@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { Login } from "./components/auth/Login";
+import { Register } from "./components/auth/Register";
 import { StatCard } from "./components/probity/StatCard";
 import { RiskBadge } from "./components/probity/RiskBadge";
 import { AssetTag } from "./components/probity/AssetTag";
@@ -174,6 +176,9 @@ function TypeScale({ family, weight, size, sample, token }: { family: string; we
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [showAuth, setShowAuth] = useState(true);
+
   const [activeNav, setActiveNav] = useState("stat-cards");
   const [selectedRows, setSelectedRows] = useState<string[]>(["2", "4"]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -189,6 +194,46 @@ export default function App() {
     setActiveNav(id);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // Auth mode - show login/register screens
+  if (showAuth) {
+    return (
+      <div>
+        {authMode === "login" ? (
+          <Login onRegisterClick={() => setAuthMode("register")} />
+        ) : (
+          <Register onSignInClick={() => setAuthMode("login")} />
+        )}
+        {/* Toggle button to see design system */}
+        <button
+          onClick={() => setShowAuth(false)}
+          style={{
+            position: "fixed",
+            bottom: "16px",
+            right: "16px",
+            padding: "8px 12px",
+            fontSize: "11px",
+            fontFamily: "var(--font-mono)",
+            backgroundColor: "rgba(59, 130, 246, 0.15)",
+            color: "var(--pb-accent)",
+            border: "1px solid var(--pb-accent)",
+            borderRadius: "4px",
+            cursor: "pointer",
+            zIndex: 100,
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(59, 130, 246, 0.25)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(59, 130, 246, 0.15)";
+          }}
+        >
+          VIEW DESIGN SYSTEM
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -803,9 +848,33 @@ export default function App() {
             <span style={{ fontFamily: "var(--font-display)", fontSize: "12px", fontWeight: 700, color: "var(--pb-text-primary)" }}>PROBITY</span>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--pb-text-muted)" }}>Design System v1.0.0</span>
           </div>
-          <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--pb-text-muted)" }}>
-            Internal use only · Risk Intelligence Platform · © 2026 Probity, Inc.
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <button
+              onClick={() => setShowAuth(true)}
+              style={{
+                padding: "6px 12px",
+                fontSize: "10px",
+                fontFamily: "var(--font-mono)",
+                backgroundColor: "rgba(59, 130, 246, 0.15)",
+                color: "var(--pb-accent)",
+                border: "1px solid var(--pb-accent)",
+                borderRadius: "4px",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(59, 130, 246, 0.25)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(59, 130, 246, 0.15)";
+              }}
+            >
+              VIEW AUTH SCREENS
+            </button>
+            <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--pb-text-muted)" }}>
+              Internal use only · Risk Intelligence Platform · © 2026 Probity, Inc.
+            </p>
+          </div>
         </div>
       </main>
 
