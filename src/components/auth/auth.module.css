@@ -372,3 +372,53 @@
     padding: 12px 16px;
   }
 }
+
+/* ============================================================
+   auth.module.css — Probity auth styles
+   ============================================================ */
+
+/* Keep all your existing CSS variables + classes exactly as they are.
+   Add the following new classes below your existing ones:        */
+
+/* ---- Success banner (shown on login page after register) ---- */
+.successMessage {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10B981;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+/* ---- Password field wrapper (positions the eye toggle) ---- */
+.passwordWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passwordWrapper .input {
+  width: 100%;
+  padding-right: 40px; /* make room for the eye button */
+}
+
+/* ---- Show/hide password toggle button ---- */
+.showPasswordBtn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--pb-text-muted, rgba(255,255,255,0.4));
+  display: flex;
+  align-items: center;
+  transition: color 0.15s ease;
+  line-height: 1;
+}
+
+.showPasswordBtn:hover {
+  color: var(--pb-text, rgba(255,255,255,0.8));
+}
