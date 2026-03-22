@@ -138,7 +138,7 @@
 }
 
 .wordmarkText {
-  font-family: var(--font-display);
+  font-family: var(--font-display), sans-serif;
   font-size: 16px;
   font-weight: 700;
   color: var(--pb-text-primary);
@@ -148,7 +148,7 @@
 /* ── Tagline ── */
 .tagline {
   margin: 0;
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 12px;
   color: var(--pb-text-secondary);
   text-align: center;
@@ -169,7 +169,7 @@
 }
 
 .label {
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 11px;
   font-weight: 500;
   color: var(--pb-text-secondary);
@@ -178,7 +178,7 @@
 }
 
 .input {
-  font-family: var(--font-body);
+  font-family: var(--font-display), sans-serif;
   font-size: 13px;
   color: var(--pb-text-primary);
   background-color: transparent;
@@ -244,7 +244,7 @@
 }
 
 .strengthLabel {
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -259,7 +259,7 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 6px;
   padding: 10px 12px;
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 12px;
   color: var(--pb-danger);
   line-height: 1.5;
@@ -267,21 +267,21 @@
 
 .errorText {
   margin: 4px 0 0;
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 11px;
   color: var(--pb-danger);
 }
 
 .successText {
   margin: 4px 0 0;
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 11px;
   color: var(--pb-success);
 }
 
 /* ── Primary Button ── */
 .primaryButton {
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 13px;
   font-weight: 500;
   color: #ffffff;
@@ -318,7 +318,7 @@
 /* ── Bottom Text ── */
 .bottomText {
   margin: 0;
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 12px;
   color: var(--pb-text-secondary);
   text-align: center;
@@ -329,7 +329,7 @@
   background: none;
   border: none;
   color: var(--pb-accent);
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -420,5 +420,5 @@
 }
 
 .showPasswordBtn:hover {
-  color: var(--pb-text, rgba(255,255,255,0.8));
+  color: var(--pb-text-primary, rgba(255,255,255,0.8));
 }
