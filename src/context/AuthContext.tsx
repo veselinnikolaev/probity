@@ -5,8 +5,8 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { authService, User, LoginPayload, RegisterPayload } from '../api/authService';
-import { getRefreshToken } from '../api/api';
+import { authService} from '../api/authService';
+import {User, LoginPayload, RegisterPayload} from '../types/auth.types'
 
 // ---------------------------------------------------------------------------
 // Context shape
@@ -39,11 +39,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // -------------------------------------------------------------------------
   useEffect(() => {
     const initAuth = async () => {
-      const hasRefreshToken = !!getRefreshToken();
-      if (!hasRefreshToken) {
-        setIsInitializing(false);
-        return;
-      }
       try {
         const restoredUser = await authService.refresh();
         setUser(restoredUser);
@@ -56,16 +51,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initAuth();
-  }, []);
-
-  // -------------------------------------------------------------------------
-  // Listen for the global logout event dispatched by the Axios interceptor
-  // when a refresh attempt fails mid-session.
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    const handleForceLogout = () => setUser(null);
-    window.addEventListener('auth:logout', handleForceLogout);
-    return () => window.removeEventListener('auth:logout', handleForceLogout);
   }, []);
 
   // -------------------------------------------------------------------------

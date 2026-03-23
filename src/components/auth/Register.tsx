@@ -33,7 +33,7 @@ const calculatePasswordStrength = (
 };
 
 export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
-  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,12 +42,12 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const fullNameRef = useRef<HTMLInputElement>(null);
+  const usernameRef = useRef<HTMLInputElement>(null);
   const { register } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fullNameRef.current?.focus();
+    usernameRef.current?.focus();
   }, []);
 
   const passwordStrength = useMemo(() => calculatePasswordStrength(password), [password]);
@@ -57,7 +57,7 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
     e.preventDefault();
     setError('');
 
-    if (!fullName || !email || !password || !confirmPassword) {
+    if (!username || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
@@ -72,7 +72,7 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
 
     setIsLoading(true);
     try {
-      await register({ fullName, email, password });
+      await register({ username, email, password });
       navigate('/login', {
         state: { successMessage: 'Account created! Please sign in.' },
         replace: true,
@@ -134,16 +134,16 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
           {error && <div className={styles.errorMessage}>{error}</div>}
 
           <div className={styles.inputGroup}>
-            <label htmlFor="fullName" className={styles.label}>Full Name</label>
+            <label htmlFor="username" className={styles.label}>Username</label>
             <input
-              ref={fullNameRef}
-              id="fullName"
+              ref={usernameRef}
+              id="username"
               type="text"
-              placeholder="Your name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Choose a username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className={styles.input}
-              autoComplete="name"
+              autoComplete="username"
               disabled={isLoading}
             />
           </div>

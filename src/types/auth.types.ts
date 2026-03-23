@@ -1,25 +1,15 @@
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
+export interface User {
+  username: string;
+  role: string;
 }
 
 export interface LoginPayload {
-  email: string;
+  identifier: string;  // your backend uses username, not email
   password: string;
 }
 
 export interface RegisterPayload {
-  fullName: string;
+  username: string;
   email: string;
   password: string;
-}
-
-export interface User {
-  id: string;
-  email: string;
-  fullName: string;
-}
-
-export interface LoginResponse extends AuthTokens {
-  user: User;
 }
