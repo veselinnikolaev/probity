@@ -55,13 +55,35 @@ export function Tooltip({ content, children, placement = "top", delay = 200 }: T
     });
   }, [visible, placement]);
 
-  const child = React.cloneElement(children, {
-    ref: triggerRef,
-    onMouseEnter: (e: React.MouseEvent) => { show(); children.props.onMouseEnter?.(e); },
-    onMouseLeave: (e: React.MouseEvent) => { hide(); children.props.onMouseLeave?.(e); },
-    onFocus: (e: React.FocusEvent) => { show(); children.props.onFocus?.(e); },
-    onBlur: (e: React.FocusEvent) => { hide(); children.props.onBlur?.(e); },
-  });
+  const child = React.isValidElement(children)
+      ? React.cloneElement(children as React.ReactElement<any>, {
+        // We merge the refs if the child already has one
+        ref: (node: HTMLElement | null) => {
+          // Update our local ref
+          (triggerRef as any).current = node;
+          // Support existing refs on the child element
+          const { ref } = children as any;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        },
+        onMouseEnter: (e: React.MouseEvent) => {
+          show();
+          (children.props as any).onMouseEnter?.(e);
+        },
+        onMouseLeave: (e: React.MouseEvent) => {
+          hide();
+          (children.props as any).onMouseLeave?.(e);
+        },
+        onFocus: (e: React.FocusEvent) => {
+          show();
+          (children.props as any).onFocus?.(e);
+        },
+        onBlur: (e: React.FocusEvent) => {
+          hide();
+          (children.props as any).onBlur?.(e);
+        },
+      })
+      : children;
 
   const arrowStyle: React.CSSProperties = {
     position: "absolute",

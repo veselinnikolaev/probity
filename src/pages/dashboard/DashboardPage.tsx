@@ -13,8 +13,8 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div style={{ padding: 40, color: '#fff', background: '#0a0a0f', minHeight: '100vh' }}>
-      <h1>Welcome, {user?.fullName} 👋</h1>
-      <p style={{ color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>{user?.email}</p>
+      <h1>Welcome, {user?.username} 👋</h1>
+        <p style={{ color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>{user?.username}</p>
       <button
         onClick={handleLogout}
         style={{
