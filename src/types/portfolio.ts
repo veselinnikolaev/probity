@@ -2,6 +2,11 @@ export interface Portfolio {
     id: string;
     name: string;
     totalValue: number;
+    createdAt: string;
+    positionsCount: number;
+    volatility: number;
+    sharpeRatio: number;
+    sparklineData: number[];
 }
 
 export interface PortfolioSummary {
