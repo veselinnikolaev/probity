@@ -4,7 +4,7 @@ import type {
     CompositionEntry, VolatilityPoint, RiskAlert,
 } from '../types/portfolio';
 
-export const portfolioApi = {
+export const portfolioService = {
     getPortfolios: () =>
         api.get<Portfolio[]>('/portfolios').then(r => r.data),
 

@@ -7,7 +7,6 @@ import { CreatePortfolioModal } from '../../components/probity/CreatePortfolioMo
 import { ProbityButton } from '../../components/probity/ProbityButton';
 import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import styles from './portfolios.module.css';
-import { portfolioApi } from '../../api/portfolioApi';
 
 const PortfoliosPage: React.FC = () => {
   const { user, logout } = useAuth();
@@ -56,13 +55,11 @@ const PortfoliosPage: React.FC = () => {
           <div className={styles['sidebar-logo']}>Probity</div>
           <nav className={styles['sidebar-nav']}>
             {navItems.map(item => (
-              <SidebarNavItem
-                key={item.id}
-                label={item.label}
-                icon={item.icon}
-                active={activeNav === item.id}
-                onClick={() => setActiveNav(item.id)}
-              />
+                <SidebarNavItem
+                    key={item.id} label={item.label} icon={item.icon}
+                    active={activeNav === item.id}
+                    onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
+                />
             ))}
           </nav>
         </aside>
@@ -87,13 +84,12 @@ const PortfoliosPage: React.FC = () => {
         <div className={styles['sidebar-logo']}>Probity</div>
         <nav className={styles['sidebar-nav']}>
           {navItems.map(item => (
-            <SidebarNavItem
-              key={item.id}
-              label={item.label}
-              icon={item.icon}
-              active={activeNav === item.id}
-              onClick={() => setActiveNav(item.id)}
-            />
+              <SidebarNavItem
+                  key={item.id} label={item.label} icon={item.icon}
+                  active={activeNav === item.id}
+                  onClick={() => { setActiveNav(item.id);
+                    navigate(`/${item.id}`); }}
+              />
           ))}
         </nav>
       </aside>
@@ -119,19 +115,19 @@ const PortfoliosPage: React.FC = () => {
 
         <main className={styles['content-area']}>
           <div className={styles['portfolios-grid']}>
-            {portfolios.map(portfolio => (
-              <PortfolioCard
-                key={portfolio.id}
-                id={portfolio.id}
-                name={portfolio.name}
-                createdAt={portfolio.createdAt}
-                positionsCount={portfolio.positionsCount}
-                totalValue={portfolio.totalValue}
-                volatility={portfolio.volatility}
-                sharpeRatio={portfolio.sharpeRatio}
-                sparklineData={portfolio.sparklineData}
-                onClick={() => navigate(`/dashboard?portfolio=${portfolio.id}`)}
-              />
+            {portfolios?.map(portfolio => (
+                <PortfolioCard
+                    key={portfolio.id}
+                    id={portfolio.id}
+                    name={portfolio.name}
+                    createdAt={portfolio.createdAt}
+                    positionsCount={portfolio.positionsCount || 0}
+                    totalValue={portfolio.totalValue || 0}
+                    volatility={portfolio.volatility}
+                    sharpeRatio={portfolio.sharpeRatio}
+                    sparklineData={portfolio.sparklineData || []}
+                    onClick={() => navigate(`/dashboard?portfolio=${portfolio.id}`)}
+                />
             ))}
             <EmptyPortfolioCard onClick={() => setIsModalOpen(true)} />
           </div>

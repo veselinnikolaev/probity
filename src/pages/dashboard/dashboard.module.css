@@ -168,15 +168,21 @@
   color: var(--pb-text-primary);
 }
 
+/* FIX: Removed `display: flex; align-items: center; justify-content: center`
+   from this wrapper. Those properties were causing the SVG (which uses
+   width:100%) to fight for space against the flex container's centering,
+   resulting in the chart exceeding its bounds. Now the wrapper is just a
+   plain block container with overflow:hidden — the LineChart fills it naturally
+   via width:100% / height:100% on its inner div. */
 .volatility-wrapper {
   background: var(--pb-surface);
   border: 1px solid var(--pb-border);
   border-radius: 8px;
   padding: 20px;
   height: 280px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  /* Inner LineChart wrapper is position:relative and fills 100%x100% */
+  box-sizing: border-box;
 }
 
 .alert-feed-container {
@@ -218,10 +224,11 @@
   transition: background-color 0.12s;
 }
 
+/* FIX: .alert-icon used to size an emoji; now the SVG icon component
+   controls its own dimensions (18×18). Keep the class but only use it for
+   flex alignment if needed — the inline SVG style handles sizing. */
 .alert-icon {
-  font-size: 18px;
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .alert-content {
@@ -307,6 +314,100 @@
 
 .notification-bell:hover {
   color: var(--pb-text-primary);
+}
+
+/* ── Empty States ──────────────────────────────────────────────────────────
+   FIX: These were incorrectly nested inside @media (max-width: 768px), making
+   them invisible on desktop. Moved here to root scope so they always apply.
+ ── */
+
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 60vh;
+  text-align: center;
+  color: var(--pb-text-secondary);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+
+.empty-state-container h2 {
+  color: var(--pb-text-primary);
+  font-size: 24px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.empty-state-container p {
+  margin-bottom: 24px;
+  font-size: 16px;
+}
+
+.empty-portfolio-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--pb-surface);
+  border: 1px dashed var(--pb-border);
+  border-radius: 12px;
+  padding: 48px 24px;
+  margin-top: 24px;
+  text-align: center;
+  color: var(--pb-text-secondary);
+}
+
+.empty-portfolio-message h3 {
+  color: var(--pb-text-primary);
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.empty-portfolio-message p {
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+/* ── Buttons ── */
+
+.primary-button {
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.primary-button:hover {
+  background-color: #1d4ed8;
+}
+
+.secondary-button {
+  background-color: transparent;
+  color: var(--pb-text-primary);
+  border: 1px solid var(--pb-border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondary-button:hover {
+  background-color: var(--pb-surface-elevated);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 /* ── Responsive Design ── */

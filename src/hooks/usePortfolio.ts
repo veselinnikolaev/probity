@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { portfolioApi } from '../api/portfolioApi';
+import { portfolioService } from '../api/portfolioService';
 import type {
     Portfolio, PortfolioSummary, Position,
     CompositionEntry, RiskAlert,
@@ -10,7 +10,7 @@ interface PortfolioData {
     summary: PortfolioSummary | null;
     positions: Position[];
     composition: CompositionEntry[];
-    volatility: number[];          // unwrapped .value[] for LineChart
+    volatility: number[];
     alerts: RiskAlert[];
     loading: boolean;
     error: string | null;
@@ -28,32 +28,40 @@ export function usePortfolio(portfolioId: string, dateRange: string): PortfolioD
     const [error, setError]               = useState<string | null>(null);
 
     const fetchAll = useCallback(async () => {
-        if (!portfolioId) return;
         setLoading(true);
         setError(null);
         try {
-            const [lists, sum, pos, comp, vol, alrt] = await Promise.all([
-                portfolioApi.getPortfolios(),
-                portfolioApi.getSummary(portfolioId, dateRange),
-                portfolioApi.getPositions(portfolioId),
-                portfolioApi.getComposition(portfolioId),
-                portfolioApi.getVolatility(portfolioId, dateRange),
-                portfolioApi.getAlerts(portfolioId),
-            ]);
+            // 1. Fetch the master list of portfolios first (this doesn't require an ID!)
+            const lists = await portfolioService.getPortfolios();
             setPortfolios(lists);
-            setSummary(sum);
-            setPositions(pos);
-            setComposition(comp);
-            setVolatility(vol.map(p => p.value));
-            setAlerts(alrt);
+
+            // 2. Guard here instead! Only fetch detailed data if we have an active ID
+            if (portfolioId) {
+                const [sum, pos, comp, vol, alrt] = await Promise.all([
+                    portfolioService.getSummary(portfolioId, dateRange),
+                    portfolioService.getPositions(portfolioId),
+                    portfolioService.getComposition(portfolioId),
+                    portfolioService.getVolatility(portfolioId, dateRange),
+                    portfolioService.getAlerts(portfolioId),
+                ]);
+
+                setSummary(sum);
+                setPositions(pos);
+                setComposition(comp);
+                setVolatility(vol.map(p => p.value));
+                setAlerts(alrt);
+            }
         } catch (e: any) {
             setError(e?.response?.data?.message ?? 'Failed to load portfolio data');
         } finally {
+            // 3. This finally block will ALWAYS run, unfreezing your loading state
             setLoading(false);
         }
-    }, [portfolioId, dateRange]);      // ← re-fetches on EVERY dropdown change
+    }, [portfolioId, dateRange]);
 
-    useEffect(() => { fetchAll(); }, [fetchAll]);
+    useEffect(() => {
+        fetchAll();
+    }, [fetchAll]);
 
     return { portfolios, summary, positions, composition, volatility, alerts, loading, error, refetch: fetchAll };
 }

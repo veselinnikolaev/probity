@@ -37,8 +37,9 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({
     year: 'numeric',
   });
 
+  const safeVolatility = volatility || 0;
   const volatilityRisk: 'LOW' | 'MODERATE' | 'HIGH' =
-    volatility < 15 ? 'LOW' : volatility < 25 ? 'MODERATE' : 'HIGH';
+      safeVolatility < 15 ? 'LOW' : safeVolatility < 25 ? 'MODERATE' : 'HIGH';
 
   return (
     <div
@@ -60,7 +61,9 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({
         </div>
         <div className="portfolio-card__meta-item">
           <span className="portfolio-card__meta-label">Sharpe Ratio</span>
-          <span className="portfolio-card__meta-value">{sharpeRatio.toFixed(2)}</span>
+          <span className="portfolio-card__meta-value">
+            {sharpeRatio != null ? sharpeRatio.toFixed(2) : 'N/A'}
+          </span>
         </div>
       </div>
 
@@ -73,13 +76,17 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({
 
       <div className="portfolio-card__footer">
         <div className="portfolio-card__sparkline-wrapper">
-          <Sparkline
-            data={sparklineData}
-            width={80}
-            height={24}
-            color="#3B82F6"
-            showArea={false}
-          />
+          {sparklineData && sparklineData.length > 0 ? (
+              <Sparkline
+                  data={sparklineData}
+                  width={80}
+                  height={24}
+                  color="#3B82F6"
+                  showArea={false}
+              />
+          ) : (
+              <span className="portfolio-card__no-data">No chart data</span>
+          )}
         </div>
         <RiskBadge level={volatilityRisk} size="sm" />
       </div>
