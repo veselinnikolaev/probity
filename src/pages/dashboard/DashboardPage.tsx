@@ -9,6 +9,7 @@ import { DonutChart } from '../../components/probity/DonutChart';
 import { LineChart } from '../../components/probity/LineChart';
 import styles from './dashboard.module.css';
 import { usePortfolio } from "../../hooks/usePortfolio";
+import type { StatCardProps } from '../../components/probity/StatCard';
 
 // ── Alert icon component ─────────────────────────────────────────────────────
 // FIX: Replace the raw `alert.icon` string (which was just text/emoji from the
@@ -107,12 +108,12 @@ const DashboardPage: React.FC = () => {
     { label: 'Settings',    icon: '⚙️', id: 'settings'   },
   ];
 
-  const statCards = summary ? [
+  const statCards: StatCardProps[] = summary ? [
     {
       label: 'Total Value',
       value: summary.totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 }),
       delta: `${summary.totalValueDelta >= 0 ? '+' : ''}${summary.totalValueDelta.toFixed(1)}%`,
-      deltaType: summary.totalValueDelta >= 0 ? 'up' as const : 'down' as const,
+      deltaType: summary.totalValueDelta >= 0 ? 'up' : 'down',
       sparklineData: summary.sparklines?.totalValue || [],
       prefix: '$',
       invertSentiment: false,
@@ -121,7 +122,7 @@ const DashboardPage: React.FC = () => {
       label: 'Daily Return',
       value: summary.dailyReturn.toLocaleString('en-US', { maximumFractionDigits: 2 }),
       delta: `${summary.dailyReturnDelta >= 0 ? '+' : ''}${summary.dailyReturnDelta.toFixed(2)}%`,
-      deltaType: summary.dailyReturnDelta >= 0 ? 'up' as const : 'down' as const,
+      deltaType: summary.dailyReturnDelta >= 0 ? 'up' : 'down',
       sparklineData: summary.sparklines?.dailyReturn || [],
       prefix: '$',
       invertSentiment: false,
@@ -130,16 +131,15 @@ const DashboardPage: React.FC = () => {
       label: 'Portfolio Volatility',
       value: `${summary.volatility.toFixed(1)}%`,
       delta: `${summary.volatilityDelta >= 0 ? '+' : ''}${summary.volatilityDelta.toFixed(1)}%`,
-      deltaType: summary.volatilityDelta <= 0 ? 'down' as const : 'up' as const,
+      deltaType: summary.volatilityDelta <= 0 ? 'down' : 'up',
       sparklineData: summary.sparklines?.volatility || [],
-      // FIX: Volatility going up is bad → invert sparkline colour
       invertSentiment: true,
     },
     {
       label: 'Sharpe Ratio',
       value: summary.sharpeRatio.toFixed(2),
       delta: `${summary.sharpeRatioDelta >= 0 ? '+' : ''}${summary.sharpeRatioDelta.toFixed(2)}`,
-      deltaType: summary.sharpeRatioDelta >= 0 ? 'up' as const : 'down' as const,
+      deltaType: summary.sharpeRatioDelta >= 0 ? 'up' : 'down',
       sparklineData: summary.sparklines?.sharpeRatio || [],
       invertSentiment: false,
     },
@@ -147,10 +147,9 @@ const DashboardPage: React.FC = () => {
       label: 'VaR (95%)',
       value: summary.var95.toLocaleString('en-US', { maximumFractionDigits: 0 }),
       delta: `${summary.var95Delta >= 0 ? '+' : ''}${summary.var95Delta.toFixed(1)}%`,
-      deltaType: summary.var95Delta <= 0 ? 'down' as const : 'up' as const,
+      deltaType: summary.var95Delta <= 0 ? 'down' : 'up',
       sparklineData: summary.sparklines?.var95 || [],
       prefix: '$',
-      // FIX: VaR going up is bad → invert sparkline colour
       invertSentiment: true,
     },
   ] : [];
@@ -169,7 +168,7 @@ const DashboardPage: React.FC = () => {
     riskScore: p.riskScore,
     riskLevel: p.riskLevel,
     volume: p.volume,
-    marketCap: p.marketCap,
+    marketCap: p.positionValue,
   }));
 
   // ── Render guards ─────────────────────────────────────────────────────────

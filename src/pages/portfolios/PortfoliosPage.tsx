@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePortfolio } from '../../hooks/usePortfolio';
@@ -7,11 +7,12 @@ import { CreatePortfolioModal } from '../../components/probity/CreatePortfolioMo
 import { ProbityButton } from '../../components/probity/ProbityButton';
 import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import styles from './portfolios.module.css';
+import { portfolioService } from "../../api/portfolioService";
 
 const PortfoliosPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { portfolios, loading } = usePortfolio('', '30d');
+  const { portfolios, loading, refetch } = usePortfolio('', '30d');
 
   const [activeNav, setActiveNav] = useState('portfolios');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,15 +23,12 @@ const PortfoliosPage: React.FC = () => {
     navigate('/login', { replace: true });
   };
 
-  const handleCreatePortfolio = async (data: {
-    name: string;
-    description?: string;
-  }) => {
+  const handleCreatePortfolio = async (data: { name: string; description?: string }) => {
     setIsCreating(true);
     try {
-      // Call API to create portfolio (implement endpoint as needed)
-      await new Promise(resolve => setTimeout(resolve, 500)); // Placeholder
+      await portfolioService.createPortfolio(data);
       setIsModalOpen(false);
+      refetch();
     } catch (error) {
       throw new Error('Failed to create portfolio');
     } finally {

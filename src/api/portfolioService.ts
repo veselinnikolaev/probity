@@ -2,11 +2,15 @@ import api from './api';
 import type {
     Portfolio, PortfolioSummary, Position,
     CompositionEntry, VolatilityPoint, RiskAlert,
+    CreatePortfolioRequest,
 } from '../types/portfolio';
 
 export const portfolioService = {
     getPortfolios: () =>
         api.get<Portfolio[]>('/portfolios').then(r => r.data),
+
+    createPortfolio: (data: CreatePortfolioRequest) =>
+        api.post<Portfolio>('/portfolios', data).then(r => r.data),
 
     getSummary: (id: string, range: string) =>
         api.get<PortfolioSummary>(`/portfolios/${id}/summary`, { params: { range } }).then(r => r.data),

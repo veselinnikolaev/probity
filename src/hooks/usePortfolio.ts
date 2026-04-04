@@ -30,6 +30,13 @@ export function usePortfolio(portfolioId: string, dateRange: string): PortfolioD
     const fetchAll = useCallback(async () => {
         setLoading(true);
         setError(null);
+
+        setSummary(null);
+        setPositions([]);
+        setComposition([]);
+        setVolatility([]);
+        setAlerts([]);
+
         try {
             // 1. Fetch the master list of portfolios first (this doesn't require an ID!)
             const lists = await portfolioService.getPortfolios();

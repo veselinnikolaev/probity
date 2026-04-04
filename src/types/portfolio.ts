@@ -40,7 +40,7 @@ export interface Position {
     riskScore: number;
     riskLevel: 'LOW' | 'MODERATE' | 'HIGH';
     volume: string;
-    marketCap: string;
+    positionValue: string;
     sector: string;       // for donut drill-down
 }
 
@@ -61,4 +61,9 @@ export interface RiskAlert {
     severity: 'high' | 'moderate' | 'low';
     timestamp: string;
     icon: string;
+}
+
+export interface CreatePortfolioRequest {
+    name: string;
+    description?: string;
 }

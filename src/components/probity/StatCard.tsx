@@ -2,7 +2,7 @@ import React from "react";
 import { Sparkline } from "./Sparkline";
 import { RiskBadge, RiskLevel } from "./RiskBadge";
 
-interface StatCardProps {
+export interface  StatCardProps {
     label: string;
     value: string;
     subValue?: string;

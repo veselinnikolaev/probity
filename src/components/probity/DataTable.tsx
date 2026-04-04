@@ -35,7 +35,7 @@ const COL_HEADERS = [
   { key: "riskLevel",     label: "Risk",          width: "14%", align: "center" as const },
   { key: "riskScore",     label: "Score",         width: "8%",  align: "right"  as const },
   { key: "volume",        label: "Volume",        width: "12%", align: "right"  as const },
-  { key: "marketCap",     label: "Mkt Cap",       width: "10%", align: "right"  as const },
+  { key: "positionValue", label: "Position Value",width: "10%", align: "right"  as const },
 ];
 
 // ── Sort helpers ─────────────────────────────────────────────────────────────
