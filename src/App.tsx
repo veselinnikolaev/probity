@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import PortfoliosPage from './pages/portfolios/PortfoliosPage';
+import PortfolioDetailPage from './pages/portfolio-detail/PortfolioDetailPage';
 
 // ---------------------------------------------------------------------------
 // App
@@ -23,6 +24,7 @@ const App: React.FC = () => {
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/portfolios" element={<PortfoliosPage />} />
+            <Route path="/portfolio-detail" element={<PortfolioDetailPage />} />
             {/* Add more protected routes here */}
           </Route>
 
