@@ -42,6 +42,14 @@ export interface Position {
     volume: string;
     positionValue: string;
     sector: string;       // for donut drill-down
+    // Portfolio detail fields
+    quantity?: number;
+    avgBuyPrice?: number;
+    currentPrice?: number;
+    weight?: number;      // percentage
+    dailyReturn?: number; // percentage
+    volatility?: number;  // percentage
+    riskContribution?: number; // percentage
 }
 
 export interface CompositionEntry {
