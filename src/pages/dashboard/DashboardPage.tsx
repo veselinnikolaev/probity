@@ -7,13 +7,16 @@ import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataTable, DataRow } from '../../components/probity/DataTable';
 import { DonutChart } from '../../components/probity/DonutChart';
 import { LineChart } from '../../components/probity/LineChart';
+import { DataBoundary } from '../../components/core/DataBoundary';
+import { EmptyState } from '../../components/probity/EmptyState';
+import { ErrorState } from '../../components/probity/ErrorState';
+import { StatCardSkeleton, TableSkeleton } from '../../components/probity/SkeletonLoader';
 import styles from './dashboard.module.css';
-import { usePortfolio } from "../../hooks/usePortfolio";
+import { usePortfolios } from '../../hooks/usePortfolios';
+import { usePortfolioDetail } from '../../hooks/usePortfolioDetail';
 import type { StatCardProps } from '../../components/probity/StatCard';
 
 // ── Alert icon component ─────────────────────────────────────────────────────
-// FIX: Replace the raw `alert.icon` string (which was just text/emoji from the
-// API) with a proper SVG icon determined by the alert's severity level.
 type AlertSeverity = 'high' | 'moderate' | 'low' | string;
 
 function AlertIcon({ severity }: { severity: AlertSeverity }) {
@@ -24,36 +27,33 @@ function AlertIcon({ severity }: { severity: AlertSeverity }) {
     marginTop: 2,
   };
 
-  // "high"     → red filled warning triangle  (⚠ shape)
-  // "moderate" → amber outlined info circle   (ℹ shape)
-  // "low"      → green outlined check circle  (✓ shape)
   switch (severity) {
     case 'high':
       return (
-          <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="High severity">
-            <path
-                d="M8.485 3.215a1.75 1.75 0 0 1 3.03 0l6.28 10.875A1.75 1.75 0 0 1 16.28 17H3.72a1.75 1.75 0 0 1-1.515-2.91L8.485 3.215Z"
-                fill="#EF4444" fillOpacity="0.15" stroke="#EF4444" strokeWidth="1.4"
-            />
-            <path d="M10 7.5v4" stroke="#EF4444" strokeWidth="1.6" strokeLinecap="round" />
-            <circle cx="10" cy="13.5" r="0.85" fill="#EF4444" />
-          </svg>
+        <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="High severity">
+          <path
+            d="M8.485 3.215a1.75 1.75 0 0 1 3.03 0l6.28 10.875A1.75 1.75 0 0 1 16.28 17H3.72a1.75 1.75 0 0 1-1.515-2.91L8.485 3.215Z"
+            fill="#EF4444" fillOpacity="0.15" stroke="#EF4444" strokeWidth="1.4"
+          />
+          <path d="M10 7.5v4" stroke="#EF4444" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="10" cy="13.5" r="0.85" fill="#EF4444" />
+        </svg>
       );
     case 'moderate':
       return (
-          <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="Moderate severity">
-            <circle cx="10" cy="10" r="7.5" stroke="#F59E0B" strokeWidth="1.4" fill="#F59E0B" fillOpacity="0.1" />
-            <path d="M10 9v5" stroke="#F59E0B" strokeWidth="1.6" strokeLinecap="round" />
-            <circle cx="10" cy="6.5" r="0.85" fill="#F59E0B" />
-          </svg>
+        <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="Moderate severity">
+          <circle cx="10" cy="10" r="7.5" stroke="#F59E0B" strokeWidth="1.4" fill="#F59E0B" fillOpacity="0.1" />
+          <path d="M10 9v5" stroke="#F59E0B" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="10" cy="6.5" r="0.85" fill="#F59E0B" />
+        </svg>
       );
     case 'low':
     default:
       return (
-          <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="Low severity">
-            <circle cx="10" cy="10" r="7.5" stroke="#10B981" strokeWidth="1.4" fill="#10B981" fillOpacity="0.1" />
-            <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="#10B981" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="Low severity">
+          <circle cx="10" cy="10" r="7.5" stroke="#10B981" strokeWidth="1.4" fill="#10B981" fillOpacity="0.1" />
+          <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="#10B981" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       );
   }
 }
@@ -67,17 +67,17 @@ const DashboardPage: React.FC = () => {
   const [selectedDateRange, setSelectedDateRange] = useState('90d');
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
 
-  const {
-    portfolios, summary, positions,
-    composition, volatility, alerts,
-    loading, error,
-  } = usePortfolio(selectedPortfolio, selectedDateRange);
+  // Fetch all portfolios
+  const portfoliosState = usePortfolios();
+
+  // Fetch detail data for selected portfolio
+  const detailState = usePortfolioDetail(selectedPortfolio, selectedDateRange);
 
   useEffect(() => {
-    if (portfolios.length > 0 && !selectedPortfolio) {
-      setSelectedPortfolio(portfolios[0].id);
+    if (portfoliosState.data && portfoliosState.data.length > 0 && !selectedPortfolio) {
+      setSelectedPortfolio(portfoliosState.data[0].id);
     }
-  }, [portfolios, selectedPortfolio]);
+  }, [portfoliosState.data, selectedPortfolio]);
 
   const handleLogout = async () => {
     await logout();
@@ -85,7 +85,7 @@ const DashboardPage: React.FC = () => {
   };
 
   // ── Derived data ─────────────────────────────────────────────────────────
-  const portfolioOptions = portfolios.map(p => ({
+  const portfolioOptions = (portfoliosState.data || []).map(p => ({
     value: p.id,
     label: p.name,
     description: `$${p.totalValue.toLocaleString()}`,
@@ -108,7 +108,7 @@ const DashboardPage: React.FC = () => {
     { label: 'Settings',    icon: '⚙️', id: 'settings'   },
   ];
 
-  const statCards: StatCardProps[] = summary ? [
+  const buildStatCards = (summary: any): StatCardProps[] => [
     {
       label: 'Total Value',
       value: summary.totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 }),
@@ -152,211 +152,289 @@ const DashboardPage: React.FC = () => {
       prefix: '$',
       invertSentiment: true,
     },
-  ] : [];
-
-  const filteredPositions: DataRow[] = (sectorFilter && positions
-          ? positions.filter(p => p.sector === sectorFilter)
-          : positions || []
-  ).map(p => ({
-    id: p.id,
-    ticker: p.ticker,
-    name: p.name,
-    assetType: p.assetType,
-    price: `$${p.price.toFixed(2)}`,
-    change: `${p.change >= 0 ? '+' : ''}$${Math.abs(p.change).toFixed(2)}`,
-    changePercent: `${p.changePercent >= 0 ? '+' : ''}${p.changePercent.toFixed(2)}%`,
-    riskScore: p.riskScore,
-    riskLevel: p.riskLevel,
-    volume: p.volume,
-    marketCap: p.positionValue,
-  }));
-
-  // ── Render guards ─────────────────────────────────────────────────────────
-  if (loading) return (
-      <div className={styles['dashboard-layout']}>
-        <div className={styles['loading-state']}>Loading portfolio data…</div>
-      </div>
-  );
-
-  if (error) return (
-      <div className={styles['dashboard-layout']}>
-        <div className={styles['error-state']}>{error}</div>
-      </div>
-  );
-
-  const hasNoPortfolios = portfolios.length === 0;
-  const isPortfolioEmpty = positions?.length === 0;
+  ];
 
   // ── Shared UI ─────────────────────────────────────────────────────────────
   const Sidebar = (
-      <aside className={styles['sidebar']}>
-        <div className={styles['sidebar-logo']}>Probity</div>
-        <nav className={styles['sidebar-nav']}>
-          {navItems.map(item => (
-              <SidebarNavItem
-                  key={item.id} label={item.label} icon={item.icon}
-                  active={activeNav === item.id}
-                  onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
-              />
-          ))}
-        </nav>
-      </aside>
+    <aside className={styles['sidebar']}>
+      <div className={styles['sidebar-logo']}>Probity</div>
+      <nav className={styles['sidebar-nav']}>
+        {navItems.map(item => (
+          <SidebarNavItem
+            key={item.id} label={item.label} icon={item.icon}
+            active={activeNav === item.id}
+            onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
+          />
+        ))}
+      </nav>
+    </aside>
   );
 
   const Topbar = (
-      <header className={styles['topbar']}>
-        <div className={styles['topbar-left']}>
-          {!hasNoPortfolios && (
-              <DropdownSelect
-                  options={portfolioOptions}
-                  value={selectedPortfolio}
-                  onChange={(val) => { setSelectedPortfolio(val); setSectorFilter(null); }}
-                  width="240px"
-              />
-          )}
+    <header className={styles['topbar']}>
+      <div className={styles['topbar-left']}>
+        {portfolioOptions.length > 0 && (
+          <DropdownSelect
+            options={portfolioOptions}
+            value={selectedPortfolio}
+            onChange={(val) => { setSelectedPortfolio(val); setSectorFilter(null); }}
+            width="240px"
+          />
+        )}
+      </div>
+      <div className={styles['topbar-center']}>
+        {portfolioOptions.length > 0 && (
+          <DropdownSelect
+            options={dateRangeOptions}
+            value={selectedDateRange}
+            onChange={setSelectedDateRange}
+            width="180px"
+          />
+        )}
+      </div>
+      <div className={styles['topbar-right']}>
+        <span className={styles['notification-bell']}>🔔</span>
+        <div
+          className={styles['user-avatar']}
+          onClick={handleLogout}
+          title="Click to sign out"
+        >
+          {user?.username?.charAt(0).toUpperCase() || 'U'}
         </div>
-        <div className={styles['topbar-center']}>
-          {!hasNoPortfolios && (
-              <DropdownSelect
-                  options={dateRangeOptions}
-                  value={selectedDateRange}
-                  onChange={setSelectedDateRange}
-                  width="180px"
-              />
-          )}
-        </div>
-        <div className={styles['topbar-right']}>
-          <span className={styles['notification-bell']}>🔔</span>
-          <div
-              className={styles['user-avatar']}
-              onClick={handleLogout}
-              title="Click to sign out"
-          >
-            {user?.username?.charAt(0).toUpperCase() || 'U'}
-          </div>
-        </div>
-      </header>
+      </div>
+    </header>
   );
 
   // ── Main Render ───────────────────────────────────────────────────────────
-  if (hasNoPortfolios) {
-    return (
-        <div className={styles['dashboard-layout']}>
-          {Sidebar}
-          <div className={styles['main-wrapper']}>
-            {Topbar}
-            <main className={styles['content-area']}>
-              <div className={styles['empty-state-container']}>
-                <div className={styles['empty-state-icon']}>💼</div>
-                <h2>Welcome to Probity</h2>
-                <p>You don't have any portfolios set up yet.</p>
-                <button className={styles['primary-button']} onClick={() => navigate('/portfolios/new')}>
-                  Create Your First Portfolio
-                </button>
-              </div>
-            </main>
-          </div>
-        </div>
-    );
-  }
-
   return (
-      <div className={styles['dashboard-layout']}>
-        {Sidebar}
-        <div className={styles['main-wrapper']}>
-          {Topbar}
-          <main className={styles['content-area']}>
-            <div className={styles['content-zones']}>
-
-              {/* Stat Cards Row */}
-              {statCards.length > 0 && (
-                  <section className={styles['summary-strip']}>
-                    {statCards.map((card, idx) => (
-                        <StatCard key={idx} {...card} />
-                    ))}
-                  </section>
-              )}
-
-              {isPortfolioEmpty ? (
-                  <div className={styles['empty-portfolio-message']}>
-                    <h3>This portfolio is empty</h3>
-                    <p>Add some assets to start seeing your risk analysis, composition, and alerts.</p>
+    <div className={styles['dashboard-layout']}>
+      {Sidebar}
+      <div className={styles['main-wrapper']}>
+        {Topbar}
+        <main className={styles['content-area']}>
+          <DataBoundary
+            state={portfoliosState}
+            isEmpty={(data) => data.length === 0}
+            loading={
+              <div className={styles['loading-state']}>
+                Loading portfolios…
+              </div>
+            }
+            empty={
+              <div className={styles['empty-state-container']}>
+                <EmptyState
+                  icon="💼"
+                  title="Welcome to Probity"
+                  description="You don't have any portfolios set up yet."
+                  action={
                     <button
-                        className={styles['secondary-button']}
-                        onClick={() => console.log('Open Add Asset Modal')}
+                      className={styles['primary-button']}
+                      onClick={() => navigate('/portfolios/new')}
                     >
-                      + Add Assets
+                      Create Your First Portfolio
                     </button>
+                  }
+                />
+              </div>
+            }
+            error={(msg) => (
+              <div className={styles['error-state']}>
+                <ErrorState message={msg} onRetry={portfoliosState.refetch} />
+              </div>
+            )}
+          >
+            {(portfolios) => (
+              <div className={styles['content-zones']}>
+                {/* STAT CARDS WITH BOUNDARY */}
+                <section className={styles['summary-strip']}>
+                  <DataBoundary
+                    state={detailState}
+                    isEmpty={(data) => !data}
+                    loading={
+                      <>
+                        {[...Array(5)].map((_, i) => (
+                          <StatCardSkeleton key={i} />
+                        ))}
+                      </>
+                    }
+                    empty={
+                      <EmptyState
+                        title="Portfolio Empty"
+                        description="Add assets to see your portfolio metrics"
+                        size="sm"
+                      />
+                    }
+                    error={(msg) => (
+                      <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />
+                    )}
+                  >
+                    {(detail) => (
+                      <>
+                        {buildStatCards(detail.summary).map((card, idx) => (
+                          <StatCard key={idx} {...card} />
+                        ))}
+                      </>
+                    )}
+                  </DataBoundary>
+                </section>
+
+                {/* POSITIONS AND COMPOSITION */}
+                <section className={styles['middle-row']}>
+                  <div className={styles['position-table-container']}>
+                    <div className={styles['table-header']}>
+                      Positions by Risk Contribution
+                      {sectorFilter && (
+                        <button
+                          onClick={() => setSectorFilter(null)}
+                          style={{ marginLeft: '12px', fontSize: '11px', opacity: 0.7 }}
+                        >
+                          ✕ {sectorFilter}
+                        </button>
+                      )}
+                    </div>
+                    <DataBoundary
+                      state={detailState}
+                      isEmpty={(data) => data.positions.length === 0}
+                      loading={<TableSkeleton rows={5} />}
+                      empty={
+                        <EmptyState
+                          title="No Positions"
+                          description="Add assets to your portfolio"
+                          size="sm"
+                        />
+                      }
+                      error={(msg) => (
+                        <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />
+                      )}
+                    >
+                      {(detail) => {
+                        const filteredPositions: DataRow[] = (sectorFilter
+                          ? detail.positions.filter(p => p.sector === sectorFilter)
+                          : detail.positions
+                        ).map(p => ({
+                          id: p.id,
+                          ticker: p.ticker,
+                          name: p.name,
+                          assetType: p.assetType,
+                          price: `$${p.price.toFixed(2)}`,
+                          change: `${p.change >= 0 ? '+' : ''}$${Math.abs(p.change).toFixed(2)}`,
+                          changePercent: `${p.changePercent >= 0 ? '+' : ''}${p.changePercent.toFixed(2)}%`,
+                          riskScore: p.riskScore,
+                          riskLevel: p.riskLevel,
+                          volume: p.volume,
+                          marketCap: p.positionValue,
+                        }));
+
+                        return <DataTable rows={filteredPositions} />;
+                      }}
+                    </DataBoundary>
                   </div>
-              ) : (
-                  <>
-                    <section className={styles['middle-row']}>
-                      <div className={styles['position-table-container']}>
-                        <div className={styles['table-header']}>
-                          Positions by Risk Contribution
-                          {sectorFilter && (
-                              <button
-                                  onClick={() => setSectorFilter(null)}
-                                  style={{ marginLeft: '12px', fontSize: '11px', opacity: 0.7 }}
-                              >
-                                ✕ {sectorFilter}
-                              </button>
-                          )}
-                        </div>
-                        <DataTable rows={filteredPositions} />
-                      </div>
 
-                      <div className={styles['chart-container']}>
-                        <div className={styles['chart-header']}>Portfolio Composition</div>
-                        <div className={styles['chart-wrapper']}>
-                          <DonutChart data={composition} onSegmentClick={(label) => setSectorFilter(label)} />
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className={styles['bottom-row']}>
-                      <div className={styles['volatility-chart-container']}>
-                        <div className={styles['volatility-header']}>
-                          Volatility Over Time ({selectedDateRange})
-                        </div>
-                        {/* FIX: wrapper no longer uses flexbox centering which was
-                        fighting the SVG's natural aspect-ratio expansion.
-                        It now just provides the bounded box the chart fills. */}
-                        <div className={styles['volatility-wrapper']}>
-                          <LineChart
-                              data={volatility}
-                              dateRange={selectedDateRange}
+                  <div className={styles['chart-container']}>
+                    <div className={styles['chart-header']}>Portfolio Composition</div>
+                    <div className={styles['chart-wrapper']}>
+                      <DataBoundary
+                        state={detailState}
+                        isEmpty={(data) => data.composition.length === 0}
+                        loading={<div style={{ padding: '40px', textAlign: 'center' }}>Loading chart…</div>}
+                        empty={
+                          <EmptyState
+                            title="No Data"
+                            description="Your portfolio needs positions"
+                            size="sm"
                           />
-                        </div>
-                      </div>
+                        }
+                        error={(msg) => (
+                          <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />
+                        )}
+                      >
+                        {(detail) => (
+                          <DonutChart
+                            data={detail.composition}
+                            onSegmentClick={(label) => setSectorFilter(label)}
+                          />
+                        )}
+                      </DataBoundary>
+                    </div>
+                  </div>
+                </section>
 
-                      <div className={styles['alert-feed-container']}>
-                        <div className={styles['alert-feed-header']}>Risk Alerts</div>
+                {/* VOLATILITY AND ALERTS */}
+                <section className={styles['bottom-row']}>
+                  <div className={styles['volatility-chart-container']}>
+                    <div className={styles['volatility-header']}>
+                      Volatility Over Time ({selectedDateRange})
+                    </div>
+                    <div className={styles['volatility-wrapper']}>
+                      <DataBoundary
+                        state={detailState}
+                        isEmpty={(data) => data.volatility.length === 0}
+                        loading={<div style={{ padding: '40px', textAlign: 'center' }}>Loading chart…</div>}
+                        empty={
+                          <EmptyState
+                            title="No Data"
+                            description="Insufficient volatility history"
+                            size="sm"
+                          />
+                        }
+                        error={(msg) => (
+                          <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />
+                        )}
+                      >
+                        {(detail) => (
+                          <LineChart
+                            data={detail.volatility.map(v => v.value)}
+                            dateRange={selectedDateRange}
+                          />
+                        )}
+                      </DataBoundary>
+                    </div>
+                  </div>
+
+                  <div className={styles['alert-feed-container']}>
+                    <div className={styles['alert-feed-header']}>Risk Alerts</div>
+                    <DataBoundary
+                      state={detailState}
+                      isEmpty={(data) => data.alerts.length === 0}
+                      loading={<div style={{ padding: '20px', textAlign: 'center' }}>Loading alerts…</div>}
+                      empty={
+                        <EmptyState
+                          title="No Alerts"
+                          description="Your portfolio is looking good"
+                          size="sm"
+                        />
+                      }
+                      error={(msg) => (
+                        <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />
+                      )}
+                    >
+                      {(detail) => (
                         <div className={styles['alert-feed']}>
-                          {alerts.map(alert => (
-                              <div key={alert.id} className={styles['alert-item']}>
-                                {/* FIX: replaced alert.icon (raw string) with severity-driven SVG */}
-                                <AlertIcon severity={alert.severity} />
-                                <div className={styles['alert-content']}>
-                                  <div className={styles['alert-message']}>{alert.message}</div>
-                                  <div className={styles['alert-meta']}>
-                                    <span className={styles['alert-time']}>{alert.timestamp}</span>
-                                    <span className={`${styles['severity-badge']} ${styles[`severity-${alert.severity}`]}`}>
-                                {alert.severity}
-                              </span>
-                                  </div>
+                          {detail.alerts.map(alert => (
+                            <div key={alert.id} className={styles['alert-item']}>
+                              <AlertIcon severity={alert.severity} />
+                              <div className={styles['alert-content']}>
+                                <div className={styles['alert-message']}>{alert.message}</div>
+                                <div className={styles['alert-meta']}>
+                                  <span className={styles['alert-time']}>{alert.timestamp}</span>
+                                  <span className={`${styles['severity-badge']} ${styles[`severity-${alert.severity}`]}`}>
+                                    {alert.severity}
+                                  </span>
                                 </div>
                               </div>
+                            </div>
                           ))}
                         </div>
-                      </div>
-                    </section>
-                  </>
-              )}
-            </div>
-          </main>
-        </div>
+                      )}
+                    </DataBoundary>
+                  </div>
+                </section>
+              </div>
+            )}
+          </DataBoundary>
+        </main>
       </div>
+    </div>
   );
 };
 
