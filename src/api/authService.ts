@@ -29,4 +29,8 @@ export const authService = {
       // Server unreachable — cookies will expire naturally
     }
   },
+
+  async refreshCsrfToken(): Promise<void> {
+    await api.get('/auth/csrf');
+  },
 };

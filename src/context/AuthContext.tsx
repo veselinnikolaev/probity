@@ -40,10 +40,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        await authService.refreshCsrfToken(); // primes XSRF-TOKEN cookie
         const restoredUser = await authService.refresh();
         setUser(restoredUser);
       } catch {
-        // Refresh token expired or invalid — user must log in again
         setUser(null);
       } finally {
         setIsInitializing(false);
