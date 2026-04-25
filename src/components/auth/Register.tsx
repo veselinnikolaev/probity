@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { AxiosError } from 'axios';
-import styles from './auth.module.css';
+import styles from '../../pages/auth/auth.module.css';
 
 interface RegisterProps {
   onSignInClick?: () => void;
