@@ -2,7 +2,8 @@ import api from './api';
 import type {
     Portfolio, PortfolioSummary, Position,
     CompositionEntry, VolatilityPoint, RiskAlert,
-    CreatePortfolioRequest,
+    RiskMetrics, CorrelationMatrix,
+    CreatePortfolioRequest
 } from '../types/portfolio';
 
 export const portfolioService = {
@@ -26,4 +27,10 @@ export const portfolioService = {
 
     getAlerts: (id: string) =>
         api.get<RiskAlert[]>(`/portfolios/${id}/alerts`).then(r => r.data),
+
+    getRiskMetrics: (id: string, range: string) =>
+        api.get<RiskMetrics>(`/portfolios/${id}/risk-metrics`, { params: { range } }).then(r => r.data),
+
+    getCorrelation: (id: string, range: string) =>
+        api.get<CorrelationMatrix>(`/portfolios/${id}/correlation`, { params: { range } }).then(r => r.data),
 };

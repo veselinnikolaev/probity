@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { portfolioService } from '../api/portfolioService';
 import { AsyncState } from '../types/async-state';
-import type { PortfolioSummary, Position, CompositionEntry, RiskAlert, VolatilityPoint } from '../types/portfolio';
+import type { PortfolioSummary, Position, CompositionEntry, RiskAlert, VolatilityPoint, RiskMetrics } from '../types/portfolio';
 
 /**
  * Combined portfolio detail data for a specific portfolio.
@@ -13,6 +13,7 @@ export interface PortfolioDetail {
   composition: CompositionEntry[];
   volatility: VolatilityPoint[];
   alerts: RiskAlert[];
+  riskMetrics: RiskMetrics;
 }
 
 /**
@@ -37,22 +38,17 @@ export function usePortfolioDetail(
     setState({ isLoading: true, error: null });
 
     try {
-      const [summary, positions, composition, volatility, alerts] = await Promise.all([
+      const [summary, positions, composition, volatility, alerts, riskMetrics] = await Promise.all([
         portfolioService.getSummary(portfolioId, dateRange),
         portfolioService.getPositions(portfolioId),
         portfolioService.getComposition(portfolioId),
         portfolioService.getVolatility(portfolioId, dateRange),
         portfolioService.getAlerts(portfolioId),
+        portfolioService.getRiskMetrics(portfolioId, dateRange),
       ]);
 
       setState({
-        data: {
-          summary,
-          positions,
-          composition,
-          volatility,
-          alerts,
-        },
+        data: { summary, positions, composition, volatility, alerts, riskMetrics },
         isLoading: false,
         error: null,
       });

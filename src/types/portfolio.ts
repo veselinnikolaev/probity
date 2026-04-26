@@ -41,15 +41,16 @@ export interface Position {
     riskLevel: 'LOW' | 'MODERATE' | 'HIGH';
     volume: string;
     positionValue: string;
-    sector: string;       // for donut drill-down
+    sector: string;
     // Portfolio detail fields
     quantity?: number;
     avgBuyPrice?: number;
     currentPrice?: number;
-    weight?: number;      // percentage
-    dailyReturn?: number; // percentage
-    volatility?: number;  // percentage
-    riskContribution?: number; // percentage
+    weight?: number;
+    dailyReturn?: number;
+    volatility?: number;
+    riskContribution?: number;
+    volatilityContribution?: number;
 }
 
 export interface CompositionEntry {
@@ -68,10 +69,27 @@ export interface RiskAlert {
     message: string;
     severity: 'high' | 'moderate' | 'low';
     timestamp: string;
-    icon: string;
+    affectedAssets: string[];
 }
 
 export interface CreatePortfolioRequest {
     name: string;
     description?: string;
+}
+
+export interface RiskMetrics {
+    beta: number;
+    betaDelta: number;
+    maxDrawdown: number;
+    maxDrawdownDelta: number;
+    concentrationIndex: number;
+    concentrationDelta: number;
+    maxDrawdownSparkline: number[];
+    betaSparkline: number[];
+    concentrationSparkline: number[];
+}
+
+export interface CorrelationMatrix {
+    assets: string[],
+    matrix: number[][]
 }

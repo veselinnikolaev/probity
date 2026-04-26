@@ -316,28 +316,28 @@ const RiskAnalysisPage: React.FC = () => {
                                                 />
                                                 <StatCard
                                                     label="Beta vs S&P 500"
-                                                    value={detail.summary.beta?.toFixed(2) || '—'}
-                                                    delta={`${detail.summary.betaDelta >= 0 ? '+' : ''}${detail.summary.betaDelta?.toFixed(2) || '0.00'}`}
-                                                    deltaType={detail.summary.betaDelta >= 0 ? 'up' : 'down'}
-                                                    riskLevel={detail.summary.beta > 1.5 ? 'HIGH' : detail.summary.beta > 0.8 ? 'MODERATE' : 'LOW'}
-                                                    sparklineData={detail.summary.sparklines?.beta || []}
+                                                    value={detail.riskMetrics.beta?.toFixed(2) || '—'}
+                                                    delta={`${detail.riskMetrics.betaDelta >= 0 ? '+' : ''}${detail.riskMetrics.betaDelta?.toFixed(2) || '0.00'}`}
+                                                    deltaType={detail.riskMetrics.betaDelta >= 0 ? 'up' : 'down'}
+                                                    riskLevel={detail.riskMetrics.beta > 1.5 ? 'HIGH' : detail.riskMetrics.beta > 0.8 ? 'MODERATE' : 'LOW'}
+                                                    sparklineData={detail.riskMetrics.betaSparkline || []}
                                                 />
                                                 <StatCard
                                                     label="Max Drawdown"
-                                                    value={`${detail.summary.maxDrawdown?.toFixed(1) || '0'}%`}
-                                                    delta={`${detail.summary.maxDrawdownDelta >= 0 ? '+' : ''}${detail.summary.maxDrawdownDelta?.toFixed(1) || '0'}%`}
-                                                    deltaType={detail.summary.maxDrawdownDelta <= 0 ? 'down' : 'up'}
-                                                    riskLevel={detail.summary.maxDrawdown > 30 ? 'HIGH' : detail.summary.maxDrawdown > 15 ? 'MODERATE' : 'LOW'}
-                                                    sparklineData={detail.summary.sparklines?.maxDrawdown || []}
+                                                    value={`${detail.riskMetrics.maxDrawdown?.toFixed(1) || '0'}%`}
+                                                    delta={`${detail.riskMetrics.maxDrawdownDelta >= 0 ? '+' : ''}${detail.riskMetrics.maxDrawdownDelta?.toFixed(1) || '0'}%`}
+                                                    deltaType={detail.riskMetrics.maxDrawdownDelta <= 0 ? 'down' : 'up'}
+                                                    riskLevel={detail.riskMetrics.maxDrawdown > 30 ? 'HIGH' : detail.riskMetrics.maxDrawdown > 15 ? 'MODERATE' : 'LOW'}
+                                                    sparklineData={detail.riskMetrics.maxDrawdownSparkline || []}
                                                     invertSentiment={true}
                                                 />
                                                 <StatCard
                                                     label="Concentration Index"
-                                                    value={detail.summary.concentrationIndex?.toFixed(2) || '—'}
-                                                    delta={`${detail.summary.concentrationDelta >= 0 ? '+' : ''}${detail.summary.concentrationDelta?.toFixed(2) || '0.00'}`}
-                                                    deltaType={detail.summary.concentrationDelta <= 0 ? 'down' : 'up'}
-                                                    riskLevel={detail.summary.concentrationIndex > 0.5 ? 'HIGH' : detail.summary.concentrationIndex > 0.25 ? 'MODERATE' : 'LOW'}
-                                                    sparklineData={detail.summary.sparklines?.concentration || []}
+                                                    value={detail.riskMetrics.concentrationIndex?.toFixed(2) || '—'}
+                                                    delta={`${detail.riskMetrics.concentrationDelta >= 0 ? '+' : ''}${detail.riskMetrics.concentrationDelta?.toFixed(2) || '0.00'}`}
+                                                    deltaType={detail.riskMetrics.concentrationDelta <= 0 ? 'down' : 'up'}
+                                                    riskLevel={detail.riskMetrics.concentrationIndex > 0.5 ? 'HIGH' : detail.riskMetrics.concentrationIndex > 0.25 ? 'MODERATE' : 'LOW'}
+                                                    sparklineData={detail.riskMetrics.concentrationSparkline || []}
                                                     invertSentiment={true}
                                                 />
                                             </div>
