@@ -40,10 +40,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const [restoredUser] = await Promise.all([
-          authService.refresh(),
-          authService.refreshCsrfToken(),
-        ]);
+        await authService.refreshCsrfToken();
+        const restoredUser = await authService.refresh();
         setUser(restoredUser);
       } catch {
         setUser(null);

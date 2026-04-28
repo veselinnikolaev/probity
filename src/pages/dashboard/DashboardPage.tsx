@@ -229,7 +229,7 @@ const DashboardPage: React.FC = () => {
                   action={
                     <button
                       className={styles['primary-button']}
-                      onClick={() => navigate('/portfolios/new')}
+                      onClick={() => navigate('/portfolios')}
                     >
                       Create Your First Portfolio
                     </button>
@@ -351,7 +351,7 @@ const DashboardPage: React.FC = () => {
                         {(detail) => (
                           <DonutChart
                             data={detail.composition}
-                            onSegmentClick={(label) => setSectorFilter(label)}
+                            onSegmentClick={(label) => setSectorFilter(prev => prev === label ? null : label)}
                           />
                         )}
                       </DataBoundary>

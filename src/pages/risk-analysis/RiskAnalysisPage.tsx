@@ -13,7 +13,7 @@ import { StatCardSkeleton, TableSkeleton } from '../../components/probity/Skelet
 import { Tooltip } from '../../components/probity/Tooltip';
 import styles from './risk-analysis.module.css';
 import { usePortfolios } from '../../hooks/usePortfolios';
-import { usePortfolioDetail } from '../../hooks/usePortfolioDetail';
+import { usePortfolioRiskDetail  } from '../../hooks/usePortfolioRiskDetail';
 
 // ── Alert icon component ─────────────────────────────────────────────────────
 type AlertSeverity = 'high' | 'moderate' | 'low' | string;
@@ -150,7 +150,7 @@ const RiskAnalysisPage: React.FC = () => {
     const portfoliosState = usePortfolios();
 
     // Fetch detail data for selected portfolio
-    const detailState = usePortfolioDetail(selectedPortfolio, selectedDateRange);
+    const detailState = usePortfolioRiskDetail(selectedPortfolio, selectedDateRange);
 
     useEffect(() => {
         if (portfoliosState.data && portfoliosState.data.length > 0 && !selectedPortfolio) {
@@ -316,28 +316,28 @@ const RiskAnalysisPage: React.FC = () => {
                                                 />
                                                 <StatCard
                                                     label="Beta vs S&P 500"
-                                                    value={detail.riskMetrics.beta?.toFixed(2) || '—'}
-                                                    delta={`${detail.riskMetrics.betaDelta >= 0 ? '+' : ''}${detail.riskMetrics.betaDelta?.toFixed(2) || '0.00'}`}
+                                                    value={detail.riskMetrics.beta.toFixed(2)}
+                                                    delta={`${detail.riskMetrics.betaDelta >= 0 ? '+' : ''}${detail.riskMetrics.betaDelta.toFixed(2)}`}
                                                     deltaType={detail.riskMetrics.betaDelta >= 0 ? 'up' : 'down'}
                                                     riskLevel={detail.riskMetrics.beta > 1.5 ? 'HIGH' : detail.riskMetrics.beta > 0.8 ? 'MODERATE' : 'LOW'}
-                                                    sparklineData={detail.riskMetrics.betaSparkline || []}
+                                                    sparklineData={detail.riskMetrics.betaSparkline}
                                                 />
                                                 <StatCard
                                                     label="Max Drawdown"
-                                                    value={`${detail.riskMetrics.maxDrawdown?.toFixed(1) || '0'}%`}
-                                                    delta={`${detail.riskMetrics.maxDrawdownDelta >= 0 ? '+' : ''}${detail.riskMetrics.maxDrawdownDelta?.toFixed(1) || '0'}%`}
+                                                    value={`${detail.riskMetrics.maxDrawdown.toFixed(1)}%`}
+                                                    delta={`${detail.riskMetrics.maxDrawdownDelta >= 0 ? '+' : ''}${detail.riskMetrics.maxDrawdownDelta.toFixed(1)}%`}
                                                     deltaType={detail.riskMetrics.maxDrawdownDelta <= 0 ? 'down' : 'up'}
                                                     riskLevel={detail.riskMetrics.maxDrawdown > 30 ? 'HIGH' : detail.riskMetrics.maxDrawdown > 15 ? 'MODERATE' : 'LOW'}
-                                                    sparklineData={detail.riskMetrics.maxDrawdownSparkline || []}
+                                                    sparklineData={detail.riskMetrics.maxDrawdownSparkline}
                                                     invertSentiment={true}
                                                 />
                                                 <StatCard
                                                     label="Concentration Index"
-                                                    value={detail.riskMetrics.concentrationIndex?.toFixed(2) || '—'}
-                                                    delta={`${detail.riskMetrics.concentrationDelta >= 0 ? '+' : ''}${detail.riskMetrics.concentrationDelta?.toFixed(2) || '0.00'}`}
+                                                    value={detail.riskMetrics.concentrationIndex.toFixed(2)}
+                                                    delta={`${detail.riskMetrics.concentrationDelta >= 0 ? '+' : ''}${detail.riskMetrics.concentrationDelta.toFixed(2)}`}
                                                     deltaType={detail.riskMetrics.concentrationDelta <= 0 ? 'down' : 'up'}
                                                     riskLevel={detail.riskMetrics.concentrationIndex > 0.5 ? 'HIGH' : detail.riskMetrics.concentrationIndex > 0.25 ? 'MODERATE' : 'LOW'}
-                                                    sparklineData={detail.riskMetrics.concentrationSparkline || []}
+                                                    sparklineData={detail.riskMetrics.concentrationSparkline}
                                                     invertSentiment={true}
                                                 />
                                             </div>
@@ -374,8 +374,12 @@ const RiskAnalysisPage: React.FC = () => {
                                                             {/* Render a simple stacked bar chart */}
                                                             {detail.positions.slice(0, 8).map((pos, idx) => {
                                                                 const positionWidth = (600 / detail.positions.slice(0, 8).length);
-                                                                const contribution = pos.volatilityContribution || Math.random() * 100;
-                                                                const height = (contribution / 100) * 150;
+                                                                const maxContribution = Math.max(
+                                                                    ...detail.positions.slice(0, 8).map(p => p.volatilityContribution ?? 0),
+                                                                    1  // prevent division by zero
+                                                                );
+                                                                const contribution = pos.volatilityContribution ?? 0;
+                                                                const height = (contribution / maxContribution) * 150;
                                                                 return (
                                                                     <g key={idx}>
                                                                         <rect
@@ -471,15 +475,12 @@ const RiskAnalysisPage: React.FC = () => {
                                         )}
                                     >
                                         {(detail) => {
-                                            const assets = detail.positions.map(p => p.ticker);
-                                            // Generate sample correlation matrix (in production, this comes from API)
-                                            const correlations = assets.map((_, i) =>
-                                                assets.map((_, j) => {
-                                                    if (i === j) return 1.0;
-                                                    return Math.cos((i - j) * Math.PI / assets.length) * 0.7 + (Math.random() - 0.5) * 0.2;
-                                                })
+                                            return (
+                                                <CorrelationHeatmap
+                                                    assets={detail.correlation.assets}
+                                                    correlations={detail.correlation.matrix}
+                                                />
                                             );
-                                            return <CorrelationHeatmap assets={assets} correlations={correlations} />;
                                         }}
                                     </DataBoundary>
                                 </section>

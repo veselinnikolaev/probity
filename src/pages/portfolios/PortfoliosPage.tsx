@@ -140,7 +140,10 @@ const PortfoliosPage: React.FC = () => {
                     volatility={portfolio.volatility}
                     sharpeRatio={portfolio.sharpeRatio}
                     sparklineData={portfolio.sparklineData || []}
-                    onClick={() => navigate(`/portfolio-detail?portfolio=${portfolio.id}`)}
+                    onClick={() => navigate(
+                        `/portfolio-detail?portfolio=${portfolio.id}`,
+                        { state: { name: portfolio.name } }
+                    )}
                   />
                 ))}
                 <EmptyPortfolioCard onClick={() => setIsModalOpen(true)} />

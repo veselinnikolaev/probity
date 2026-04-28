@@ -5,6 +5,7 @@ import { RiskBadge } from './RiskBadge';
 
 interface PortfolioDetailTableProps {
   positions: Position[];
+  deletingId?: string | null;
   onEdit?: (positionId: string) => void;
   onDelete?: (positionId: string) => void;
 }

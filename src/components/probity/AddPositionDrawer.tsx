@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AssetTag } from './AssetTag';
 import { ProbityButton } from './ProbityButton';
+import { portfolioService } from "../../api/portfolioService";
 import { InputField } from './InputField';
 
 interface Asset {
@@ -11,11 +12,21 @@ interface Asset {
   currentPrice: number;
 }
 
+interface EditingPosition {
+    ticker: string;
+    name: string;
+    type: 'STOCK' | 'ETF' | 'CRYPTO' | 'BOND';
+    currentPrice: number;
+    quantity: number;
+}
+
 interface AddPositionDrawerProps {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   portfolioId: string;
   editingPositionId?: string | null;
+  editingPosition?: EditingPosition | null;
 }
 
 // Mock asset data for search - in a real app, this would come from an API
@@ -33,15 +44,35 @@ const MOCK_ASSETS: Asset[] = [
 ];
 
 export function AddPositionDrawer({
-  open,
-  onClose,
-  portfolioId,
-  editingPositionId,
+                                      open,
+                                      onClose,
+                                      onSuccess,
+                                      portfolioId,
+                                      editingPositionId,
+                                      editingPosition,
 }: AddPositionDrawerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [quantity, setQuantity] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+        if (editingPosition) {
+            setSelectedAsset({
+                id: editingPosition.ticker,
+                name: editingPosition.name,
+                ticker: editingPosition.ticker,
+                type: editingPosition.type,
+                currentPrice: editingPosition.currentPrice,
+            });
+            setQuantity(editingPosition.quantity.toString());
+        } else {
+            setSelectedAsset(null);
+            setQuantity('');
+            setSearchQuery('');
+        }
+    }, [open, editingPosition]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -58,29 +89,32 @@ export function AddPositionDrawer({
     setSearchQuery('');
   };
 
-  const handleAddPosition = async () => {
-    if (!selectedAsset || !quantity) return;
+    const handleAddPosition = async () => {
+        if (!selectedAsset || !quantity) return;
 
-    setIsLoading(true);
-    try {
-      // TODO: Call API to add position
-      console.log('Adding position:', {
-        portfolioId,
-        assetId: selectedAsset.id,
-        quantity: parseFloat(quantity),
-      });
-      
-      // Reset form
-      setSelectedAsset(null);
-      setQuantity('');
-      setSearchQuery('');
-      onClose();
-    } catch (error) {
-      console.error('Failed to add position:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        setIsLoading(true);
+        try {
+            if (editingPositionId) {
+                await portfolioService.updatePosition(portfolioId, editingPositionId, {
+                    quantity: parseFloat(quantity),
+                });
+            } else {
+                await portfolioService.addPosition(portfolioId, {
+                    ticker: selectedAsset.ticker,
+                    quantity: parseFloat(quantity),
+                });
+            }
+            setSelectedAsset(null);
+            setQuantity('');
+            setSearchQuery('');
+            onSuccess?.();
+            onClose();
+        } catch (error) {
+            console.error('Failed to save position:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
   if (!open) return null;
 

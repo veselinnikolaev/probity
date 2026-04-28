@@ -33,4 +33,13 @@ export const portfolioService = {
 
     getCorrelation: (id: string, range: string) =>
         api.get<CorrelationMatrix>(`/portfolios/${id}/correlation`, { params: { range } }).then(r => r.data),
+
+    addPosition: (portfolioId: string, data: { ticker: string; quantity: number }) =>
+        api.post(`/portfolios/${portfolioId}/positions`, data).then(r => r.data),
+
+    updatePosition: (portfolioId: string, positionId: string, data: { quantity: number }) =>
+        api.put(`/portfolios/${portfolioId}/positions/${positionId}`, data).then(r => r.data),
+
+    deletePosition: (portfolioId: string, positionId: string) =>
+        api.delete(`/portfolios/${portfolioId}/positions/${positionId}`).then(r => r.data),
 };

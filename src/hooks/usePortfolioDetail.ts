@@ -1,28 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { portfolioService } from '../api/portfolioService';
 import { AsyncState } from '../types/async-state';
-import type { PortfolioSummary, Position, CompositionEntry, RiskAlert, VolatilityPoint, RiskMetrics } from '../types/portfolio';
+import type {
+  PortfolioSummary,
+  Position,
+  CompositionEntry,
+  RiskAlert,
+  VolatilityPoint
+} from '../types/portfolio';
 
-/**
- * Combined portfolio detail data for a specific portfolio.
- * All fields are required when data is present.
- */
 export interface PortfolioDetail {
   summary: PortfolioSummary;
   positions: Position[];
   composition: CompositionEntry[];
   volatility: VolatilityPoint[];
   alerts: RiskAlert[];
-  riskMetrics: RiskMetrics;
 }
 
-/**
- * Fetch all portfolio detail data for a specific portfolio with full AsyncState management.
- * Enforces loading, error, and empty states for all related data.
- */
 export function usePortfolioDetail(
-  portfolioId: string,
-  dateRange: string
+    portfolioId: string,
+    dateRange: string
 ): AsyncState<PortfolioDetail> & { refetch: () => void } {
   const [state, setState] = useState<AsyncState<PortfolioDetail>>({
     isLoading: true,
@@ -34,35 +31,28 @@ export function usePortfolioDetail(
       setState({ isLoading: false, error: null });
       return;
     }
-
     setState({ isLoading: true, error: null });
-
     try {
-      const [summary, positions, composition, volatility, alerts, riskMetrics] = await Promise.all([
+      const [summary, positions, composition, volatility, alerts] = await Promise.all([
         portfolioService.getSummary(portfolioId, dateRange),
         portfolioService.getPositions(portfolioId),
         portfolioService.getComposition(portfolioId),
         portfolioService.getVolatility(portfolioId, dateRange),
         portfolioService.getAlerts(portfolioId),
-        portfolioService.getRiskMetrics(portfolioId, dateRange),
       ]);
-
       setState({
-        data: { summary, positions, composition, volatility, alerts, riskMetrics },
+        data: { summary, positions, composition, volatility, alerts },
         isLoading: false,
         error: null,
       });
     } catch (e: any) {
-      const errorMsg = e?.response?.data?.message ?? 'Failed to load portfolio details';
-      setState({ isLoading: false, error: errorMsg });
+      setState({
+        isLoading: false,
+        error: e?.response?.data?.message ?? 'Failed to load portfolio details',
+      });
     }
   }, [portfolioId, dateRange]);
 
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
-
+  useEffect(() => { fetch(); }, [fetch]);
   return { ...state, refetch: fetch };
 }
-
-export default usePortfolioDetail;
