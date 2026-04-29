@@ -8,11 +8,8 @@ export interface  StatCardProps {
     subValue?: string;
     delta?: string;
     deltaType?: "up" | "down" | "neutral";
-    // FIX: When true, the sparkline colour is inverted — a rising line is drawn
-    // in red and a falling line in green. Use this for metrics where higher is
-    // *worse* (e.g. Portfolio Volatility, VaR).
     invertSentiment?: boolean;
-    sparklineData?: number[];
+    sparklineData?: (number | null)[];
     riskLevel?: RiskLevel;
     loading?: boolean;
     suffix?: string;
@@ -81,10 +78,10 @@ export function StatCard({
     //   trend down → green (#10B981)   ← lower is better
     const sparklineColor = (() => {
         if (!sparklineData || sparklineData.length < 2) return "#3B82F6";
-        const trendUp = sparklineData[sparklineData.length - 1] > sparklineData[0];
-        if (invertSentiment) {
-            return trendUp ? "#EF4444" : "#10B981";
-        }
+        const first = sparklineData.find(v => v != null) ?? 0;
+        const last = [...sparklineData].reverse().find(v => v != null) ?? 0;
+        const trendUp = last > first;
+        if (invertSentiment) return trendUp ? "#EF4444" : "#10B981";
         return trendUp ? "#10B981" : "#EF4444";
     })();
 

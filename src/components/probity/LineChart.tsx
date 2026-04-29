@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 
 interface LineChartProps {
-  data: number[];
+  data: (number | null)[];
   width?: number;
   height?: number;
   lineColor?: string;
@@ -63,9 +63,17 @@ export function LineChart({
   const gW = width - pad.left - pad.right;
   const gH = height - pad.top - pad.bottom;
 
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  const validData = data.filter((v): v is number => v != null);
+  const min = Math.min(...validData);
+  const max = Math.max(...validData);
   const range = max - min || 1;
+
+  const points = data.map((v, i) => ({
+    x: pad.left + (gW / (data.length - 1)) * i,
+    y: v != null ? pad.top + gH - ((v - min) / range) * gH : null,
+    value: v,
+    idx: i,
+  }));
 
   const gridCount = 4;
   const gridPts = Array.from({ length: gridCount + 1 }, (_, i) => ({
@@ -73,24 +81,31 @@ export function LineChart({
     value: max - (range / gridCount) * i,
   }));
 
-  const points = data.map((v, i) => ({
-    x: pad.left + (gW / (data.length - 1)) * i,
-    y: pad.top + gH - ((v - min) / range) * gH,
-    value: v,
-    idx: i,
-  }));
-
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const areaD = `${pathD} L ${points.at(-1)!.x} ${pad.top + gH} L ${pad.left} ${pad.top + gH} Z`;
+  const pathD = points
+      .map((p, i) => {
+        if (p.y == null) return null;
+        const prev = points[i - 1];
+        const move = i === 0 || prev?.y == null ? 'M' : 'L';
+        return `${move} ${p.x} ${p.y}`;
+      })
+      .filter(Boolean)
+      .join(' ');  const areaD = `${pathD} L ${points.at(-1)!.x} ${pad.top + gH} L ${pad.left} ${pad.top + gH} Z`;
 
   const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const scaleX = width / rect.width;
     const mouseX = (e.clientX - rect.left) * scaleX;
-    let nearest = points[0];
-    let minDist = Math.abs(points[0].x - mouseX);
-    for (const p of points) {
+
+    // Only snap to points that have a valid y (non-null data)
+    const validPoints = points.filter((p): p is typeof p & { y: number; value: number } =>
+        p.y != null && p.value != null
+    );
+    if (validPoints.length === 0) return;
+
+    let nearest = validPoints[0];
+    let minDist = Math.abs(nearest.x - mouseX);
+    for (const p of validPoints) {
       const d = Math.abs(p.x - mouseX);
       if (d < minDist) { minDist = d; nearest = p; }
     }
@@ -170,7 +185,7 @@ export function LineChart({
           )}
 
           <g clipPath="url(#lc-plot-area)">
-            {points.map(p => (
+            {points.filter((p): p is typeof p & { y: number } => p.y != null).map(p => (
                 <circle
                     key={p.idx}
                     cx={p.x} cy={p.y}

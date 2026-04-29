@@ -3,16 +3,18 @@ import type {
     Portfolio, PortfolioSummary, Position,
     CompositionEntry, VolatilityPoint, RiskAlert,
     RiskMetrics, CorrelationMatrix,
-    CreatePortfolioRequest
+    CreatePortfolioRequest, AssetSearchResult,
 } from '../types/portfolio';
 
 export const portfolioService = {
+    // ── Portfolios ────────────────────────────────────────────────────────────
     getPortfolios: () =>
         api.get<Portfolio[]>('/portfolios').then(r => r.data),
 
     createPortfolio: (data: CreatePortfolioRequest) =>
         api.post<Portfolio>('/portfolios', data).then(r => r.data),
 
+    // ── Portfolio detail ──────────────────────────────────────────────────────
     getSummary: (id: string, range: string) =>
         api.get<PortfolioSummary>(`/portfolios/${id}/summary`, { params: { range } }).then(r => r.data),
 
@@ -34,6 +36,7 @@ export const portfolioService = {
     getCorrelation: (id: string, range: string) =>
         api.get<CorrelationMatrix>(`/portfolios/${id}/correlation`, { params: { range } }).then(r => r.data),
 
+    // ── Positions — no price field, server fetches current price ──────────────
     addPosition: (portfolioId: string, data: { ticker: string; quantity: number }) =>
         api.post(`/portfolios/${portfolioId}/positions`, data).then(r => r.data),
 
@@ -42,4 +45,10 @@ export const portfolioService = {
 
     deletePosition: (portfolioId: string, positionId: string) =>
         api.delete(`/portfolios/${portfolioId}/positions/${positionId}`).then(r => r.data),
+
+    // ── Asset search — hits your backend, which queries the Asset table ────────
+    searchAssets: (query: string): Promise<AssetSearchResult[]> => {
+        if (!query.trim()) return Promise.resolve([]);
+        return api.get<AssetSearchResult[]>('/assets/search', { params: { q: query } }).then(r => r.data);
+    },
 };
