@@ -8,6 +8,7 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import PortfoliosPage from './pages/portfolios/PortfoliosPage';
 import PortfolioDetailPage from './pages/portfolio-detail/PortfolioDetailPage';
 import RiskAnalysisPage from './pages/risk-analysis/RiskAnalysisPage';
+import VaRReportPage from './pages/var-report/VaRReportPage';
 
 // ---------------------------------------------------------------------------
 // App
@@ -27,6 +28,7 @@ const App: React.FC = () => {
               <Route path="/portfolios" element={<PortfoliosPage />} />
               <Route path="/portfolio-detail" element={<PortfolioDetailPage />} />
               <Route path="/risk" element={<RiskAnalysisPage />} />
+              <Route path="/var" element={<VaRReportPage />} />
               {/* Add more protected routes here */}
             </Route>
 
