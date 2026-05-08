@@ -75,7 +75,7 @@ const PortfolioDetailPage: React.FC = () => {
     { label: 'Settings',      icon: '⚙️', id: 'settings'   },
   ];
 
-  const unimplemented = ['var', 'monte', 'correlation', 'settings'];
+  const unimplemented = ['var', 'correlation', 'settings'];
 
   const buildStatCards = (summary: any, positions: any[]): StatCardProps[] => [
     {
