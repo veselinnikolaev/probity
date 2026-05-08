@@ -3,7 +3,7 @@ import type {
     Portfolio, PortfolioSummary, Position,
     CompositionEntry, VolatilityPoint, RiskAlert,
     RiskMetrics, CorrelationMatrix,
-    CreatePortfolioRequest, AssetSearchResult,
+    CreatePortfolioRequest, AssetSearchResult, VaRReport,
 } from '../types/portfolio';
 
 export const portfolioService = {
@@ -51,4 +51,9 @@ export const portfolioService = {
         if (!query.trim()) return Promise.resolve([]);
         return api.get<AssetSearchResult[]>('/assets/search', { params: { q: query } }).then(r => r.data);
     },
+
+    getVaRReport: (id: string, confidenceLevel: number, timeHorizonDays: number) =>
+        api.get<VaRReport>(`/portfolios/${id}/var-report`, {
+            params: { confidenceLevel, timeHorizonDays },
+        }).then(r => r.data),
 };
