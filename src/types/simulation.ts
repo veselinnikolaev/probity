@@ -1,8 +1,3 @@
-/**
- * Monte Carlo Simulation Types
- * Structured for backend integration
- */
-
 // ── Request / Input ──────────────────────────────────────────────────────────
 export interface SimulationRequest {
   portfolioId: string;

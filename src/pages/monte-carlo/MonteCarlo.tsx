@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePortfolios } from '../../hooks/usePortfolios';
-import { StatCard, StatCardProps } from '../../components/probity/StatCard';
+import { StatCard } from '../../components/probity/StatCard';
 import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataBoundary } from '../../components/core/DataBoundary';
@@ -12,7 +12,7 @@ import { StatCardSkeleton } from '../../components/probity/SkeletonLoader';
 import { FanChart } from '../../components/probity/FanChart';
 import { DistributionHistogram } from '../../components/probity/DistributionHistogram';
 import { PercentileTable } from '../../components/probity/PercentileTable';
-import { SimulationResult, SimulationRequest, SimulationAsyncState } from '../../types/simulation';
+import { SimulationRequest, SimulationAsyncState } from '../../types/simulation';
 import { runSimulation } from '../../api/simulationService';
 import styles from './monte-carlo.module.css';
 
