@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePortfolios } from '../../hooks/usePortfolios';
@@ -12,43 +12,9 @@ import { StatCardSkeleton } from '../../components/probity/SkeletonLoader';
 import { FanChart } from '../../components/probity/FanChart';
 import { DistributionHistogram } from '../../components/probity/DistributionHistogram';
 import { PercentileTable } from '../../components/probity/PercentileTable';
-import { SimulationRequest, SimulationAsyncState } from '../../types/simulation';
-import { runSimulation } from '../../api/simulationService';
+import { SimulationRequest } from '../../types/simulation';
 import styles from './monte-carlo.module.css';
-
-// ── Simulation State Hook ────────────────────────────────────────────────────
-function useSimulation(portfolioId: string) {
-  const [state, setState] = useState<SimulationAsyncState>({ status: 'idle', data: null });
-
-  const run = useCallback(
-    async (request: SimulationRequest, currentValue: number) => {
-      setState({ status: 'loading', data: null });
-      try {
-        const result = await runSimulation(request, currentValue);
-        setState({ status: 'success', data: result });
-        return result;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to run simulation';
-        setState({ status: 'error', data: null, error: message });
-      }
-    },
-    []
-  );
-
-  const refetch = useCallback((currentValue: number) => {
-    if (state.status === 'success' && state.data) {
-      const request: SimulationRequest = {
-        portfolioId,
-        numberOfSimulations: state.data.parameters.numberOfSimulations,
-        timeHorizonDays: state.data.parameters.timeHorizonDays,
-        confidenceLevel: state.data.parameters.confidenceLevel,
-      };
-      run(request, currentValue);
-    }
-  }, [state, portfolioId, run]);
-
-  return { state, run, refetch };
-}
+import {useSimulation} from "../../hooks/useSimulation";
 
 // ── Main Component ───────────────────────────────────────────────────────────
 const MonteCarloPage: React.FC = () => {
@@ -62,7 +28,6 @@ const MonteCarloPage: React.FC = () => {
   const [numberOfSims, setNumberOfSims] = useState(10000);
   const [timeHorizon, setTimeHorizon] = useState(365);
   const [confidenceLevel, setConfidenceLevel] = useState(95);
-  const [mockCurrentValue, setMockCurrentValue] = useState(100000);
 
   const simulationState = useSimulation(selectedPortfolio);
 
@@ -70,7 +35,6 @@ const MonteCarloPage: React.FC = () => {
   useEffect(() => {
     if (portfoliosState.data && portfoliosState.data.length > 0 && !selectedPortfolio) {
       setSelectedPortfolio(portfoliosState.data[0].id);
-      setMockCurrentValue(portfoliosState.data[0].totalValue);
     }
   }, [portfoliosState.data, selectedPortfolio]);
 
@@ -81,13 +45,13 @@ const MonteCarloPage: React.FC = () => {
   };
 
   const handleRunSimulation = async () => {
-    const request: SimulationRequest = {
-      portfolioId: selectedPortfolio,
-      numberOfSimulations: numberOfSims,
-      timeHorizonDays: timeHorizon,
-      confidenceLevel,
-    };
-    await simulationState.run(request, mockCurrentValue);
+      const request: SimulationRequest = {
+          portfolioId: selectedPortfolio,
+          numberOfSimulations: numberOfSims,
+          timeHorizonDays: timeHorizon,
+          confidenceLevel,
+      };
+      await simulationState.run(request);
   };
 
   const isLoading = simulationState.state.status === 'loading';
@@ -147,8 +111,6 @@ const MonteCarloPage: React.FC = () => {
             value={selectedPortfolio}
             onChange={(val) => {
               setSelectedPortfolio(val);
-              const portfolio = portfoliosState.data?.find((p) => p.id === val);
-              if (portfolio) setMockCurrentValue(portfolio.totalValue);
             }}
             width="240px"
           />
@@ -289,7 +251,7 @@ const MonteCarloPage: React.FC = () => {
                 ) : simulationState.state.status === 'error' ? (
                   <ErrorState
                     message={simulationState.state.error}
-                    onRetry={() => simulationState.refetch(mockCurrentValue)}
+                    onRetry={() => simulationState.refetch()}
                   />
                 ) : simulationState.state.status === 'loading' ? (
                   <>

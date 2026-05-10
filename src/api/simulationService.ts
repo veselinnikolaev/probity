@@ -8,11 +8,12 @@ import { SimulationRequest, SimulationResult } from '../types/simulation';
  * The backend derives μ and σ from real market data when
  * assumedReturnPercent / assumedVolatilityPercent are omitted.
  */
-export async function runSimulation(
-    request: SimulationRequest,
-    _currentPortfolioValue?: number,
-): Promise<SimulationResult> {
-  const response = await api.post<SimulationResult>('/simulations/run', request);
+export async function runSimulation(request: SimulationRequest): Promise<SimulationResult> {
+  const payload = {
+    ...request,
+    confidenceLevel: request.confidenceLevel / 100,  // 95 → 0.95
+  };
+  const response = await api.post<SimulationResult>('/simulations/run', payload);
   return response.data;
 }
 
