@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // -------------------------------------------------------------------------
   const login = useCallback(async (payload: LoginPayload) => {
     const loggedInUser = await authService.login(payload);
+    await authService.refreshCsrfToken(); // re-fetch after login rotates the token
     setUser(loggedInUser);
   }, []);
 
