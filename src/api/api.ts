@@ -34,16 +34,18 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
     response => response,
     async error => {
-      if (
-          error.response?.status === 403 &&
-          !error.config._csrfRetry &&
-          !error.config.url?.includes('/auth/csrf')
-      ) {
-        error.config._csrfRetry = true;
-        await api.get('/auth/csrf');
-        return api(error.config);
-      }
-      return Promise.reject(error);
+        if (
+            error.response?.status === 403 &&
+            !error.config._csrfRetry &&
+            !error.config.url?.includes('/auth/csrf')
+        ) {
+            error.config._csrfRetry = true;
+            const csrfRes = await api.get('/auth/csrf');
+            const token = csrfRes.headers['x-xsrf-token'];
+            if (token) storeCsrfToken(token);
+            return api(error.config);
+        }
+        return Promise.reject(error);
     }
 );
 
