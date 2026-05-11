@@ -8,6 +8,12 @@ const api: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
+let csrfToken: string | null = null;
+
+export function storeCsrfToken(token: string) {
+    csrfToken = token;
+}
+
 function getCookie(name: string): string | null {
     const value = document.cookie
         .split('; ')
@@ -18,11 +24,11 @@ function getCookie(name: string): string | null {
 }
 
 api.interceptors.request.use((config) => {
-  const token = getCookie('XSRF-TOKEN');
-  if (token) {
-    config.headers.set('X-XSRF-TOKEN', token);
-  }
-  return config;
+    const token = csrfToken ?? getCookie('XSRF-TOKEN');
+    if (token && config.headers) {
+        config.headers['X-XSRF-TOKEN'] = token;
+    }
+    return config;
 });
 
 api.interceptors.response.use(

@@ -1,4 +1,4 @@
-import api from './api';
+import api, {storeCsrfToken} from './api';
 import { LoginPayload, RegisterPayload, User } from '../types/auth.types';
 
 export const authService = {
@@ -31,6 +31,8 @@ export const authService = {
   },
 
   async refreshCsrfToken(): Promise<void> {
-    await api.get('/auth/csrf');
+    const res = await api.get('/auth/csrf');
+    const token = res.headers['x-xsrf-token'];
+    if (token) storeCsrfToken(token);
   },
 };
