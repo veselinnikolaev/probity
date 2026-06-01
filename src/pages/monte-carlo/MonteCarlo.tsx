@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import { usePortfolios } from '../../hooks/usePortfolios';
 import { StatCard } from '../../components/probity/StatCard';
-import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataBoundary } from '../../components/core/DataBoundary';
 import { EmptyState } from '../../components/probity/EmptyState';
@@ -15,10 +13,11 @@ import { PercentileTable } from '../../components/probity/PercentileTable';
 import { SimulationRequest } from '../../types/simulation';
 import styles from './monte-carlo.module.css';
 import {useSimulation} from "../../hooks/useSimulation";
+import {useTopbarSlot} from "../../hooks/useTopbarSlot";
+import {ROUTES} from "../../constants/routes";
 
 // ── Main Component ───────────────────────────────────────────────────────────
 const MonteCarloPage: React.FC = () => {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const portfoliosState = usePortfolios();
 
@@ -38,11 +37,6 @@ const MonteCarloPage: React.FC = () => {
   }, [portfoliosState.data, selectedPortfolio]);
 
   // ── Event handlers ───────────────────────────────────────────────────────────
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
-
   const handleRunSimulation = async () => {
       const request: SimulationRequest = {
           portfolioId: selectedPortfolio,
@@ -71,37 +65,22 @@ const MonteCarloPage: React.FC = () => {
   ];
 
   // ── UI Components ────────────────────────────────────────────────────────────
-  const Topbar = (
-    <header className={styles['topbar']}>
-      <div className={styles['topbar-left']}>
-        {portfolioOptions.length > 0 && (
-          <DropdownSelect
-            options={portfolioOptions}
-            value={selectedPortfolio}
-            onChange={(val) => {
-              setSelectedPortfolio(val);
-            }}
-            width="240px"
-          />
-        )}
-      </div>
-      <div className={styles['topbar-right']}>
-        <span className={styles['notification-bell']}>🔔</span>
-        <div
-          className={styles['user-avatar']}
-          onClick={handleLogout}
-          title="Click to sign out"
-        >
-          {user?.username?.charAt(0).toUpperCase() || 'U'}
-        </div>
-      </div>
-    </header>
-  );
+    useTopbarSlot(
+        <>
+            {portfolioOptions.length > 0 && (
+                <DropdownSelect
+                    options={portfolioOptions}
+                    value={selectedPortfolio}
+                    onChange={(val) => setSelectedPortfolio(val)}
+                    width="240px"
+                />
+            )}
+        </>,
+        [portfolioOptions, selectedPortfolio]
+    );
 
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
-      <div className={styles['main-wrapper']}>
-        {Topbar}
         <main className={styles['content-area']}>
           <DataBoundary
             state={portfoliosState}
@@ -126,7 +105,7 @@ const MonteCarloPage: React.FC = () => {
                         cursor: 'pointer',
                         fontFamily: 'var(--font-body)',
                       }}
-                      onClick={() => navigate('/portfolios')}
+                      onClick={() => navigate(ROUTES.PORTFOLIOS)}
                     >
                       Create Your First Portfolio
                     </button>
@@ -316,7 +295,6 @@ const MonteCarloPage: React.FC = () => {
             )}
           </DataBoundary>
         </main>
-      </div>
   );
 };
 

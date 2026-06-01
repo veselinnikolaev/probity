@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import { useVaRReport } from '../../hooks/useVaRReport';
 import { LineChart } from '../../components/probity/LineChart';
-import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataBoundary } from '../../components/core/DataBoundary';
 import { EmptyState } from '../../components/probity/EmptyState';
@@ -12,11 +10,10 @@ import { StatCardSkeleton } from '../../components/probity/SkeletonLoader';
 import styles from './var-report.module.css';
 import { usePortfolios } from '../../hooks/usePortfolios';
 import type { VaRReport } from '../../types/portfolio';
+import {useTopbarSlot} from "../../hooks/useTopbarSlot";
 
 const VaRReportPage: React.FC = () => {
-    const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const [activeNav, setActiveNav] = useState('var');
     const [selectedPortfolio, setSelectedPortfolio] = useState('');
     const [confidenceLevel, setConfidenceLevel] = useState('95');
     const [timeHorizon, setTimeHorizon] = useState('1d');
@@ -34,67 +31,24 @@ const VaRReportPage: React.FC = () => {
 
     const varReportState = useVaRReport(selectedPortfolio, confidenceLevelNum, timeHorizonDays);
 
-    const handleLogout = async () => {
-        await logout();
-        navigate('/login', { replace: true });
-    };
-
     const portfolioOptions = (portfoliosState.data || []).map(p => ({
         value: p.id,
         label: p.name,
         description: `$${p.totalValue.toLocaleString()}`,
     }));
 
-    const navItems = [
-        { label: 'Dashboard',    icon: '📊', id: 'dashboard'   },
-        { label: 'Portfolios',   icon: '💼', id: 'portfolios'  },
-        { label: 'Risk Analysis',icon: '⚠️', id: 'risk'        },
-        { label: 'VaR Report',   icon: '📈', id: 'var'         },
-        { label: 'Monte Carlo',  icon: '🎲', id: 'monte'       },
-        { label: 'Correlation',  icon: '🔗', id: 'correlation' },
-        { label: 'Settings',     icon: '⚙️', id: 'settings'   },
-    ];
-
-    const Sidebar = (
-        <aside className={styles['sidebar']}>
-            <div className={styles['sidebar-logo']}>Probity</div>
-            <nav className={styles['sidebar-nav']}>
-                {navItems.map(item => (
-                    <SidebarNavItem
-                        key={item.id}
-                        label={item.label}
-                        icon={item.icon}
-                        active={activeNav === item.id}
-                        onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
-                    />
-                ))}
-            </nav>
-        </aside>
-    );
-
-    const Topbar = (
-        <header className={styles['topbar']}>
-            <div className={styles['topbar-left']}>
-                {portfolioOptions.length > 0 && (
-                    <DropdownSelect
-                        options={portfolioOptions}
-                        value={selectedPortfolio}
-                        onChange={(val) => setSelectedPortfolio(val)}
-                        width="240px"
-                    />
-                )}
-            </div>
-            <div className={styles['topbar-right']}>
-                <span className={styles['notification-bell']}>🔔</span>
-                <div
-                    className={styles['user-avatar']}
-                    onClick={handleLogout}
-                    title="Click to sign out"
-                >
-                    {user?.username?.charAt(0).toUpperCase() || 'U'}
-                </div>
-            </div>
-        </header>
+    useTopbarSlot(
+        <>
+            {portfolioOptions.length > 0 && (
+                <DropdownSelect
+                    options={portfolioOptions}
+                    value={selectedPortfolio}
+                    onChange={(val) => setSelectedPortfolio(val)}
+                    width="240px"
+                />
+            )}
+        </>,
+        [portfolioOptions, selectedPortfolio]
     );
 
     // Derived from live data — used to scale contribution bars
@@ -102,10 +56,6 @@ const VaRReportPage: React.FC = () => {
         .reduce((max, row) => Math.max(max, Math.abs(row.contribution)), 1);
 
     return (
-        <div className={styles['var-report-layout']}>
-            {Sidebar}
-            <div className={styles['main-wrapper']}>
-                {Topbar}
                 <main className={styles['content-area']}>
                     <DataBoundary
                         state={portfoliosState}
@@ -444,8 +394,6 @@ const VaRReportPage: React.FC = () => {
                         )}
                     </DataBoundary>
                 </main>
-            </div>
-        </div>
     );
 };
 

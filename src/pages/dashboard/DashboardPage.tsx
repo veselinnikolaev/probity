@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { ROUTES } from '../../constants/routes';
 import { StatCard } from '../../components/probity/StatCard';
 import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataTable, DataRow } from '../../components/probity/DataTable';
@@ -15,6 +13,7 @@ import styles from './dashboard.module.css';
 import { usePortfolios } from '../../hooks/usePortfolios';
 import { usePortfolioDetail } from '../../hooks/usePortfolioDetail';
 import type { StatCardProps } from '../../components/probity/StatCard';
+import {useTopbarSlot} from "../../hooks/useTopbarSlot";
 
 // ── Alert icon component ─────────────────────────────────────────────────────
 type AlertSeverity = 'high' | 'moderate' | 'low' | string;
@@ -60,7 +59,6 @@ function AlertIcon({ severity }: { severity: AlertSeverity }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DashboardPage: React.FC = () => {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
   const [selectedDateRange, setSelectedDateRange] = useState('90d');
@@ -77,11 +75,6 @@ const DashboardPage: React.FC = () => {
       setSelectedPortfolio(portfoliosState.data[0].id);
     }
   }, [portfoliosState.data, selectedPortfolio]);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate(ROUTES.LOGIN);
-  };
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const portfolioOptions = (portfoliosState.data || []).map(p => ({
@@ -143,47 +136,30 @@ const DashboardPage: React.FC = () => {
     },
   ];
 
-  // ── Shared UI ─────────────────────────────────────────────────────────────
-  const Topbar = (
-    <header className={styles['topbar']}>
-      <div className={styles['topbar-left']}>
+  useTopbarSlot(
+      <>
         {portfolioOptions.length > 0 && (
-          <DropdownSelect
-            options={portfolioOptions}
-            value={selectedPortfolio}
-            onChange={(val) => { setSelectedPortfolio(val); setSectorFilter(null); }}
-            width="240px"
-          />
+            <DropdownSelect
+                options={portfolioOptions}
+                value={selectedPortfolio}
+                onChange={(val) => { setSelectedPortfolio(val); setSectorFilter(null); }}
+                width="240px"
+            />
         )}
-      </div>
-      <div className={styles['topbar-center']}>
         {portfolioOptions.length > 0 && (
-          <DropdownSelect
-            options={dateRangeOptions}
-            value={selectedDateRange}
-            onChange={setSelectedDateRange}
-            width="180px"
-          />
+            <DropdownSelect
+                options={dateRangeOptions}
+                value={selectedDateRange}
+                onChange={setSelectedDateRange}
+                width="180px"
+            />
         )}
-      </div>
-      <div className={styles['topbar-right']}>
-        <span className={styles['notification-bell']}>🔔</span>
-        <div
-          className={styles['user-avatar']}
-          onClick={handleLogout}
-          title="Click to sign out"
-        >
-          {user?.username?.charAt(0).toUpperCase() || 'U'}
-        </div>
-      </div>
-    </header>
+      </>,
+      [portfolioOptions, selectedPortfolio, selectedDateRange]
   );
 
   // ── Main Render ───────────────────────────────────────────────────────────
   return (
-      <div className={styles['dashboard-layout']}>
-      <div className={styles['main-wrapper']}>
-        {Topbar}
         <main className={styles['content-area']}>
           <DataBoundary
             state={portfoliosState}
@@ -216,7 +192,7 @@ const DashboardPage: React.FC = () => {
               </div>
             )}
           >
-            {(portfolios) => (
+            {() => (
               <div className={styles['content-zones']}>
                 {/* STAT CARDS WITH BOUNDARY */}
                 <section className={styles['summary-strip']}>
@@ -406,8 +382,6 @@ const DashboardPage: React.FC = () => {
             )}
           </DataBoundary>
         </main>
-      </div>
-      </div>
   );
 };
 

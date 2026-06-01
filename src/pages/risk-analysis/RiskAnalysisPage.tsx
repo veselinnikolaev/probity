@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import { StatCard } from '../../components/probity/StatCard';
-import { RiskBadge, RiskLevel } from '../../components/probity/RiskBadge';
-import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataTable, DataRow } from '../../components/probity/DataTable';
 import { DataBoundary } from '../../components/core/DataBoundary';
 import { EmptyState } from '../../components/probity/EmptyState';
 import { ErrorState } from '../../components/probity/ErrorState';
 import { StatCardSkeleton, TableSkeleton } from '../../components/probity/SkeletonLoader';
-import { Tooltip } from '../../components/probity/Tooltip';
 import styles from './risk-analysis.module.css';
 import { usePortfolios } from '../../hooks/usePortfolios';
 import { usePortfolioRiskDetail  } from '../../hooks/usePortfolioRiskDetail';
+import {useTopbarSlot} from "../../hooks/useTopbarSlot";
 
 // ── Alert icon component ─────────────────────────────────────────────────────
 type AlertSeverity = 'high' | 'moderate' | 'low' | string;
@@ -139,7 +136,6 @@ function CorrelationHeatmap({ assets, correlations }: CorrelationHeatmapProps) {
 
 // ── Risk Analysis Page ───────────────────────────────────────────────────────
 const RiskAnalysisPage: React.FC = () => {
-    const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [selectedPortfolio, setSelectedPortfolio] = useState('');
     const [selectedDateRange, setSelectedDateRange] = useState('90d');
@@ -157,11 +153,6 @@ const RiskAnalysisPage: React.FC = () => {
         }
     }, [portfoliosState.data, selectedPortfolio]);
 
-    const handleLogout = async () => {
-        await logout();
-        navigate('/login', { replace: true });
-    };
-
     // ── Derived data ─────────────────────────────────────────────────────────
     const portfolioOptions = (portfoliosState.data || []).map(p => ({
         value: p.id,
@@ -176,47 +167,30 @@ const RiskAnalysisPage: React.FC = () => {
         { value: '1y',  label: 'Last year'    },
     ];
 
-    // ── Shared UI ─────────────────────────────────────────────────────────────
-    const Topbar = (
-        <header className={styles['topbar']}>
-            <div className={styles['topbar-left']}>
-                {portfolioOptions.length > 0 && (
-                    <DropdownSelect
-                        options={portfolioOptions}
-                        value={selectedPortfolio}
-                        onChange={(val) => { setSelectedPortfolio(val); }}
-                        width="240px"
-                    />
-                )}
-            </div>
-            <div className={styles['topbar-center']}>
-                {portfolioOptions.length > 0 && (
-                    <DropdownSelect
-                        options={dateRangeOptions}
-                        value={selectedDateRange}
-                        onChange={setSelectedDateRange}
-                        width="180px"
-                    />
-                )}
-            </div>
-            <div className={styles['topbar-right']}>
-                <span className={styles['notification-bell']}>🔔</span>
-                <div
-                    className={styles['user-avatar']}
-                    onClick={handleLogout}
-                    title="Click to sign out"
-                >
-                    {user?.username?.charAt(0).toUpperCase() || 'U'}
-                </div>
-            </div>
-        </header>
+    useTopbarSlot(
+        <>
+            {portfolioOptions.length > 0 && (
+                <DropdownSelect
+                    options={portfolioOptions}
+                    value={selectedPortfolio}
+                    onChange={(val) => setSelectedPortfolio(val)}
+                    width="240px"
+                />
+            )}
+            {portfolioOptions.length > 0 && (
+                <DropdownSelect
+                    options={dateRangeOptions}
+                    value={selectedDateRange}
+                    onChange={setSelectedDateRange}
+                    width="180px"
+                />
+            )}
+        </>,
+        [portfolioOptions, selectedPortfolio, selectedDateRange]
     );
 
     // ── Main Render ───────────────────────────────────────────────────────────
     return (
-        <div className={styles['risk-analysis-layout']}>
-            <div className={styles['main-wrapper']}>
-                {Topbar}
                 <main className={styles['content-area']}>
                     <DataBoundary
                         state={portfoliosState}
@@ -249,7 +223,7 @@ const RiskAnalysisPage: React.FC = () => {
                             </div>
                         )}
                     >
-                        {(portfolios) => (
+                        {() => (
                             <div className={styles['content-zones']}>
                                 {/* SECTION 1: RISK OVERVIEW */}
                                 <section className={styles['risk-overview']}>
@@ -527,8 +501,6 @@ const RiskAnalysisPage: React.FC = () => {
                         )}
                     </DataBoundary>
                 </main>
-            </div>
-        </div>
     );
 };
 

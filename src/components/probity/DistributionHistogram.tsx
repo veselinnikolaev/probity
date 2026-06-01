@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { DistributionBucket } from '../../types/simulation';
-import { Tooltip } from './Tooltip';
 
 interface DistributionHistogramProps {
   distribution: DistributionBucket[];
@@ -229,12 +228,27 @@ export function DistributionHistogram({
         onMouseLeave={handleMouseLeave}
       />
       {tooltip && (
-        <Tooltip
-          content={tooltip.content}
-          x={tooltip.x}
-          y={tooltip.y}
-          visible={true}
-        />
+          <div
+              style={{
+                position: 'absolute',
+                top: tooltip.y + 12,
+                left: tooltip.x + 12,
+                zIndex: 100,
+                backgroundColor: '#131B2E',
+                border: '1px solid #1E2D45',
+                borderRadius: '6px',
+                padding: '7px 10px',
+                pointerEvents: 'none',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                whiteSpace: 'pre-line',       // preserves the \n line breaks in content
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                color: 'var(--pb-text-primary)',
+                lineHeight: 1.6,
+              }}
+          >
+            {tooltip.content}
+          </div>
       )}
     </div>
   );

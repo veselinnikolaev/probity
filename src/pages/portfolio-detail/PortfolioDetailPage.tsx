@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import React, { useState, useMemo } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { usePortfolioDetail } from '../../hooks/usePortfolioDetail';
 import { StatCard } from '../../components/probity/StatCard';
-import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import { ProbityButton } from '../../components/probity/ProbityButton';
 import { PortfolioDetailTable } from '../../components/probity/PortfolioDetailTable';
 import { AddPositionDrawer } from '../../components/probity/AddPositionDrawer';
@@ -14,10 +12,9 @@ import { StatCardSkeleton, TableSkeleton } from '../../components/probity/Skelet
 import { portfolioService } from '../../api/portfolioService';
 import styles from './portfolio-detail.module.css';
 import type { StatCardProps } from '../../components/probity/StatCard';
+import {useTopbarSlot} from "../../hooks/useTopbarSlot";
 
 const PortfolioDetailPage: React.FC = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const { state: routerState } = useLocation();
   const [searchParams] = useSearchParams();
   const portfolioId = searchParams.get('portfolio') || '';
@@ -40,11 +37,6 @@ const PortfolioDetailPage: React.FC = () => {
       quantity: pos.quantity ?? 0,
     };
   }, [editingPositionId, detailState.data]);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
 
   const handleEditPosition = (positionId: string) => {
     setEditingPositionId(positionId);
@@ -108,120 +100,95 @@ const PortfolioDetailPage: React.FC = () => {
     },
   ];
 
-  const Topbar = (
-      <header className={styles['topbar']}>
-        <div className={styles['topbar-left']}>
-          <h1 className={styles['portfolio-title']}>
-            {routerState?.name || 'Portfolio'}
-          </h1>
-        </div>
-        <div className={styles['topbar-right']}>
-          <ProbityButton
-              variant="primary"
-              size="md"
-              onClick={() => {
-                setEditingPositionId(null);
-                setIsDrawerOpen(true);
-              }}
-          >
-            + Add Position
-          </ProbityButton>
-          <span className={styles['notification-bell']}>🔔</span>
-          <div className={styles['user-avatar']} onClick={handleLogout}>
-            {user?.username?.charAt(0).toUpperCase()}
-          </div>
-        </div>
-      </header>
-  );
-
-  return (
-      <div className={styles['portfolio-detail-layout']}>
-        <div className={styles['main-wrapper']}>
-          {Topbar}
-          <main className={styles['content-area']}>
-            <div className={styles['content-zones']}>
-              <section className={styles['summary-strip']}>
-                <DataBoundary
-                    state={detailState}
-                    isEmpty={(data) => !data}
-                    loading={
-                      <>{[...Array(5)].map((_, i) => <StatCardSkeleton key={i} />)}</>
-                    }
-                    empty={
-                      <EmptyState
-                          title="Portfolio Empty"
-                          description="Add positions to see metrics"
-                          size="sm"
-                      />
-                    }
-                    error={(msg) => (
-                        <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />
-                    )}
+    useTopbarSlot(
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+            <h1 className={styles['portfolio-title']}>
+                {routerState?.name || 'Portfolio'}
+            </h1>
+            <div style={{ marginLeft: 'auto' }}>
+                <ProbityButton
+                    variant="primary"
+                    size="md"
+                    onClick={() => {
+                        setEditingPositionId(null);
+                        setIsDrawerOpen(true);
+                    }}
                 >
-                  {(detail) =>
-                      buildStatCards(detail.summary, detail.positions).map((card, idx) => (
-                          <StatCard key={idx} {...card} />
-                      ))
-                  }
-                </DataBoundary>
-              </section>
-
-              <DataBoundary
-                  state={detailState}
-                  isEmpty={(data) => data.positions.length === 0}
-                  loading={<TableSkeleton rows={3} />}
-                  empty={
-                    <div className={styles['empty-state-container']}>
-                      <EmptyState
-                          icon="📊"
-                          title="No Positions Yet"
-                          description="Add your first position to start tracking your portfolio."
-                          action={
-                            <ProbityButton
-                                variant="primary"
-                                onClick={() => {
-                                  setEditingPositionId(null);
-                                  setIsDrawerOpen(true);
-                                }}
-                            >
-                              Add Position
-                            </ProbityButton>
-                          }
-                      />
-                    </div>
-                  }
-                  error={(msg) => (
-                      <ErrorState message={msg} onRetry={detailState.refetch} />
-                  )}
-              >
-                {(detail) => (
-                    <section className={styles['positions-section']}>
-                      <div className={styles['section-header']}>Positions</div>
-                      <PortfolioDetailTable
-                          positions={detail.positions}
-                          deletingId={deletingId}
-                          onEdit={handleEditPosition}
-                          onDelete={handleDeletePosition}
-                      />
-                    </section>
-                )}
-              </DataBoundary>
+                    + Add Position
+                </ProbityButton>
             </div>
-          </main>
-        </div>
+        </div>, []
+    );
 
-        <AddPositionDrawer
-            open={isDrawerOpen}
-            onClose={() => {
-              setIsDrawerOpen(false);
-              setEditingPositionId(null);
-            }}
-            onSuccess={detailState.refetch}
-            portfolioId={portfolioId}
-            editingPositionId={editingPositionId}
-            editingPosition={editingPosition}
-        />
-      </div>
+    return (
+        <>
+            <main className={styles['content-area']}>
+                <div className={styles['content-zones']}>
+                    <section className={styles['summary-strip']}>
+                        <DataBoundary
+                            state={detailState}
+                            isEmpty={(data) => !data}
+                            loading={<>{[...Array(5)].map((_, i) => <StatCardSkeleton key={i}/>)}</>}
+                            empty={<EmptyState
+                                title="Portfolio Empty"
+                                description="Add positions to see metrics"
+                                size="sm"/>}
+                            error={(msg) => (
+                                <ErrorState message={msg} onRetry={detailState.refetch} size="sm"/>
+                            )}
+                        >
+                            {(detail) => buildStatCards(detail.summary, detail.positions).map((card, idx) => (
+                                <StatCard key={idx} {...card} />
+                            ))}
+                        </DataBoundary>
+                    </section>
+
+                    <DataBoundary
+                        state={detailState}
+                        isEmpty={(data) => data.positions.length === 0}
+                        loading={<TableSkeleton rows={3}/>}
+                        empty={<div className={styles['empty-state-container']}>
+                            <EmptyState
+                                icon="📊"
+                                title="No Positions Yet"
+                                description="Add your first position to start tracking your portfolio."
+                                action={<ProbityButton
+                                    variant="primary"
+                                    onClick={() => {
+                                        setEditingPositionId(null);
+                                        setIsDrawerOpen(true);
+                                    }}
+                                >
+                                    Add Position
+                                </ProbityButton>}/>
+                        </div>}
+                        error={(msg) => (
+                            <ErrorState message={msg} onRetry={detailState.refetch}/>
+                        )}
+                    >
+                        {(detail) => (
+                            <section className={styles['positions-section']}>
+                                <div className={styles['section-header']}>Positions</div>
+                                <PortfolioDetailTable
+                                    positions={detail.positions}
+                                    deletingId={deletingId}
+                                    onEdit={handleEditPosition}
+                                    onDelete={handleDeletePosition}/>
+                            </section>
+                        )}
+                    </DataBoundary>
+                </div>
+            </main>
+            <AddPositionDrawer
+                open={isDrawerOpen}
+                onClose={() => {
+                    setIsDrawerOpen(false);
+                    setEditingPositionId(null);
+                }}
+                onSuccess={detailState.refetch}
+                portfolioId={portfolioId}
+                editingPositionId={editingPositionId}
+                editingPosition={editingPosition}/></>
   );
 };
 
