@@ -62,7 +62,6 @@ function AlertIcon({ severity }: { severity: AlertSeverity }) {
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeNav, setActiveNav] = useState('dashboard');
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
   const [selectedDateRange, setSelectedDateRange] = useState('90d');
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
@@ -96,16 +95,6 @@ const DashboardPage: React.FC = () => {
     { value: '30d', label: 'Last 30 days' },
     { value: '90d', label: 'Last 90 days' },
     { value: '1y',  label: 'Last year'    },
-  ];
-
-  const navItems = [
-    { label: 'Dashboard',   icon: '📊', id: 'dashboard'   },
-    { label: 'Portfolios',  icon: '💼', id: 'portfolios'  },
-    { label: 'Risk Analysis', icon: '⚠️', id: 'risk'      },
-    { label: 'VaR Report',  icon: '📈', id: 'var'         },
-    { label: 'Monte Carlo', icon: '🎲', id: 'monte'       },
-    { label: 'Correlation', icon: '🔗', id: 'correlation' },
-    { label: 'Settings',    icon: '⚙️', id: 'settings'   },
   ];
 
   const buildStatCards = (summary: any): StatCardProps[] => [
@@ -155,21 +144,6 @@ const DashboardPage: React.FC = () => {
   ];
 
   // ── Shared UI ─────────────────────────────────────────────────────────────
-  const Sidebar = (
-    <aside className={styles['sidebar']}>
-      <div className={styles['sidebar-logo']}>Probity</div>
-      <nav className={styles['sidebar-nav']}>
-        {navItems.map(item => (
-          <SidebarNavItem
-            key={item.id} label={item.label} icon={item.icon}
-            active={activeNav === item.id}
-            onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
-          />
-        ))}
-      </nav>
-    </aside>
-  );
-
   const Topbar = (
     <header className={styles['topbar']}>
       <div className={styles['topbar-left']}>
@@ -207,8 +181,7 @@ const DashboardPage: React.FC = () => {
 
   // ── Main Render ───────────────────────────────────────────────────────────
   return (
-    <div className={styles['dashboard-layout']}>
-      {Sidebar}
+      <div className={styles['dashboard-layout']}>
       <div className={styles['main-wrapper']}>
         {Topbar}
         <main className={styles['content-area']}>
@@ -434,7 +407,7 @@ const DashboardPage: React.FC = () => {
           </DataBoundary>
         </main>
       </div>
-    </div>
+      </div>
   );
 };
 

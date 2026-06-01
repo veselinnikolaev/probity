@@ -17,7 +17,6 @@ const PortfoliosPage: React.FC = () => {
   const navigate = useNavigate();
   const portfoliosState = usePortfolios();
 
-  const [activeNav, setActiveNav] = useState('portfolios');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -39,32 +38,7 @@ const PortfoliosPage: React.FC = () => {
     }
   };
 
-  const navItems = [
-    { label: 'Dashboard', icon: '📊', id: 'dashboard' },
-    { label: 'Portfolios', icon: '💼', id: 'portfolios' },
-    { label: 'Risk Analysis', icon: '⚠️', id: 'risk' },
-    { label: 'VaR Report', icon: '📈', id: 'var' },
-    { label: 'Monte Carlo', icon: '🎲', id: 'monte' },
-    { label: 'Correlation', icon: '🔗', id: 'correlation' },
-    { label: 'Settings', icon: '⚙️', id: 'settings' },
-  ];
-
   // ── Shared UI ─────────────────────────────────────────────────────────────
-  const Sidebar = (
-    <aside className={styles['sidebar']}>
-      <div className={styles['sidebar-logo']}>Probity</div>
-      <nav className={styles['sidebar-nav']}>
-        {navItems.map(item => (
-          <SidebarNavItem
-            key={item.id} label={item.label} icon={item.icon}
-            active={activeNav === item.id}
-            onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
-          />
-        ))}
-      </nav>
-    </aside>
-  );
-
   const Topbar = (
     <header className={styles['topbar']}>
       <div className={styles['topbar-left']}>
@@ -87,7 +61,6 @@ const PortfoliosPage: React.FC = () => {
 
   return (
     <div className={styles['portfolios-layout']}>
-      {Sidebar}
 
       <div className={styles['main-wrapper']}>
         {Topbar}

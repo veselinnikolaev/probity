@@ -11,32 +11,28 @@ import RiskAnalysisPage from './pages/risk-analysis/RiskAnalysisPage';
 import VaRReportPage from './pages/var-report/VaRReportPage';
 import MonteCarloPage from './pages/monte-carlo/MonteCarlo';
 import SettingsPage from './pages/settings/SettingsPage';
+import AppLayout from './pages/layout/AppLayout';
 
-// ---------------------------------------------------------------------------
-// App
-// ---------------------------------------------------------------------------
 const App: React.FC = () => {
   return (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
 
-            {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/portfolios" element={<PortfoliosPage />} />
-              <Route path="/portfolio-detail" element={<PortfolioDetailPage />} />
-              <Route path="/risk" element={<RiskAnalysisPage />} />
-              <Route path="/var" element={<VaRReportPage />} />
-              <Route path="/monte" element={<MonteCarloPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              {/* Add more protected routes here */}
+              <Route element={<AppLayout />}>
+                <Route path="/dashboard"        element={<DashboardPage />} />
+                <Route path="/portfolios"       element={<PortfoliosPage />} />
+                <Route path="/portfolio-detail" element={<PortfolioDetailPage />} />
+                <Route path="/risk"             element={<RiskAnalysisPage />} />
+                <Route path="/var"              element={<VaRReportPage />} />
+                <Route path="/monte"            element={<MonteCarloPage />} />
+                <Route path="/settings"         element={<SettingsPage />} />
+              </Route>
             </Route>
 
-            {/* Default redirect */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </AuthProvider>

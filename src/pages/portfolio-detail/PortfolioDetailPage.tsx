@@ -22,7 +22,6 @@ const PortfolioDetailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const portfolioId = searchParams.get('portfolio') || '';
 
-  const [activeNav, setActiveNav] = useState('portfolios');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -64,18 +63,6 @@ const PortfolioDetailPage: React.FC = () => {
       setDeletingId(null);
     }
   };
-
-  const navItems = [
-    { label: 'Dashboard',     icon: '📊', id: 'dashboard'   },
-    { label: 'Portfolios',    icon: '💼', id: 'portfolios'  },
-    { label: 'Risk Analysis', icon: '⚠️', id: 'risk'        },
-    { label: 'VaR Report',    icon: '📈', id: 'var'         },
-    { label: 'Monte Carlo',   icon: '🎲', id: 'monte'       },
-    { label: 'Correlation',   icon: '🔗', id: 'correlation' },
-    { label: 'Settings',      icon: '⚙️', id: 'settings'   },
-  ];
-
-  const unimplemented = ['var', 'correlation', 'settings'];
 
   const buildStatCards = (summary: any, positions: any[]): StatCardProps[] => [
     {
@@ -121,27 +108,6 @@ const PortfolioDetailPage: React.FC = () => {
     },
   ];
 
-  const Sidebar = (
-      <aside className={styles['sidebar']}>
-        <div className={styles['sidebar-logo']}>Probity</div>
-        <nav className={styles['sidebar-nav']}>
-          {navItems.map(item => (
-              <SidebarNavItem
-                  key={item.id}
-                  label={item.label}
-                  icon={item.icon}
-                  active={activeNav === item.id}
-                  onClick={() => {
-                    if (unimplemented.includes(item.id)) return;
-                    setActiveNav(item.id);
-                    navigate(`/${item.id}`);
-                  }}
-              />
-          ))}
-        </nav>
-      </aside>
-  );
-
   const Topbar = (
       <header className={styles['topbar']}>
         <div className={styles['topbar-left']}>
@@ -170,7 +136,6 @@ const PortfolioDetailPage: React.FC = () => {
 
   return (
       <div className={styles['portfolio-detail-layout']}>
-        {Sidebar}
         <div className={styles['main-wrapper']}>
           {Topbar}
           <main className={styles['content-area']}>
