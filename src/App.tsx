@@ -10,6 +10,7 @@ import PortfolioDetailPage from './pages/portfolio-detail/PortfolioDetailPage';
 import RiskAnalysisPage from './pages/risk-analysis/RiskAnalysisPage';
 import VaRReportPage from './pages/var-report/VaRReportPage';
 import MonteCarloPage from './pages/monte-carlo/MonteCarlo';
+import SettingsPage from './pages/settings/SettingsPage';
 
 // ---------------------------------------------------------------------------
 // App
@@ -31,6 +32,7 @@ const App: React.FC = () => {
               <Route path="/risk" element={<RiskAnalysisPage />} />
               <Route path="/var" element={<VaRReportPage />} />
               <Route path="/monte" element={<MonteCarloPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               {/* Add more protected routes here */}
             </Route>
 
