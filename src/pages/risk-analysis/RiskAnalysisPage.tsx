@@ -141,7 +141,6 @@ function CorrelationHeatmap({ assets, correlations }: CorrelationHeatmapProps) {
 const RiskAnalysisPage: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const [activeNav, setActiveNav] = useState('risk');
     const [selectedPortfolio, setSelectedPortfolio] = useState('');
     const [selectedDateRange, setSelectedDateRange] = useState('90d');
     const [alertFilter, setAlertFilter] = useState<'all' | 'high' | 'moderate' | 'low'>('all');
@@ -177,32 +176,7 @@ const RiskAnalysisPage: React.FC = () => {
         { value: '1y',  label: 'Last year'    },
     ];
 
-    const navItems = [
-        { label: 'Dashboard',   icon: '📊', id: 'dashboard'   },
-        { label: 'Portfolios',  icon: '💼', id: 'portfolios'  },
-        { label: 'Risk Analysis', icon: '⚠️', id: 'risk'      },
-        { label: 'VaR Report',  icon: '📈', id: 'var'         },
-        { label: 'Monte Carlo', icon: '🎲', id: 'monte'       },
-        { label: 'Correlation', icon: '🔗', id: 'correlation' },
-        { label: 'Settings',    icon: '⚙️', id: 'settings'   },
-    ];
-
     // ── Shared UI ─────────────────────────────────────────────────────────────
-    const Sidebar = (
-        <aside className={styles['sidebar']}>
-            <div className={styles['sidebar-logo']}>Probity</div>
-            <nav className={styles['sidebar-nav']}>
-                {navItems.map(item => (
-                    <SidebarNavItem
-                        key={item.id} label={item.label} icon={item.icon}
-                        active={activeNav === item.id}
-                        onClick={() => { setActiveNav(item.id); navigate(`/${item.id}`); }}
-                    />
-                ))}
-            </nav>
-        </aside>
-    );
-
     const Topbar = (
         <header className={styles['topbar']}>
             <div className={styles['topbar-left']}>
@@ -241,7 +215,6 @@ const RiskAnalysisPage: React.FC = () => {
     // ── Main Render ───────────────────────────────────────────────────────────
     return (
         <div className={styles['risk-analysis-layout']}>
-            {Sidebar}
             <div className={styles['main-wrapper']}>
                 {Topbar}
                 <main className={styles['content-area']}>

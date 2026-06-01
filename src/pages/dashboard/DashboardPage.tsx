@@ -181,8 +181,7 @@ const DashboardPage: React.FC = () => {
 
   // ── Main Render ───────────────────────────────────────────────────────────
   return (
-    <div className={styles['dashboard-layout']}>
-      {Sidebar}
+      <div className={styles['dashboard-layout']}>
       <div className={styles['main-wrapper']}>
         {Topbar}
         <main className={styles['content-area']}>
@@ -408,7 +407,7 @@ const DashboardPage: React.FC = () => {
           </DataBoundary>
         </main>
       </div>
-    </div>
+      </div>
   );
 };
 

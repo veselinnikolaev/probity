@@ -23,7 +23,6 @@ const MonteCarloPage: React.FC = () => {
   const portfoliosState = usePortfolios();
 
   // ── Component state ──────────────────────────────────────────────────────────
-  const [activeNav, setActiveNav] = useState('monte');
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
   const [numberOfSims, setNumberOfSims] = useState(10000);
   const [timeHorizon, setTimeHorizon] = useState(365);
@@ -71,37 +70,7 @@ const MonteCarloPage: React.FC = () => {
     { value: '365', label: '365 days' },
   ];
 
-  const navItems = [
-    { label: 'Dashboard', icon: '📊', id: 'dashboard' },
-    { label: 'Portfolios', icon: '💼', id: 'portfolios' },
-    { label: 'Risk Analysis', icon: '⚠️', id: 'risk' },
-    { label: 'VaR Report', icon: '📈', id: 'var' },
-    { label: 'Monte Carlo', icon: '🎲', id: 'monte' },
-    { label: 'Correlation', icon: '🔗', id: 'correlation' },
-    { label: 'Settings', icon: '⚙️', id: 'settings' },
-  ];
-
   // ── UI Components ────────────────────────────────────────────────────────────
-  const Sidebar = (
-    <aside className={styles['sidebar']}>
-      <div className={styles['sidebar-logo']}>Probity</div>
-      <nav className={styles['sidebar-nav']}>
-        {navItems.map((item) => (
-          <SidebarNavItem
-            key={item.id}
-            label={item.label}
-            icon={item.icon}
-            active={activeNav === item.id}
-            onClick={() => {
-              setActiveNav(item.id);
-              navigate(`/${item.id}`);
-            }}
-          />
-        ))}
-      </nav>
-    </aside>
-  );
-
   const Topbar = (
     <header className={styles['topbar']}>
       <div className={styles['topbar-left']}>
@@ -131,8 +100,6 @@ const MonteCarloPage: React.FC = () => {
 
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
-    <div className={styles['monte-carlo-layout']}>
-      {Sidebar}
       <div className={styles['main-wrapper']}>
         {Topbar}
         <main className={styles['content-area']}>
@@ -350,7 +317,6 @@ const MonteCarloPage: React.FC = () => {
           </DataBoundary>
         </main>
       </div>
-    </div>
   );
 };
 
