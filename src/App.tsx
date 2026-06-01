@@ -12,6 +12,7 @@ import VaRReportPage from './pages/var-report/VaRReportPage';
 import MonteCarloPage from './pages/monte-carlo/MonteCarlo';
 import SettingsPage from './pages/settings/SettingsPage';
 import { ROUTES } from './constants/routes';
+import AppLayout from './pages/layout/AppLayout';
 
 const App: React.FC = () => {
   return (
@@ -23,13 +24,15 @@ const App: React.FC = () => {
             <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
 
             <Route element={<ProtectedRoute />}>
-              <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-              <Route path={ROUTES.PORTFOLIOS} element={<PortfoliosPage />} />
-              <Route path={ROUTES.PORTFOLIO_DETAIL} element={<PortfolioDetailPage />} />
-              <Route path={ROUTES.RISK} element={<RiskAnalysisPage />} />
-              <Route path={ROUTES.VAR} element={<VaRReportPage />} />
-              <Route path={ROUTES.MONTE} element={<MonteCarloPage />} />
-              <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+              <Route element={<AppLayout />}>
+                <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+                <Route path={ROUTES.PORTFOLIOS} element={<PortfoliosPage />} />
+                <Route path={ROUTES.PORTFOLIO_DETAIL} element={<PortfolioDetailPage />} />
+                <Route path={ROUTES.RISK} element={<RiskAnalysisPage />} />
+                <Route path={ROUTES.VAR} element={<VaRReportPage />} />
+                <Route path={ROUTES.MONTE} element={<MonteCarloPage />} />
+                <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+              </Route>
             </Route>
 
             {/* Default redirect */}
