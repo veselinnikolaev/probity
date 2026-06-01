@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { AxiosError } from 'axios';
+import { ROUTES } from '../../constants/routes';
 import styles from '../../pages/auth/auth.module.css';
 
 interface LoginProps {
@@ -35,7 +36,7 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/dashboard';
+      const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? ROUTES.DASHBOARD;
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, location.state]);
