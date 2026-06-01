@@ -1,13 +1,8 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { ROUTES } from '../../constants/routes';
 
-/**
- * Wraps protected routes. While the silent refresh is in flight on mount,
- * renders nothing (or a spinner) to avoid a flash-redirect to /login.
- * Once auth is resolved, redirects unauthenticated users to /login,
- * preserving the attempted URL so they land back after signing in.
- */
 const ProtectedRoute: React.FC = () => {
   const { isAuthenticated, isInitializing } = useAuth();
   const location = useLocation();
@@ -39,7 +34,7 @@ const ProtectedRoute: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
   }
 
   return <Outlet />;

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { ROUTES } from '../../constants/routes';
 import { StatCard } from '../../components/probity/StatCard';
-import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
 import { DropdownSelect } from '../../components/probity/DropdownSelect';
 import { DataTable, DataRow } from '../../components/probity/DataTable';
 import { DonutChart } from '../../components/probity/DonutChart';
@@ -80,7 +80,7 @@ const DashboardPage: React.FC = () => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login', { replace: true });
+    navigate(ROUTES.LOGIN);
   };
 
   // ── Derived data ─────────────────────────────────────────────────────────

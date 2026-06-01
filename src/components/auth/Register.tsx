@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { AxiosError } from 'axios';
+import { ROUTES } from '../../constants/routes';
 import styles from '../../pages/auth/auth.module.css';
 
 interface RegisterProps {
@@ -73,7 +74,7 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
     setIsLoading(true);
     try {
       await register({ username, email, password });
-      navigate('/login', {
+      navigate(ROUTES.LOGIN, {
         state: { successMessage: 'Account created! Please sign in.' },
         replace: true,
       });
