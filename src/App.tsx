@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/core/ProtectedRoute';
+import { ErrorBoundary } from './components/probity/ErrorBoundary';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -16,6 +17,7 @@ import AppLayout from './pages/layout/AppLayout';
 
 const App: React.FC = () => {
   return (
+    <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
           <Routes>
@@ -40,6 +42,7 @@ const App: React.FC = () => {
           </Routes>
         </AuthProvider>
       </BrowserRouter>
+    </ErrorBoundary>
   );
 };
 

@@ -5,8 +5,8 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { authService} from '../api/authService';
-import {User, LoginPayload, RegisterPayload} from '../types/auth.types'
+import { authService} from '@/services/auth';
+import {User, LoginPayload, RegisterPayload} from '@/types/auth'
 
 // ---------------------------------------------------------------------------
 // Context shape

@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@/hooks/auth';
 import { AxiosError } from 'axios';
-import { ROUTES } from '../../constants/routes';
-import styles from '../../pages/auth/auth.module.css';
+import { ROUTES } from '@/constants/routes';
+import styles from '@/pages/auth/auth.module.css';
 
 interface RegisterProps {
   onSignInClick?: () => void;

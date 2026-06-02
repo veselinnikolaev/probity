@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@/hooks/auth';
 import { AxiosError } from 'axios';
-import { ROUTES } from '../../constants/routes';
-import styles from '../../pages/auth/auth.module.css';
+import { ROUTES } from '@/constants/routes';
+import styles from '@/pages/auth/auth.module.css';
 
 interface LoginProps {
   onRegisterClick?: () => void;

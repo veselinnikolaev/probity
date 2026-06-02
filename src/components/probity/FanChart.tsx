@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { SimulatedPath, PercentileSeries } from '../../types/simulation';
+import { SimulatedPath, PercentileSeries } from '@/types/simulation';
 
 interface FanChartProps {
   allPaths: SimulatedPath[];

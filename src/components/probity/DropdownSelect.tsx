@@ -8,7 +8,7 @@ interface Option {
 }
 
 interface DropdownSelectProps {
-  options: Option[];
+  options: readonly Option[];
   value?: string;
   onChange?: (value: string) => void;
   placeholder?: string;

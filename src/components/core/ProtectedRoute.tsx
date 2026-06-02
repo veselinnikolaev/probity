@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { ROUTES } from '../../constants/routes';
+import { useAuth } from '@/hooks/auth';
+import { ROUTES } from '@/constants/routes';
 
 const ProtectedRoute: React.FC = () => {
   const { isAuthenticated, isInitializing } = useAuth();

@@ -1,138 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StatCard } from '../../components/probity/StatCard';
-import { DropdownSelect } from '../../components/probity/DropdownSelect';
-import { DataTable, DataRow } from '../../components/probity/DataTable';
-import { DataBoundary } from '../../components/core/DataBoundary';
-import { EmptyState } from '../../components/probity/EmptyState';
-import { ErrorState } from '../../components/probity/ErrorState';
-import { StatCardSkeleton, TableSkeleton } from '../../components/probity/SkeletonLoader';
+import { StatCard } from '@/components/probity/StatCard';
+import { DropdownSelect } from '@/components/probity/DropdownSelect';
+import { DataTable, DataRow } from '@/components/probity/DataTable';
+import { AlertIcon } from '@/components/probity/AlertIcon';
+import { CorrelationHeatmap } from '@/components/probity/CorrelationHeatmap';
+import { DataBoundary } from '@/components/core/DataBoundary';
+import { EmptyState } from '@/components/probity/EmptyState';
+import { ErrorState } from '@/components/probity/ErrorState';
+import { StatCardSkeleton, TableSkeleton } from '@/components/probity/SkeletonLoader';
 import styles from './risk-analysis.module.css';
-import { usePortfolios } from '../../hooks/usePortfolios';
-import { usePortfolioRiskDetail  } from '../../hooks/usePortfolioRiskDetail';
-import {useTopbarSlot} from "../../hooks/useTopbarSlot";
-
-// ── Alert icon component ─────────────────────────────────────────────────────
-type AlertSeverity = 'high' | 'moderate' | 'low' | string;
-
-function AlertIcon({ severity }: { severity: AlertSeverity }) {
-    const baseStyle: React.CSSProperties = {
-        width: 18,
-        height: 18,
-        flexShrink: 0,
-        marginTop: 2,
-    };
-
-    switch (severity) {
-        case 'high':
-            return (
-                <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="High severity">
-                    <path
-                        d="M8.485 3.215a1.75 1.75 0 0 1 3.03 0l6.28 10.875A1.75 1.75 0 0 1 16.28 17H3.72a1.75 1.75 0 0 1-1.515-2.91L8.485 3.215Z"
-                        fill="#EF4444" fillOpacity="0.15" stroke="#EF4444" strokeWidth="1.4"
-                    />
-                    <path d="M10 7.5v4" stroke="#EF4444" strokeWidth="1.6" strokeLinecap="round" />
-                    <circle cx="10" cy="13.5" r="0.85" fill="#EF4444" />
-                </svg>
-            );
-        case 'moderate':
-            return (
-                <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="Moderate severity">
-                    <circle cx="10" cy="10" r="7.5" stroke="#F59E0B" strokeWidth="1.4" fill="#F59E0B" fillOpacity="0.1" />
-                    <path d="M10 9v5" stroke="#F59E0B" strokeWidth="1.6" strokeLinecap="round" />
-                    <circle cx="10" cy="6.5" r="0.85" fill="#F59E0B" />
-                </svg>
-            );
-        case 'low':
-        default:
-            return (
-                <svg viewBox="0 0 20 20" fill="none" style={baseStyle} aria-label="Low severity">
-                    <circle cx="10" cy="10" r="7.5" stroke="#10B981" strokeWidth="1.4" fill="#10B981" fillOpacity="0.1" />
-                    <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="#10B981" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-            );
-    }
-}
-
-// ── Correlation Heatmap Component ────────────────────────────────────────────
-interface CorrelationHeatmapProps {
-    assets: string[];
-    correlations: number[][];
-}
-
-function CorrelationHeatmap({ assets, correlations }: CorrelationHeatmapProps) {
-    const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
-
-    const getColor = (value: number): string => {
-        // Blue-to-red diverging scale
-        // -1 (negative correlation) = blue, 0 = white, 1 (positive correlation) = red
-        if (value < -0.7) return '#1e3a8a';
-        if (value < -0.4) return '#3b82f6';
-        if (value < -0.1) return '#93c5fd';
-        if (value < 0.1) return '#f3f4f6';
-        if (value < 0.4) return '#fca5a5';
-        if (value < 0.7) return '#ef4444';
-        return '#991b1b';
-    };
-
-    return (
-        <div className={styles['heatmap-wrapper']}>
-            <div className={styles['heatmap-container']}>
-                {/* Header row */}
-                <div className={styles['heatmap-header-row']}>
-                    <div className={styles['heatmap-corner']} />
-                    {assets.map((asset, i) => (
-                        <div key={i} className={styles['heatmap-header-cell']}>
-                            <span className={styles['heatmap-header-text']}>{asset}</span>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Data rows */}
-                {assets.map((asset, rowIdx) => (
-                    <div key={rowIdx} className={styles['heatmap-data-row']}>
-                        <div className={styles['heatmap-row-label']}>
-                            <span className={styles['heatmap-label-text']}>{asset}</span>
-                        </div>
-                        {correlations[rowIdx].map((value, colIdx) => (
-                            <div
-                                key={`${rowIdx}-${colIdx}`}
-                                className={styles['heatmap-cell']}
-                                style={{
-                                    backgroundColor: getColor(value),
-                                    cursor: 'pointer',
-                                    opacity: hoveredCell ? (hoveredCell.row === rowIdx || hoveredCell.col === colIdx ? 1 : 0.5) : 1,
-                                    transition: 'opacity 0.12s',
-                                }}
-                                onMouseEnter={() => setHoveredCell({ row: rowIdx, col: colIdx })}
-                                onMouseLeave={() => setHoveredCell(null)}
-                                title={`${asset} vs ${assets[colIdx]}: ${value.toFixed(2)}`}
-                            >
-                                <span className={styles['heatmap-cell-value']}>{value.toFixed(2)}</span>
-                            </div>
-                        ))}
-                    </div>
-                ))}
-            </div>
-
-            {/* Legend */}
-            <div className={styles['heatmap-legend']}>
-                <div className={styles['legend-item']}>
-                    <div className={styles['legend-color']} style={{ backgroundColor: '#1e3a8a' }} />
-                    <span>Negative Correlation</span>
-                </div>
-                <div className={styles['legend-item']}>
-                    <div className={styles['legend-color']} style={{ backgroundColor: '#f3f4f6' }} />
-                    <span>No Correlation</span>
-                </div>
-                <div className={styles['legend-item']}>
-                    <div className={styles['legend-color']} style={{ backgroundColor: '#991b1b' }} />
-                    <span>Positive Correlation</span>
-                </div>
-            </div>
-        </div>
-    );
-}
+import { usePortfolios } from '@/hooks/portfolio';
+import { usePortfolioRiskDetail } from '@/hooks/portfolio';
+import { useTopbarSlot } from '@/hooks/useTopbarSlot';
+import { buildPortfolioOptions } from '@/utils/portfolioHelpers';
+import { DATE_RANGE_OPTIONS } from '@/constants/portfolio';
 
 // ── Risk Analysis Page ───────────────────────────────────────────────────────
 const RiskAnalysisPage: React.FC = () => {
@@ -154,18 +36,7 @@ const RiskAnalysisPage: React.FC = () => {
     }, [portfoliosState.data, selectedPortfolio]);
 
     // ── Derived data ─────────────────────────────────────────────────────────
-    const portfolioOptions = (portfoliosState.data || []).map(p => ({
-        value: p.id,
-        label: p.name,
-        description: `$${p.totalValue.toLocaleString()}`,
-    }));
-
-    const dateRangeOptions = [
-        { value: '7d',  label: 'Last 7 days'  },
-        { value: '30d', label: 'Last 30 days' },
-        { value: '90d', label: 'Last 90 days' },
-        { value: '1y',  label: 'Last year'    },
-    ];
+    const portfolioOptions = useMemo(() => buildPortfolioOptions(portfoliosState.data || []), [portfoliosState.data]);
 
     useTopbarSlot(
         <>
@@ -179,7 +50,7 @@ const RiskAnalysisPage: React.FC = () => {
             )}
             {portfolioOptions.length > 0 && (
                 <DropdownSelect
-                    options={dateRangeOptions}
+                    options={DATE_RANGE_OPTIONS}
                     value={selectedDateRange}
                     onChange={setSelectedDateRange}
                     width="180px"

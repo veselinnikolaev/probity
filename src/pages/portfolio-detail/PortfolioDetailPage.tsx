@@ -1,18 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { usePortfolioDetail } from '../../hooks/usePortfolioDetail';
-import { StatCard } from '../../components/probity/StatCard';
-import { ProbityButton } from '../../components/probity/ProbityButton';
-import { PortfolioDetailTable } from '../../components/probity/PortfolioDetailTable';
-import { AddPositionDrawer } from '../../components/probity/AddPositionDrawer';
-import { DataBoundary } from '../../components/core/DataBoundary';
-import { EmptyState } from '../../components/probity/EmptyState';
-import { ErrorState } from '../../components/probity/ErrorState';
-import { StatCardSkeleton, TableSkeleton } from '../../components/probity/SkeletonLoader';
-import { portfolioService } from '../../api/portfolioService';
+import { usePortfolioDetail } from '@/hooks/portfolio';
+import { StatCard } from '@/components/probity/StatCard';
+import { ProbityButton } from '@/components/probity/ProbityButton';
+import { PortfolioDetailTable } from '@/components/probity/PortfolioDetailTable';
+import { AddPositionDrawer } from '@/components/probity/AddPositionDrawer';
+import { DataBoundary } from '@/components/core/DataBoundary';
+import { EmptyState } from '@/components/probity/EmptyState';
+import { ErrorState } from '@/components/probity/ErrorState';
+import { StatCardSkeleton, TableSkeleton } from '@/components/probity/SkeletonLoader';
+import { portfolioService } from '@/services/portfolio';
+import { useMutation } from '@/hooks/useMutation';
 import styles from './portfolio-detail.module.css';
-import type { StatCardProps } from '../../components/probity/StatCard';
-import {useTopbarSlot} from "../../hooks/useTopbarSlot";
+import { useTopbarSlot } from '@/hooks/useTopbarSlot';
+import { buildStatCards } from '@/utils/portfolioStats';
+import { DATE_RANGE_OPTIONS } from '@/constants/portfolio';
 
 const PortfolioDetailPage: React.FC = () => {
   const { state: routerState } = useLocation();
@@ -21,9 +23,14 @@ const PortfolioDetailPage: React.FC = () => {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const detailState = usePortfolioDetail(portfolioId, '30d');
+  const detailState = usePortfolioDetail(portfolioId, DATE_RANGE_OPTIONS[1].value);
+
+  const deleteMutation = useMutation<void, string>(async (positionId) => {
+    await portfolioService.deletePosition(portfolioId, positionId);
+    detailState.refetch();
+  });
 
   const editingPosition = useMemo(() => {
     if (!editingPositionId || !detailState.data) return null;
@@ -45,60 +52,15 @@ const PortfolioDetailPage: React.FC = () => {
 
   const handleDeletePosition = async (positionId: string) => {
     if (!window.confirm('Remove this position from your portfolio?')) return;
-    setDeletingId(positionId);
+    setDeleteError(null);
     try {
-      await portfolioService.deletePosition(portfolioId, positionId);
-      detailState.refetch();
+      await deleteMutation.execute(positionId);
     } catch (error) {
-      console.error('Failed to delete position:', error);
-    } finally {
-      setDeletingId(null);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete position';
+      setDeleteError(errorMessage);
     }
   };
 
-  const buildStatCards = (summary: any, positions: any[]): StatCardProps[] => [
-    {
-      label: 'Total Value',
-      value: summary.totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 }),
-      delta: `${summary.totalValueDelta >= 0 ? '+' : ''}${summary.totalValueDelta.toFixed(1)}%`,
-      deltaType: summary.totalValueDelta >= 0 ? 'up' : 'down',
-      sparklineData: summary.sparklines?.totalValue || [],
-      prefix: '$',
-      invertSentiment: false,
-    },
-    {
-      label: 'Positions',
-      value: (positions?.length || 0).toString(),
-      delta: '',
-      sparklineData: [],
-      invertSentiment: false,
-    },
-    {
-      label: 'Volatility',
-      value: `${summary.volatility.toFixed(1)}%`,
-      delta: `${summary.volatilityDelta >= 0 ? '+' : ''}${summary.volatilityDelta.toFixed(1)}%`,
-      deltaType: summary.volatilityDelta <= 0 ? 'down' : 'up',
-      sparklineData: summary.sparklines?.volatility || [],
-      invertSentiment: true,
-    },
-    {
-      label: 'Sharpe Ratio',
-      value: summary.sharpeRatio.toFixed(2),
-      delta: `${summary.sharpeRatioDelta >= 0 ? '+' : ''}${summary.sharpeRatioDelta.toFixed(2)}`,
-      deltaType: summary.sharpeRatioDelta >= 0 ? 'up' : 'down',
-      sparklineData: summary.sparklines?.sharpeRatio || [],
-      invertSentiment: false,
-    },
-    {
-      label: 'VaR (95%)',
-      value: summary.var95.toLocaleString('en-US', { maximumFractionDigits: 0 }),
-      delta: `${summary.var95Delta >= 0 ? '+' : ''}${summary.var95Delta.toFixed(1)}%`,
-      deltaType: summary.var95Delta <= 0 ? 'down' : 'up',
-      sparklineData: summary.sparklines?.var95 || [],
-      prefix: '$',
-      invertSentiment: true,
-    },
-  ];
 
     useTopbarSlot(
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
@@ -137,7 +99,7 @@ const PortfolioDetailPage: React.FC = () => {
                                 <ErrorState message={msg} onRetry={detailState.refetch} size="sm"/>
                             )}
                         >
-                            {(detail) => buildStatCards(detail.summary, detail.positions).map((card, idx) => (
+                            {(detail) => useMemo(() => buildStatCards(detail.summary, detail.positions.length), [detail.summary, detail.positions.length]).map((card, idx) => (
                                 <StatCard key={idx} {...card} />
                             ))}
                         </DataBoundary>
@@ -169,9 +131,38 @@ const PortfolioDetailPage: React.FC = () => {
                         {(detail) => (
                             <section className={styles['positions-section']}>
                                 <div className={styles['section-header']}>Positions</div>
+                                {deleteError && (
+                                    <div style={{
+                                        padding: '12px',
+                                        backgroundColor: 'rgba(239,68,68,0.08)',
+                                        border: '1px solid rgba(239,68,68,0.25)',
+                                        borderRadius: 6,
+                                        marginBottom: 16,
+                                        fontSize: 13,
+                                        color: '#EF4444',
+                                        fontFamily: 'var(--font-body)',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                    }}>
+                                        <span>{deleteError}</span>
+                                        <button
+                                            onClick={() => setDeleteError(null)}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: '#EF4444',
+                                                cursor: 'pointer',
+                                                fontSize: 18,
+                                                padding: 4,
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                )}
                                 <PortfolioDetailTable
                                     positions={detail.positions}
-                                    deletingId={deletingId}
                                     onEdit={handleEditPosition}
                                     onDelete={handleDeletePosition}/>
                             </section>

@@ -284,7 +284,7 @@ src/
 ├── types/
 │   ├── async-state.ts          ← AsyncState<T> type
 │   ├── portfolio.ts            ← Domain models
-│   └── auth.types.ts
+│   └── auth.ts
 ├── hooks/
 │   ├── usePortfolios.ts        ← Returns AsyncState<Portfolio[]>
 │   ├── usePortfolioDetail.ts   ← Returns AsyncState<PortfolioDetail>

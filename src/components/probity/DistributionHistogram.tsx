@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { DistributionBucket } from '../../types/simulation';
+import { DistributionBucket } from '@/types/simulation';
 
 interface DistributionHistogramProps {
   distribution: DistributionBucket[];

@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useVaRReport } from '../../hooks/useVaRReport';
-import { LineChart } from '../../components/probity/LineChart';
-import { DropdownSelect } from '../../components/probity/DropdownSelect';
-import { DataBoundary } from '../../components/core/DataBoundary';
-import { EmptyState } from '../../components/probity/EmptyState';
-import { ErrorState } from '../../components/probity/ErrorState';
-import { StatCardSkeleton } from '../../components/probity/SkeletonLoader';
+import { useVaRReport } from '@/hooks/portfolio';
+import { LineChart } from '@/components/probity/LineChart';
+import { DropdownSelect } from '@/components/probity/DropdownSelect';
+import { DataBoundary } from '@/components/core/DataBoundary';
+import { EmptyState } from '@/components/probity/EmptyState';
+import { ErrorState } from '@/components/probity/ErrorState';
+import { StatCardSkeleton } from '@/components/probity/SkeletonLoader';
 import styles from './var-report.module.css';
-import { usePortfolios } from '../../hooks/usePortfolios';
-import type { VaRReport } from '../../types/portfolio';
-import {useTopbarSlot} from "../../hooks/useTopbarSlot";
+import { usePortfolios } from '@/hooks/portfolio';
+import type { VaRReport } from '@/types/portfolio';
+import {useTopbarSlot} from "@/hooks/useTopbarSlot";
+import { VAR_CONFIDENCE_LEVELS, TIME_HORIZONS } from '@/constants/preferences';
 
 const VaRReportPage: React.FC = () => {
     const navigate = useNavigate();
     const [selectedPortfolio, setSelectedPortfolio] = useState('');
-    const [confidenceLevel, setConfidenceLevel] = useState('95');
-    const [timeHorizon, setTimeHorizon] = useState('1d');
+    const [confidenceLevel, setConfidenceLevel] = useState<"90" | "95" | "99">(VAR_CONFIDENCE_LEVELS[1].value);
+    const [timeHorizon, setTimeHorizon] = useState<'1d' | '1w' | '1m' | '1y'>(TIME_HORIZONS[0].value);
 
     const portfoliosState = usePortfolios();
 
@@ -27,7 +28,7 @@ const VaRReportPage: React.FC = () => {
     }, [portfoliosState.data, selectedPortfolio]);
 
     const confidenceLevelNum = parseFloat(confidenceLevel) / 100;
-    const timeHorizonDays = timeHorizon === '1d' ? 1 : timeHorizon === '5d' ? 5 : 21;
+    const timeHorizonDays = timeHorizon === '1d' ? 1 : timeHorizon === '1w' ? 5 : 21;
 
     const varReportState = useVaRReport(selectedPortfolio, confidenceLevelNum, timeHorizonDays);
 
@@ -114,8 +115,9 @@ const VaRReportPage: React.FC = () => {
                                                 <div className={styles['hero-subtitle']}>
                                                     Maximum expected loss over{' '}
                                                     {timeHorizon === '1d' ? '1 trading day'
-                                                        : timeHorizon === '5d' ? '5 trading days'
-                                                            : '1 month'}{' '}
+                                                        : timeHorizon === '1w' ? '5 trading days'
+                                                            : timeHorizon === '1m' ? '1 month'
+                                                                : '1 year'}{' '}
                                                     at {confidenceLevel}% confidence
                                                 </div>
 
@@ -125,13 +127,13 @@ const VaRReportPage: React.FC = () => {
                                                             Confidence Level
                                                         </label>
                                                         <div className={styles['toggle-buttons']}>
-                                                            {['90', '95', '99'].map(level => (
+                                                            {VAR_CONFIDENCE_LEVELS.map(level => (
                                                                 <button
-                                                                    key={level}
-                                                                    className={`${styles['toggle-button']} ${confidenceLevel === level ? styles['toggle-active'] : ''}`}
-                                                                    onClick={() => setConfidenceLevel(level)}
+                                                                    key={level.value}
+                                                                    className={`${styles['toggle-button']} ${confidenceLevel === level.value ? styles['toggle-active'] : ''}`}
+                                                                    onClick={() => setConfidenceLevel(level.value)}
                                                                 >
-                                                                    {level}%
+                                                                    {level.label}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -142,11 +144,7 @@ const VaRReportPage: React.FC = () => {
                                                             Time Horizon
                                                         </label>
                                                         <div className={styles['toggle-buttons']}>
-                                                            {[
-                                                                { value: '1d', label: '1 Day' },
-                                                                { value: '5d', label: '5 Days' },
-                                                                { value: '1m', label: '1 Month' },
-                                                            ].map(horizon => (
+                                                            {TIME_HORIZONS.map(horizon => (
                                                                 <button
                                                                     key={horizon.value}
                                                                     className={`${styles['toggle-button']} ${timeHorizon === horizon.value ? styles['toggle-active'] : ''}`}

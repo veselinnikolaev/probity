@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePortfolios } from '../../hooks/usePortfolios';
-import { StatCard } from '../../components/probity/StatCard';
-import { DropdownSelect } from '../../components/probity/DropdownSelect';
-import { DataBoundary } from '../../components/core/DataBoundary';
-import { EmptyState } from '../../components/probity/EmptyState';
-import { ErrorState } from '../../components/probity/ErrorState';
-import { StatCardSkeleton } from '../../components/probity/SkeletonLoader';
-import { FanChart } from '../../components/probity/FanChart';
-import { DistributionHistogram } from '../../components/probity/DistributionHistogram';
-import { PercentileTable } from '../../components/probity/PercentileTable';
-import { SimulationRequest } from '../../types/simulation';
+import { usePortfolios } from '@/hooks/portfolio';
+import { StatCard } from '@/components/probity/StatCard';
+import { DropdownSelect } from '@/components/probity/DropdownSelect';
+import { DataBoundary } from '@/components/core/DataBoundary';
+import { EmptyState } from '@/components/probity/EmptyState';
+import { ErrorState } from '@/components/probity/ErrorState';
+import { StatCardSkeleton } from '@/components/probity/SkeletonLoader';
+import { FanChart } from '@/components/probity/FanChart';
+import { DistributionHistogram } from '@/components/probity/DistributionHistogram';
+import { PercentileTable } from '@/components/probity/PercentileTable';
+import { SimulationRequest } from '@/types/simulation';
 import styles from './monte-carlo.module.css';
-import {useSimulation} from "../../hooks/useSimulation";
-import {useTopbarSlot} from "../../hooks/useTopbarSlot";
-import {ROUTES} from "../../constants/routes";
+import {useSimulation} from "@/hooks/simulation";
+import {useTopbarSlot} from "@/hooks/useTopbarSlot";
+import {ROUTES} from "@/constants/routes";
+import { CONFIDENCE_LEVELS, TIME_HORIZON_OPTIONS, DEFAULT_SIMULATION_COUNT } from '@/constants/simulation';
 
 // ── Main Component ───────────────────────────────────────────────────────────
 const MonteCarloPage: React.FC = () => {
@@ -23,7 +24,7 @@ const MonteCarloPage: React.FC = () => {
 
   // ── Component state ──────────────────────────────────────────────────────────
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
-  const [numberOfSims, setNumberOfSims] = useState(10000);
+  const [numberOfSims, setNumberOfSims] = useState(DEFAULT_SIMULATION_COUNT);
   const [timeHorizon, setTimeHorizon] = useState(365);
   const [confidenceLevel, setConfidenceLevel] = useState(95);
 
@@ -57,12 +58,7 @@ const MonteCarloPage: React.FC = () => {
     description: `$${p.totalValue.toLocaleString()}`,
   }));
 
-  const timeHorizonOptions = [
-    { value: '30', label: '30 days' },
-    { value: '90', label: '90 days' },
-    { value: '180', label: '180 days' },
-    { value: '365', label: '365 days' },
-  ];
+  const timeHorizonOptions = TIME_HORIZON_OPTIONS;
 
   // ── UI Components ────────────────────────────────────────────────────────────
     useTopbarSlot(
@@ -156,7 +152,7 @@ const MonteCarloPage: React.FC = () => {
                   <div className={styles['control-group']}>
                     <label className={styles['control-label']}>Confidence Level</label>
                     <div className={styles['segmented-control']}>
-                      {[90, 95, 99].map((level) => (
+                      {CONFIDENCE_LEVELS.map((level) => (
                         <button
                           key={level}
                           className={`${styles['segmented-button']} ${confidenceLevel === level ? styles['active'] : ''}`}

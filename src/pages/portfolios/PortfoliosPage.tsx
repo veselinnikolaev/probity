@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePortfolios } from '../../hooks/usePortfolios';
-import { PortfolioCard, EmptyPortfolioCard } from '../../components/probity/PortfolioCard';
-import { CreatePortfolioModal } from '../../components/probity/CreatePortfolioModal';
-import { ProbityButton } from '../../components/probity/ProbityButton';
-import { DataBoundary } from '../../components/core/DataBoundary';
-import { EmptyState } from '../../components/probity/EmptyState';
-import { ErrorState } from '../../components/probity/ErrorState';
+import { usePortfolios } from '@/hooks/portfolio';
+import { PortfolioCard, EmptyPortfolioCard } from '@/components/probity/PortfolioCard';
+import { CreatePortfolioModal } from '@/components/probity/CreatePortfolioModal';
+import { ProbityButton } from '@/components/probity/ProbityButton';
+import { DataBoundary } from '@/components/core/DataBoundary';
+import { EmptyState } from '@/components/probity/EmptyState';
+import { ErrorState } from '@/components/probity/ErrorState';
 import styles from './portfolios.module.css';
-import { portfolioService } from "../../api/portfolioService";
-import {useTopbarSlot} from "../../hooks/useTopbarSlot";
+import { portfolioService } from "@/services/portfolio";
+import {useTopbarSlot} from "@/hooks/useTopbarSlot";
+import { ROUTES } from '@/constants/routes';
 
 const PortfoliosPage: React.FC = () => {
   const navigate = useNavigate();
@@ -93,7 +94,7 @@ const PortfoliosPage: React.FC = () => {
                                     sharpeRatio={portfolio.sharpeRatio}
                                     sparklineData={portfolio.sparklineData || []}
                                     onClick={() => navigate(
-                                        `/portfolio-detail?portfolio=${portfolio.id}`,
+                                        `${ROUTES.PORTFOLIO_DETAIL}?portfolio=${portfolio.id}`,
                                         { state: { name: portfolio.name } }
                                     )}
                                 />

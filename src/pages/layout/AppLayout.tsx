@@ -1,10 +1,10 @@
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { SidebarNavItem } from '../../components/probity/SidebarNavItem';
-import { TopbarProvider, useTopbarDisplay } from '../../context/TopbarContext';
+import { useAuth } from '@/hooks/auth';
+import { SidebarNavItem } from '@/components/probity/SidebarNavItem';
+import { TopbarProvider, useTopbarDisplay } from '@/context/TopbarContext';
 import styles from './app-layout.module.css';
-import {ROUTES} from "../../constants/routes";
+import {ROUTES} from "@/constants/routes";
 
 const navItems = [
     { label: 'Dashboard',     icon: '📊', path: '/dashboard'  },

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AssetTag } from './AssetTag';
-import { ProbityButton } from './ProbityButton';
-import { portfolioService } from '../../api/portfolioService';
-import type { AssetSearchResult } from '../../types/portfolio';
+import { AssetTag } from '@/components/probity/AssetTag';
+import { ProbityButton } from '@/components/probity/ProbityButton';
+import { portfolioService } from '@/services/portfolio';
+import type { AssetSearchResult } from '@/types/portfolio';
+import { useMutation } from '@/hooks/useMutation';
+import styles from './add-position-drawer.module.css';
 
 interface EditingPosition {
     ticker: string;
@@ -47,6 +49,14 @@ const inputStyle: React.CSSProperties = {
     boxSizing: 'border-box' as const,
 };
 
+const inputFocusStyle: React.CSSProperties = {
+    borderColor: 'rgba(59,130,246,0.4)',
+};
+
+const inputBlurStyle: React.CSSProperties = {
+    borderColor: 'var(--pb-border)',
+};
+
 export function AddPositionDrawer({
                                       open,
                                       onClose,
@@ -60,9 +70,19 @@ export function AddPositionDrawer({
     const [isSearching, setIsSearching]         = useState(false);
     const [selectedAsset, setSelectedAsset]     = useState<AssetSearchResult | null>(null);
     const [quantity, setQuantity]               = useState('');
-    const [isLoading, setIsLoading]             = useState(false);
     const [error, setError]                     = useState<string | null>(null);
     const debounceRef                           = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const submitMutation = useMutation(async (params: { isEdit: boolean; qty: number }) => {
+        if (params.isEdit && editingPositionId) {
+            await portfolioService.updatePosition(portfolioId, editingPositionId, { quantity: params.qty });
+        } else if (selectedAsset) {
+            await portfolioService.addPosition(portfolioId, {
+                ticker: selectedAsset.ticker,
+                quantity: params.qty,
+            });
+        }
+    });
 
     // ── Seed form when editing ────────────────────────────────────────────────
     useEffect(() => {
@@ -122,17 +142,9 @@ export function AddPositionDrawer({
             return;
         }
 
-        setIsLoading(true);
         setError(null);
         try {
-            if (editingPositionId) {
-                await portfolioService.updatePosition(portfolioId, editingPositionId, { quantity: qty });
-            } else {
-                await portfolioService.addPosition(portfolioId, {
-                    ticker: selectedAsset.ticker,
-                    quantity: qty,
-                });
-            }
+            await submitMutation.execute({ isEdit: !!editingPositionId, qty });
             setSelectedAsset(null);
             setQuantity('');
             setSearchQuery('');
@@ -141,8 +153,6 @@ export function AddPositionDrawer({
             onClose();
         } catch (e: any) {
             setError(e?.response?.data?.message ?? 'Failed to save position. Please try again.');
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -157,33 +167,25 @@ export function AddPositionDrawer({
             {/* Backdrop */}
             <div
                 onClick={onClose}
-                style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999, animation: 'fade-in 0.2s ease-out' }}
+                className={styles.backdrop}
             />
 
             {/* Drawer */}
-            <div style={{
-                position: 'fixed', right: 0, top: 0, bottom: 0, width: 420,
-                backgroundColor: 'var(--pb-surface)',
-                borderLeft: '1px solid var(--pb-border)',
-                display: 'flex', flexDirection: 'column',
-                zIndex: 1000,
-                animation: 'slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                boxShadow: '-4px 0 16px rgba(0,0,0,0.3)',
-            }}>
+            <div className={styles.drawer}>
                 {/* Header */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--pb-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                    <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--pb-text-primary)', margin: 0 }}>
+                <div className={styles.header}>
+                    <h2>
                         {editingPositionId ? 'Edit Position' : 'Add Position'}
                     </h2>
                     <button
                         onClick={onClose}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, background: 'transparent', border: 'none', color: 'var(--pb-text-secondary)', fontSize: 20, cursor: 'pointer' }}
+                        className={styles.closeButton}
                         title="Close"
                     >✕</button>
                 </div>
 
                 {/* Body */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div className={styles.body}>
 
                     {/* ── SEARCH (only when not editing and no asset selected) ── */}
                     {!editingPositionId && !selectedAsset && (
@@ -196,17 +198,17 @@ export function AddPositionDrawer({
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
                                     style={inputStyle}
-                                    onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.4)'; }}
-                                    onBlur={e  => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--pb-border)'; }}
+                                    onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = inputFocusStyle.borderColor!; }}
+                                    onBlur={e  => { (e.currentTarget as HTMLElement).style.borderColor = inputBlurStyle.borderColor!; }}
                                     autoFocus
                                 />
                             </div>
 
                             {/* Results list */}
                             {searchQuery.trim() && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+                                <div className={styles.searchResults}>
                                     {isSearching ? (
-                                        <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--pb-text-secondary)', fontSize: 14 }}>
+                                        <div className={styles.searchResultsLoading}>
                                             Searching…
                                         </div>
                                     ) : searchResults.length > 0 ? (
@@ -214,28 +216,26 @@ export function AddPositionDrawer({
                                             <button
                                                 key={asset.ticker}
                                                 onClick={() => { setSelectedAsset(asset); setSearchQuery(''); setSearchResults([]); }}
-                                                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, backgroundColor: 'var(--pb-surface-elevated)', border: '1px solid var(--pb-border)', borderRadius: 6, cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s', width: '100%' }}
-                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(59,130,246,0.1)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.3)'; }}
-                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--pb-surface-elevated)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--pb-border)'; }}
+                                                className={styles.assetButton}
                                             >
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 500, color: 'var(--pb-text-primary)', marginBottom: 4 }}>
+                                                <div className={styles.assetButtonContent}>
+                                                    <div className={styles.assetButtonName}>
                                                         {asset.name}
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, color: 'var(--pb-text-secondary)' }}>{asset.ticker}</span>
+                                                    <div className={styles.assetButtonMeta}>
+                                                        <span className={styles.assetButtonTicker}>{asset.ticker}</span>
                                                         <AssetTag type={asset.type as any} size="sm" />
                                                     </div>
                                                 </div>
                                                 {asset.currentPrice != null && (
-                                                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: 'var(--pb-accent)', flexShrink: 0 }}>
+                                                    <div className={styles.assetButtonPrice}>
                                                         ${asset.currentPrice.toFixed(2)}
                                                     </div>
                                                 )}
                                             </button>
                                         ))
                                     ) : (
-                                        <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--pb-text-secondary)', fontSize: 14 }}>
+                                        <div className={styles.searchResultsNoResults}>
                                             No assets found for "{searchQuery}"
                                         </div>
                                     )}
@@ -244,9 +244,9 @@ export function AddPositionDrawer({
 
                             {/* Empty prompt */}
                             {!searchQuery.trim() && (
-                                <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--pb-text-secondary)' }}>
-                                    <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.6 }}>🔍</div>
-                                    <p style={{ margin: 0, fontSize: 14 }}>Search for an asset to add to your portfolio</p>
+                                <div className={styles.searchResultsEmptyPrompt}>
+                                    <div className={styles.searchResultsEmptyPromptIcon}>🔍</div>
+                                    <p>Search for an asset to add to your portfolio</p>
                                 </div>
                             )}
                         </>
@@ -256,20 +256,20 @@ export function AddPositionDrawer({
                     {selectedAsset && (
                         <>
                             {/* Selected asset card */}
-                            <div style={{ padding: 12, backgroundColor: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 6 }}>
-                                <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 500, color: 'var(--pb-text-primary)', marginBottom: 4 }}>
+                            <div className={styles.selectedAssetCard}>
+                                <div className={styles.selectedAssetCardName}>
                                     {selectedAsset.name}
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, color: 'var(--pb-text-secondary)' }}>{selectedAsset.ticker}</span>
+                                <div className={styles.selectedAssetCardMeta}>
+                                    <div className={styles.selectedAssetCardMetaLeft}>
+                                        <span className={styles.assetButtonTicker}>{selectedAsset.ticker}</span>
                                         <AssetTag type={selectedAsset.type as any} size="sm" />
                                     </div>
                                     {/* Only allow changing asset when adding, not editing */}
                                     {!editingPositionId && (
                                         <button
                                             onClick={() => { setSelectedAsset(null); setQuantity(''); }}
-                                            style={{ background: 'transparent', border: 'none', color: 'var(--pb-text-secondary)', cursor: 'pointer', fontSize: 14 }}
+                                            className={styles.selectedAssetCardChangeButton}
                                             title="Change asset"
                                         >✕</button>
                                     )}
@@ -277,15 +277,15 @@ export function AddPositionDrawer({
                             </div>
 
                             {/* Price + Type chips */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                <div style={{ padding: 12, backgroundColor: 'var(--pb-surface-elevated)', borderRadius: 6 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--pb-text-secondary)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 500, letterSpacing: '0.06em' }}>Current Price</div>
-                                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 600, color: 'var(--pb-accent)' }}>
+                            <div className={styles.infoGrid}>
+                                <div className={styles.infoCard}>
+                                    <div className={styles.infoCardLabel}>Current Price</div>
+                                    <div className={styles.infoCardValue}>
                                         {selectedAsset.currentPrice != null ? `$${selectedAsset.currentPrice.toFixed(2)}` : '—'}
                                     </div>
                                 </div>
-                                <div style={{ padding: 12, backgroundColor: 'var(--pb-surface-elevated)', borderRadius: 6 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--pb-text-secondary)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 500, letterSpacing: '0.06em' }}>Type</div>
+                                <div className={styles.infoCard}>
+                                    <div className={styles.infoCardLabel}>Type</div>
                                     <AssetTag type={selectedAsset.type as any} size="md" />
                                 </div>
                             </div>
@@ -301,31 +301,31 @@ export function AddPositionDrawer({
                                     step="0.01"
                                     min="0.01"
                                     style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
-                                    onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.4)'; }}
-                                    onBlur={e  => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--pb-border)'; }}
+                                    onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = inputFocusStyle.borderColor!; }}
+                                    onBlur={e  => { (e.currentTarget as HTMLElement).style.borderColor = inputBlurStyle.borderColor!; }}
                                     autoFocus
                                 />
                             </div>
 
                             {/* Summary */}
                             {quantity && !isNaN(parseFloat(quantity)) && parseFloat(quantity) > 0 && (
-                                <div style={{ padding: 12, backgroundColor: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 6 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--pb-text-secondary)' }}>Quantity</span>
-                                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: 'var(--pb-text-primary)' }}>
+                                <div className={styles.summaryCard}>
+                                    <div className={styles.summaryCardRow}>
+                                        <span className={styles.summaryCardLabel}>Quantity</span>
+                                        <span className={styles.summaryCardValue}>
                                             {parseFloat(quantity).toLocaleString()}
                                         </span>
                                     </div>
                                     {totalValue != null && selectedAsset.currentPrice != null && (
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--pb-text-secondary)' }}>Est. Value</span>
-                                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: '#10B981' }}>
+                                        <div className={styles.summaryCardRow}>
+                                            <span className={styles.summaryCardLabel}>Est. Value</span>
+                                            <span className={`${styles.summaryCardValue} ${styles.summaryCardValueHighlight}`}>
                                                 ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </span>
                                         </div>
                                     )}
                                     {selectedAsset.currentPrice == null && (
-                                        <div style={{ fontSize: 12, color: 'var(--pb-text-secondary)', marginTop: 4 }}>
+                                        <div className={styles.summaryCardNote}>
                                             Price will be fetched at time of submission
                                         </div>
                                     )}
@@ -334,7 +334,7 @@ export function AddPositionDrawer({
 
                             {/* Error */}
                             {error && (
-                                <div style={{ padding: '10px 12px', backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 6, fontSize: 13, color: '#EF4444', fontFamily: 'var(--font-body)' }}>
+                                <div className={styles.errorCard}>
                                     {error}
                                 </div>
                             )}
@@ -343,8 +343,8 @@ export function AddPositionDrawer({
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '16px 24px', borderTop: '1px solid var(--pb-border)', display: 'flex', gap: 12, flexShrink: 0 }}>
-                    <ProbityButton variant="ghost" size="md" onClick={onClose} style={{ flex: 1 }}>
+                <div className={styles.footer}>
+                    <ProbityButton variant="ghost" size="md" onClick={onClose} className={styles.footerButton}>
                         Cancel
                     </ProbityButton>
                     <ProbityButton
@@ -352,23 +352,12 @@ export function AddPositionDrawer({
                         size="md"
                         onClick={handleSubmit}
                         disabled={!selectedAsset || !quantity || parseFloat(quantity) <= 0}
-                        loading={isLoading}
-                        style={{ flex: 1 }}
+                        loading={submitMutation.isPending}
+                        className={styles.footerButton}
                     >
                         {editingPositionId ? 'Update' : 'Add to Portfolio'}
                     </ProbityButton>
                 </div>
-
-                <style>{`
-                    @keyframes slide-in {
-                        from { transform: translateX(100%); opacity: 0; }
-                        to   { transform: translateX(0);    opacity: 1; }
-                    }
-                    @keyframes fade-in {
-                        from { opacity: 0; }
-                        to   { opacity: 1; }
-                    }
-                `}</style>
             </div>
         </>
     );

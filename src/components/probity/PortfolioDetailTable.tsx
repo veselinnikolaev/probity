@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Position } from '../../types/portfolio';
+import { Position } from '@/types/portfolio';
 import { AssetTag } from './AssetTag';
 
 interface PortfolioDetailTableProps {

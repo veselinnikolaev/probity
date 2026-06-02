@@ -1,5 +1,5 @@
 import React from 'react';
-import { AsyncState } from '../../types/async-state';
+import { AsyncState } from '@/types/shared';
 
 /**
  * Universal data boundary component.

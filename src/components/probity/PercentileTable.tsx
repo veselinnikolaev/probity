@@ -1,5 +1,5 @@
 import React from 'react';
-import { PercentileSeries } from '../../types/simulation';
+import { PercentileSeries } from '@/types/simulation';
 
 interface PercentileTableProps {
   percentileSeries: PercentileSeries[];

@@ -1,13 +1,15 @@
 import { useLayoutEffect, useRef, DependencyList, ReactNode } from 'react';
-import { useTopbar } from '../context/TopbarContext';
+import { useTopbar } from '@/context/TopbarContext';
 
 export function useTopbarSlot(content: ReactNode, deps: DependencyList = []) {
     const { setTopbarContent } = useTopbar();
     const contentRef = useRef<ReactNode>(null);
+    const setTopbarContentRef = useRef(setTopbarContent);
+    
     contentRef.current = content;
+    setTopbarContentRef.current = setTopbarContent;
 
     useLayoutEffect(() => {
-        setTopbarContent(contentRef.current);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        setTopbarContentRef.current(contentRef.current);
     }, deps);
 }
