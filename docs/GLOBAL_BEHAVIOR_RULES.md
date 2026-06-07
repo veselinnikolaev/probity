@@ -1054,38 +1054,543 @@ Mono: 12px–14px, weight 400
 
 ---
 
-## 13. Reference Components
+## 13. Reference Components & Hooks
 
-Key components to use and reference:
+Key components and hooks to use and reference:
 
-### Data States
-- `src/components/probity/SkeletonLoader.tsx` — loading state
-- `src/components/probity/EmptyState.tsx` — empty state
-- `src/components/ui/alert.tsx` — error/warning messages
+### Data States & Loading
+- `src/components/probity/SkeletonLoader.tsx` — `Skeleton`, `StatCardSkeleton`, `TableSkeleton` components
+- `src/components/probity/EmptyState.tsx` — empty state container with icon + title + CTA
+- `src/components/ui/alert.tsx` — error/warning message displays
+- `src/components/core/DataBoundary.tsx` — universal wrapper for all async states (loading, error, empty, success)
 
 ### Tables & Cards
-- `src/components/probity/DataTable.tsx` — data tables
-- `src/components/probity/StatCard.tsx` — metric cards
-- `src/components/probity/PortfolioCard.tsx` — content cards
+- `src/components/probity/DataTable.tsx` — sortable, paginated data tables
+- `src/components/probity/StatCard.tsx` — metric summary cards with trend indicators
+- `src/components/probity/PortfolioCard.tsx` — portfolio overview cards
+- `src/components/ui/table.tsx` — base table primitives (thead, tbody, th, td)
 
 ### Actions & Inputs
-- `src/components/probity/ProbityButton.tsx` — buttons
-- `src/components/probity/InputField.tsx` — form inputs
-- `src/components/probity/DropdownSelect.tsx` — dropdowns
+- `src/components/probity/ProbityButton.tsx` — buttons (primary, secondary, ghost, danger variants + sizes)
+- `src/components/probity/InputField.tsx` — text inputs with state (error, success, disabled) + prefix/suffix
+- `src/components/probity/DropdownSelect.tsx` — select menus with search and keyboard support
+- `src/components/probity/Modal.tsx` — modals with header, body, footer (sizes: sm, md, lg, xl)
+- `src/components/probity/AddPositionDrawer.tsx` — drawer pattern for side forms
 
 ### Feedback & Overlays
-- Toast notifications (implement as needed)
-- `src/components/probity/Modal.tsx` — modals
-- `src/components/probity/Tooltip.tsx` — tooltips
+- `src/components/probity/Modal.tsx` — modals and dialogs
+- `src/components/probity/Tooltip.tsx` — contextual help text with hover + focus support
+- Toast notifications — implement using `showToast()` pattern with type (success, error, info, warning)
 
-### Charts
-- `src/components/probity/DonutChart.tsx` — allocation charts
-- `src/components/probity/LineChart.tsx` — trend charts
-- `src/components/probity/Sparkline.tsx` — inline mini charts
+### Charts (Custom SVG-based)
+- `src/components/probity/DonutChart.tsx` — allocation/composition breakdown (interactive segments)
+- `src/components/probity/LineChart.tsx` — time-series trend charts (with ResizeObserver)
+- `src/components/probity/DistributionHistogram.tsx` — histogram for Monte Carlo results (canvas-based)
+- `src/components/probity/CorrelationHeatmap.tsx` — correlation matrix visualization
+- `src/components/probity/Sparkline.tsx` — inline mini trend charts for cards
+
+### Custom Hooks
+- `src/hooks/useMutation.ts` — state management for async mutations (returns `state`, `execute`, `reset`)
+- `src/hooks/useAuth.ts` — authentication context (login, logout, session management)
+- `src/hooks/portfolio/*` — portfolio data hooks (`usePortfolios`, `usePortfolio`, `usePortfolioRiskDetail`)
+- `src/hooks/simulation/*` — simulation hooks (`useSimulation`)
+
+### Core Patterns
+- `src/components/core/DataBoundary.tsx` — wraps all data-driven UI with loading/error/empty/success states
+- `src/components/core/ProtectedRoute.tsx` — guards authenticated routes
+- `src/components/core/ErrorBoundary.tsx` — catches render errors with recovery UI
+- `src/types/shared/async-state.ts` — `AsyncState<T>` type for fetch operations
+- `src/types/shared/action-state.ts` — `ActionState<T>` type for mutations (status-based)
 
 ---
 
-## 14. Figma Reference
+## 14. Form Validation & Input Patterns
+
+### 14.1 InputField States
+
+All text inputs use the unified `InputField` component with explicit state management:
+
+**Valid states:**
+- `default` — initial state, no interaction
+- `focused` — user is typing (blue border + glow)
+- `error` — validation failed (red border + error icon + message)
+- `success` — validation passed (green border + checkmark)
+- `disabled` — field not editable (muted colors, no-cursor)
+
+**Error message display:**
+- Only show when `inputState="error"` and `errorMessage` prop provided
+- Red text below the input with icon prefix
+- Clear, actionable message (e.g., "This field is required")
+
+**Code pattern:**
+```tsx
+const [email, setEmail] = useState('');
+const [emailError, setEmailError] = useState('');
+
+const handleEmailChange = (e) => {
+  setEmail(e.target.value);
+  setEmailError(''); // Clear error on change
+};
+
+const validateEmail = () => {
+  if (!email) {
+    setEmailError('Email is required');
+    return false;
+  }
+  if (!email.includes('@')) {
+    setEmailError('Enter a valid email');
+    return false;
+  }
+  return true;
+};
+
+<InputField
+  label="Email"
+  value={email}
+  onChange={handleEmailChange}
+  errorMessage={emailError}
+  inputState={emailError ? 'error' : 'default'}
+  disabled={isLoading}
+/>
+```
+
+### 14.2 Optional Fields
+
+Fields can have optional suffix/prefix via the `prefix` and `suffix` props:
+- Prefix: left side (e.g., "$" for currency)
+- Suffix: right side (e.g., "USD" for unit)
+- Both use monospace font and muted text color
+
+**Code pattern:**
+```tsx
+<InputField
+  label="Portfolio Value"
+  type="number"
+  prefix="$"
+  suffix="USD"
+  mono={true}
+  placeholder="0.00"
+/>
+```
+
+### 14.3 Form Submission Pattern
+
+Use the `useMutation` hook for form actions. It tracks submission state automatically:
+
+**Code pattern:**
+```tsx
+const { state, execute } = useMutation(async (formData) => {
+  return await portfolioService.createPortfolio(formData);
+});
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  // Validate form first
+  if (!formData.name.trim()) {
+    setError('Name is required');
+    return;
+  }
+
+  try {
+    await execute(formData);
+    // Success — state.status is now 'success'
+  } catch (err) {
+    // Error already in state.error
+  }
+};
+
+return (
+  <ProbityButton
+    type="submit"
+    loading={state.isPending}
+    disabled={state.isPending}
+  >
+    {state.isPending ? 'Creating...' : 'Create'}
+  </ProbityButton>
+);
+```
+
+---
+
+## 15. Animation & Timing Conventions
+
+### 15.1 Keyframe Definitions
+
+All animations use CSS keyframes defined inline. Common animations:
+
+**Skeleton shimmer** (800–1200ms):
+```css
+@keyframes pb-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+```
+Used in `Skeleton` component for all loading states.
+
+**Modal overlay fade** (150ms):
+```css
+@keyframes pb-modal-overlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+```
+
+**Modal content slide-in** (180ms):
+```css
+@keyframes pb-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+```
+
+**Button loading spinner** (700ms):
+```css
+@keyframes pb-spin {
+  to { transform: rotate(360deg); }
+}
+```
+Rotating border animation with 1.5px border-top transparent for the "loading" effect.
+
+**Grid background scroll** (20s infinite):
+```css
+@keyframes slideGrid {
+  0% { background-position: 0 0; }
+  100% { background-position: 60px 60px; }
+}
+```
+Subtle diagonal grid movement on auth pages.
+
+**Floating particles** (8s ease-in-out infinite):
+```css
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+  50% { opacity: 0.6; }
+}
+```
+Gentle upward float with opacity fade.
+
+### 15.2 Transition Timing
+
+Micro-interactions use consistent transitions:
+
+| Interaction | Duration | Easing |
+|-------------|----------|--------|
+| Hover state (button, row) | 150ms | ease-in-out |
+| Focus border/shadow | 150ms | ease-in-out |
+| Border color change | 150ms | ease-in-out |
+| Background color shift | 150ms | ease-in-out |
+| Opacity change (chart on hover) | 100–150ms | ease |
+| Modal/Drawer enter | 180–200ms | ease-out |
+| Modal overlay fade | 150ms | ease-out |
+| Button click feedback | instant | — |
+
+**Code pattern:**
+```css
+.element {
+  transition: all 0.15s ease-in-out;
+}
+
+.element:hover {
+  background-color: var(--pb-surface-elevated);
+  box-shadow: 0 8px 16px rgba(59,130,246,0.3);
+}
+```
+
+### 15.3 Loading States
+
+Loading spinners always use the rotating border pattern (not fill):
+
+```tsx
+<span style={{
+  width: "14px",
+  height: "14px",
+  border: "1.5px solid currentColor",
+  borderTopColor: "transparent",
+  borderRadius: "50%",
+  animation: "pb-spin 0.7s linear infinite",
+}}/>
+```
+
+Never use:
+- ❌ Rotating SVG circles
+- ❌ Bouncing dots
+- ❌ Fill-based animations
+- ❌ GIFs or images
+
+---
+
+## 16. Chart Implementation Patterns
+
+### 16.1 Custom SVG Charts
+
+The Probity platform uses custom SVG-based charts for fine-grained control and performance. All charts are implemented without Chart.js or external charting libraries.
+
+**Common chart types:**
+
+| Chart | Component | Use Case |
+|-------|-----------|----------|
+| Line chart | `LineChart.tsx` | Time-series data (portfolio returns, historical values) |
+| Donut chart | `DonutChart.tsx` | Composition/breakdown (asset allocation) |
+| Histogram | `DistributionHistogram.tsx` | Monte Carlo distribution results |
+| Heatmap | `CorrelationHeatmap.tsx` | Asset correlation matrix |
+| Sparkline | `Sparkline.tsx` | Inline mini trend (card summaries) |
+| Fan chart | `FanChart.tsx` | Confidence interval bands (forecast scenarios) |
+
+### 16.2 Responsive Chart Sizing
+
+All charts use `ResizeObserver` to respond to container resizing:
+
+**Code pattern:**
+```tsx
+const [dimensions, setDimensions] = useState({ width: 600, height: 240 });
+
+useEffect(() => {
+  if (!containerRef.current) return;
+
+  const observer = new ResizeObserver((entries) => {
+    if (entries[0]) {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        setDimensions({ width, height });
+      }
+    }
+  });
+
+  observer.observe(containerRef.current);
+  return () => observer.disconnect();
+}, []);
+```
+
+Charts use SVG `viewBox` with `preserveAspectRatio="none"` to scale perfectly without distortion.
+
+### 16.3 Chart Interaction Patterns
+
+**Hover interactions:**
+- Subtle opacity changes (50–100% opacity for non-hovered elements)
+- Smooth transitions (100–150ms)
+- Never block interaction while hovering
+- Cursor changes to `crosshair` for time-series, `pointer` for segmented charts
+
+**Click/Selection:**
+- Donut charts allow segment selection (toggle behavior)
+- Legend items are clickable alongside chart segments
+- Visual feedback: opacity reduction for non-selected items
+- "Click to clear" label on selected state
+
+**Tooltips on charts:**
+- Appear with slight delay (~150ms) to avoid flickering
+- Show numeric value and label (e.g., "Day 42: 12.45%")
+- Position intelligently (avoid screen edges)
+- Use monospace font for values
+
+**Code pattern (hover):**
+```tsx
+const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+<path
+  opacity={hoveredIdx === null || hoveredIdx === idx ? 1 : 0.25}
+  style={{ transition: 'opacity 0.1s ease' }}
+  onMouseEnter={() => setHoveredIdx(idx)}
+  onMouseLeave={() => setHoveredIdx(null)}
+/>
+```
+
+### 16.4 Number Formatting in Charts
+
+All numeric values in charts use monospace font (`var(--font-mono)`):
+
+```tsx
+<text
+  x={cx}
+  y={cy}
+  fontFamily="var(--font-mono)"
+  fill={color}
+>
+  {value.toFixed(2)}%
+</text>
+```
+
+**Grid labels:** Always include 4–5 grid lines with values at consistent intervals.
+
+---
+
+## 17. Modal & Dialog Patterns
+
+### 17.1 Modal Structure
+
+Modals always follow this component hierarchy:
+
+```tsx
+<Modal
+  open={isOpen}
+  onClose={handleClose}
+  title="Action Title"
+  subtitle="Brief description"
+  size="md"  // sm | md | lg | xl
+  footer={<footer-buttons />}
+>
+  {/* form or content here */}
+</Modal>
+```
+
+**Size widths:**
+- `sm`: 380px (simple dialogs, confirmations)
+- `md`: 520px (most forms, default)
+- `lg`: 680px (complex forms, tables)
+- `xl`: 860px (full-width forms, lists)
+
+### 17.2 Focus & Keyboard Management
+
+**Required behaviors:**
+- Escape key closes modal (automatically handled by `Modal` component)
+- Overlay click (outside modal) closes modal (click-outside behavior)
+- First interactive element receives focus on open (manual: set `autoFocus` on first input)
+- Focus trap: cannot Tab outside modal (not implemented in component — add if needed)
+
+**Code pattern:**
+```tsx
+<InputField
+  label="Name"
+  autoFocus={true}  // Gets focus when modal opens
+/>
+```
+
+### 17.3 Modal Animations
+
+Modals use two stacked animations:
+1. **Overlay fade:** 150ms opacity transition
+2. **Content slide:** 180ms scale + translate
+
+Both use `ease-out` easing. Total perceived animation: ~180ms.
+
+**Never use:** Slide from edge, rotate, or complex transforms.
+
+---
+
+## 18. Button Implementation Details
+
+### 18.1 Button Variants
+
+The `ProbityButton` component supports 4 variants with distinct styles:
+
+**Primary** — main actions (Save, Create, Submit):
+- Base: `#3B82F6` blue
+- Hover: `#60A5FA` lighter blue + shadow
+- Active: `#2563EB` darker blue
+- Use for: main CTAs in modals, primary actions
+
+**Secondary** — alternative actions:
+- Base: `var(--pb-surface-elevated)` dark
+- Hover: slightly lighter with accent border tint
+- Active: darker still
+- Use for: secondary form actions, back/cancel
+
+**Ghost** — minimal, text-like:
+- Base: transparent
+- Hover: subtle dark background + border
+- Active: darker background
+- Use for: toggles, subtle navigation, less important actions
+
+**Danger** — destructive actions (Delete, Remove):
+- Base: `rgba(239,68,68,0.1)` red tint
+- Hover: stronger red with shadow
+- Active: darker red
+- Use for: delete confirmations, irreversible actions only
+
+### 18.2 Button Sizes
+
+Three fixed sizes with consistent spacing:
+
+| Size | Padding | Font | Gap |
+|------|---------|------|-----|
+| `sm` | 6–12px | 12px | 6px |
+| `md` | 8–16px | 13px | 7px |
+| `lg` | 10–20px | 14px | 8px |
+
+### 18.3 Button States
+
+**Disabled:** Opacity 45%, cursor: not-allowed, no hover effects.
+
+**Loading:** Shows rotating spinner (see spinner pattern above), disables interaction, keeps text in place.
+
+```tsx
+<ProbityButton
+  loading={isSubmitting}
+  disabled={isSubmitting}
+  onClick={handleSubmit}
+>
+  {isSubmitting ? 'Saving...' : 'Save'}
+</ProbityButton>
+```
+
+---
+
+## 19. CSS Modules & Styling Strategy
+
+### 19.1 CSS Modules Usage
+
+The codebase uses CSS Modules for scoped styling. All page and complex component styles live in `.module.css` files:
+
+- `auth.module.css` — auth pages (Login, Register)
+- `dashboard.module.css` — dashboard layout
+- `add-position-drawer.module.css` — drawer styles
+- etc.
+
+**Naming convention:** camelCase for class names, descriptive prefixes:
+
+```css
+.authContainer { }
+.animatedBg { }
+.gridLines { }
+.floatingParticles { }
+.particle { }
+.card { }
+.wordmark { }
+.tagline { }
+.form { }
+.inputGroup { }
+.label { }
+.input { }
+.errorMessage { }
+.successMessage { }
+```
+
+### 19.2 Design Tokens in CSS
+
+All color and sizing values reference CSS variables defined in `src/assets/theme.css`:
+
+**Never hardcode:** Colors, spacing, fonts, breakpoints.
+
+```tsx
+// ❌ Don't do this
+style={{ backgroundColor: '#3B82F6', padding: '16px' }}
+
+// ✅ Do this
+style={{
+  backgroundColor: 'var(--pb-accent)',
+  padding: '16px',
+}}
+```
+
+### 19.3 Responsive Breakpoints
+
+Media queries use pixel breakpoints (no predefined sizes, adjust as needed):
+
+```css
+@media (max-width: 480px) {
+  .card { padding: 24px; }
+  .input { font-size: 14px; }
+}
+
+@media (max-width: 768px) {
+  .container { flex-direction: column; }
+}
+```
+
+---
+
+## 20. Figma Reference
 
 This design system is based on the Probity Fintech Design System Figma:
 [Fintech Design System](https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System)
@@ -1096,6 +1601,7 @@ This design system is based on the Probity Fintech Design System Figma:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026 | Added form validation patterns (InputField states, error handling), animation conventions (keyframes, timing, spinner pattern), chart implementation patterns (SVG-based, ResizeObserver, interactions), modal & dialog patterns (structure, focus, animations), button implementation details (variants, sizes, states), CSS Modules & styling strategy |
 | 1.0 | 2026 | Initial global behavior rules; codified data states, semantic structure, loading strategy, micro-interactions, feedback, data formatting, edge cases, consistency rules |
 
 ---
