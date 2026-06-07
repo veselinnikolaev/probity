@@ -1087,8 +1087,8 @@ Key components to use and reference:
 
 ## 14. Figma Reference
 
-This design system is based on the Probity Fintech Design System Figma:  
-[Link to Figma](https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System)
+This design system is based on the Probity Fintech Design System Figma:
+[Fintech Design System](https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System)
 
 ---
 
@@ -1102,6 +1102,6 @@ This design system is based on the Probity Fintech Design System Figma:
 
 ## Questions & Updates
 
-For questions about these rules, refer to the implementation components or open an issue in the design system repository.
+For questions, refer to the implementation components or contact the author.
 
 When adding new features, update this document with any new patterns, edge cases, or exceptions that arise.

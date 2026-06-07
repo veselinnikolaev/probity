@@ -53,7 +53,7 @@ The frontend is built on a **custom component library and design system** design
 - **Accessibility:** WCAG-compliant components with keyboard navigation, semantic HTML, and screen reader support
 - **Design File:** [Figma design system](https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System)
 
-For detailed design principles and implementation guidelines, see [Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md).
+For detailed design principles and implementation guidelines, see [Global Behavior Rules](./docs/GLOBAL_BEHAVIOR_RULES.md).
 
 ### Error Handling
 - **Error Boundary:** React error boundary catches and displays render-time errors with recovery UI
