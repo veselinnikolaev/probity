@@ -1,4 +1,4 @@
-# Probity Design System: Global Behavior Rules
+# Probity Frontend: Global Behavior Rules
 
 **Last Updated:** 2026  
 **Status:** Living Document  
