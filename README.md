@@ -16,14 +16,14 @@ Advanced portfolio risk modeling with configurable simulation parameters. Visual
 Secure user authentication with session management. Settings interface for portfolio configuration, risk parameters, and user preferences.
 
 ### Data Visualization
-Interactive charts built with Chart.js for time-series analysis, distribution plots, and correlation matrices. Real-time updates with responsive design.
+Interactive custom charts for time-series analysis, distribution plots, and correlation matrices. Built with SVG and Canvas for fine-grained control and performance. Real-time updates with responsive design.
 
 ## Tech Stack
 
 - **Frontend:** React 18, TypeScript, Vite
 - **Styling:** Tailwind CSS with custom design tokens
 - **Components:** Radix UI, shadcn/ui primitives
-- **Charts:** Chart.js
+- **Charts:** Custom SVG and Canvas implementations
 - **HTTP:** Axios with CSRF protection and request interceptors
 - **Backend:** [Java 21, Spring Boot, Hexagonal Architecture][1]
 
