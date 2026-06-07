@@ -1,102 +1,174 @@
+# Probity — Portfolio Risk Analytics Platform
 
-  # Probity Design System
+**Probity** is a full-stack portfolio risk analytics platform designed to help investors understand and manage portfolio risk through advanced modeling and visualization. This repository contains the React/TypeScript frontend.
 
-This is the production code bundle for the **Probity Fintech Design System**, a comprehensive design language and component library for financial platforms.
+Built solo as a full-stack project combining a Spring Boot backend with a custom-designed React frontend, component library, and design system.
 
-## Design Documentation
+## Platform Features
 
-- **[Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md)** — Unified patterns for data states, accessibility, loading strategies, micro-interactions, and consistency rules across all screens
-  - Data state handling (loading, empty, error, partial)
-  - Semantic HTML structure and accessibility guidelines
-  - Data formatting rules (currency, percentages, dates)
-  - Edge case handling (zero values, missing data, large values)
-  - Consistency patterns for reusable components
+### Dashboard
+Real-time portfolio overview with key metrics, asset allocation breakdown, and risk indicators. Combines live data with interactive summaries for at-a-glance insights.
 
-## Design System Resources
+### Monte Carlo Simulation
+Advanced portfolio risk modeling with configurable simulation parameters. Visualizes probability distributions and stress-test scenarios to help understand portfolio behavior under various market conditions.
 
-- **Figma Design File:** https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System
-- **Design Tokens:** `src/assets/theme.css` (colors, typography, CSS variables)
-- **Component Library:** `src/components/`
-  - Base UI primitives: `src/components/ui/`
-  - Probity-specific components: `src/components/probity/`
+### Authentication & Settings
+Secure user authentication with session management. Settings interface for portfolio configuration, risk parameters, and user preferences.
 
-## Quick Start
+### Data Visualization
+Interactive charts built with Chart.js for time-series analysis, distribution plots, and correlation matrices. Real-time updates with responsive design.
 
-Run `npm i` to install the dependencies.
+## Tech Stack
 
-Run `npm run dev` to start the development server.
+- **Frontend:** React 18, TypeScript, Vite
+- **Styling:** Tailwind CSS with custom design tokens
+- **Components:** Radix UI, shadcn/ui primitives
+- **Charts:** Chart.js
+- **HTTP:** Axios with CSRF protection and request interceptors
+- **Backend:** [Java 21, Spring Boot, Hexagonal Architecture][1]
 
-The application will be available at the configured dev server URL.
+## Architecture & Technical Highlights
+
+### State Management Patterns
+- **Typed Async States:** Generic `AsyncState<T>` and `ActionState<T>` types enforce consistency across all data fetches and mutations (loading, success, error states)
+- **Data Boundary Pattern:** Universal `DataBoundary<T>` component guarantees uniform handling of loading, error, empty, and success states across the application — eliminates inconsistent loaders and error handling
+- **Custom Hooks:** Specialized hooks (`usePortfolio`, `usePortfolios`, `useSimulation`, etc.) encapsulate data-fetching logic with automatic state management
+
+### Security
+- **CSRF Protection:** Axios interceptors automatically attach and rotate CSRF tokens on every request
+- **Session Restore:** Auth context performs silent token refresh on mount — seamlessly restores sessions after page reloads
+- **Protected Routes:** React Router guards ensure only authenticated users access app routes; unauthenticated requests redirect to login
+
+### API Service Layer
+- **Axios Interceptors:** Request/response interceptors handle CSRF token lifecycle and centralize error handling
+- **Type-Safe Endpoints:** Service layer (`portfolioService`, `simulationService`, `authService`) maps all backend endpoints with strict TypeScript types
+- **Credential Handling:** `withCredentials: true` ensures secure cookie-based session management
+
+### Component System
+The frontend is built on a **custom component library and design system** designed and implemented from scratch:
+
+- **Design Tokens:** Centralized color palette, typography, and spacing via CSS variables (`src/assets/theme.css`)
+- **Semantic Primitives:** Built on Radix UI for accessible, unstyled foundations
+- **Data State Handling:** Every component handles loading, empty, error, and partial states — no missing loaders or inconsistent error messages
+- **Accessibility:** WCAG-compliant components with keyboard navigation, semantic HTML, and screen reader support
+- **Design File:** [Figma design system](https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System)
+
+For detailed design principles and implementation guidelines, see [Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md).
+
+### Error Handling
+- **Error Boundary:** React error boundary catches and displays render-time errors with recovery UI
+- **Async Error States:** All data fetches capture and display error messages from server responses
+- **Fallback UI:** Loading spinners, empty states, and error messages provide clear feedback throughout the application
 
 ## Project Structure
 
 ```
 src/
-├── assets/              # Global styles and design tokens
-│   ├── theme.css       # Color palette, typography, CSS variables
-│   ├── tailwind.css    # Tailwind CSS entry point
-│   └── index.css       # Global CSS imports
 ├── components/
-│   ├── ui/             # Base Radix/shadcn-style primitives
-│   ├── probity/        # Probity-specific component system
-│   └── auth/           # Authentication components
-├── pages/              # Page-level layouts and screens
-├── api/                # API service layer
-├── hooks/              # Custom React hooks
-├── context/            # Context providers
-├── types/              # TypeScript type definitions
-└── docs/               # Design system documentation
+│   ├── ui/              # Radix/shadcn primitives (unstyled)
+│   ├── probity/         # Product-specific components (data visualization, tables, forms)
+│   ├── auth/            # Authentication UI
+│   └── core/            # Core patterns (DataBoundary, ProtectedRoute, ErrorBoundary)
+├── pages/               # Page-level layouts and features
+├── services/            # API service layer with typed endpoints
+├── hooks/               # Custom React hooks for data fetching and state
+│   ├── portfolio/       # Portfolio data hooks
+│   ├── simulation/      # Monte Carlo simulation hooks
+│   ├── settings/        # User settings and preferences
+│   └── auth/            # Authentication hooks
+├── context/             # Context providers (Auth)
+├── types/               # TypeScript type definitions
+│   ├── shared/          # AsyncState, ActionState patterns
+│   ├── portfolio/       # Portfolio types
+│   ├── simulation/      # Simulation types
+│   └── auth/            # Auth types
+├── assets/              # Design tokens and global styles
+├── constants/           # Route definitions and app constants
+└── docs/                # Design system documentation
 ```
 
-## Key Design System Principles
+## Getting Started
 
-1. **Data States First** — Every component handles loading, empty, error, and partial data states
-2. **Semantic HTML** — Proper heading hierarchy, table structure, and ARIA attributes
-3. **Progressive Loading** — Show layouts immediately with skeletons; replace section by section
-4. **Accessible By Default** — Keyboard navigation, screen reader support, color + non-color signals
-5. **Consistent Patterns** — Reuse components, maintain action placement, same state = same UI
-6. **Data Formatting** — Numbers in IBM Plex Mono with proper currency, percentage, and date formats
-7. **Micro-interactions** — Smooth, responsive feedback with <200ms animations
+### Prerequisites
+- Node.js 18+
+- npm or yarn
 
-## Component Usage
+### Installation
 
-Always refer to existing components when building features:
+```bash
+# Install dependencies
+npm install
 
-### Data States
-- `SkeletonLoader` — Loading state with shimmer animation
-- `EmptyState` — Dashed border container with icon, message, and CTA
-- Alert components — Error and warning messages
+# Start development server
+npm run dev
+```
 
-### Tables & Cards
-- `DataTable` — Semantic table with headers and proper markup
-- `StatCard` — Metric summary cards
-- `PortfolioCard` — Content cards for portfolio displays
+The frontend will be available at `http://localhost:5173` (or your configured dev server URL).
 
-### Actions
-- `ProbityButton` — Primary, secondary, ghost, and danger button variants
-- `InputField` — Form inputs with labels
-- `DropdownSelect` — Accessible select menus
-- `Modal` & `Tooltip` — Overlays and help text
+### Building for Production
 
-### Charts
-- `DonutChart`, `LineChart`, `Sparkline` — Data visualization components
+```bash
+npm run build
+```
 
-For complete implementation guidance, see [Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md).
+## Key Components
 
-## Contributing to the Design System
+### Data State Management
+- **SkeletonLoader** — Progressive loading with shimmer animation
+- **EmptyState** — Dashed containers for empty data states
+- **ErrorState** — Error message display with recovery actions
+- **DataBoundary** — Universal wrapper for consistent async state handling
 
-When adding new features or components:
+### Visualizations
+- **DonutChart** — Portfolio composition breakdown
+- **LineChart** — Time-series portfolio performance
+- **CorrelationHeatmap** — Asset correlation matrix visualization
+- **DistributionHistogram** — Monte Carlo result distribution
+- **Sparkline** — Compact metric trends
 
-1. **Read the Global Behavior Rules** — Ensure your implementation follows the established patterns
-2. **Reuse Components** — Don't create custom variants; extend or reuse existing components
-3. **Use Design Tokens** — Always reference `--pb-*` CSS variables, never hardcode colors
-4. **Handle Data States** — Every data-driven component must support all 4 states
-5. **Test Accessibility** — Keyboard navigation, screen readers, color contrast
-6. **Follow Semantic HTML** — Use proper heading structure, `<table>`, `<label>`, etc.
-7. **Format Data Consistently** — Use IBM Plex Mono for numbers; follow currency/date rules
+### Forms & Inputs
+- **InputField** — Accessible text inputs with labels
+- **DropdownSelect** — Semantic select menus with search
+- **ProbityButton** — Primary, secondary, ghost, danger variants
+
+### Complex Components
+- **DataTable** — Sortable, paginated tables with semantic HTML
+- **PortfolioCard** — Portfolio summary cards with live data
+- **Modal** & **Drawer** — Accessible overlays for forms and actions
+- **Tooltip** — Contextual help text
+
+## Design Patterns
+
+### Type-Safe API Calls
+All backend endpoints are wrapped in a service layer with strict TypeScript types:
+
+```typescript
+const portfolio = await portfolioService.getPortfolios();
+const summary = await portfolioService.getSummary(id, dateRange);
+const varReport = await portfolioService.getVaRReport(id, confidence, horizon);
+```
+
+### Unified Async State Management
+Every data fetch follows the same pattern:
+
+```typescript
+const { state, execute } = useMutation(portfolioService.createPortfolio);
+// state: { status, error, data }
+// isPending, isSuccess, isError computed from status
+```
+
+### Error Recovery
+Silent token refresh on mount restores sessions; explicit logout clears auth state. All requests retry with fresh CSRF tokens if rotation occurs.
+
+## Full-Stack Project
+
+This is one half of Probity. The complete platform includes:
+
+- **Frontend (this repo):** React/TypeScript interface for portfolio analysis and Monte Carlo visualization
+- **Backend:** [Java 21, Spring Boot backend with hexagonal architecture and Monte Carlo simulations][1]
+
+[1]: [link]
 
 ---
 
-**Last Updated:** 2026
-**Maintainer:** Probity Design System Team
-  
+Built by [Veselin Nikolaev](https://linkedin.com/in/veselinnikolaev)
