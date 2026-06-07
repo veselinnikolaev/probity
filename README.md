@@ -1,102 +1,110 @@
+# Probity — Portfolio Risk Analytics Platform
 
-  # Probity Design System
+**Probity** is a full-stack portfolio risk analytics platform designed to help investors understand and manage portfolio risk through advanced modeling and visualization. This repository contains the React/TypeScript frontend.
 
-This is the production code bundle for the **Probity Fintech Design System**, a comprehensive design language and component library for financial platforms.
+Built solo as a full-stack project combining a Spring Boot backend with a custom-designed React frontend, component library, and design system.
 
-## Design Documentation
+## Platform Features
 
-- **[Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md)** — Unified patterns for data states, accessibility, loading strategies, micro-interactions, and consistency rules across all screens
-  - Data state handling (loading, empty, error, partial)
-  - Semantic HTML structure and accessibility guidelines
-  - Data formatting rules (currency, percentages, dates)
-  - Edge case handling (zero values, missing data, large values)
-  - Consistency patterns for reusable components
+### Dashboard
+Real-time portfolio overview with key metrics, asset allocation breakdown, and risk indicators. Combines live data with interactive summaries for at-a-glance insights.
 
-## Design System Resources
+### Monte Carlo Simulation
+Advanced portfolio risk modeling with configurable simulation parameters. Visualizes probability distributions and stress-test scenarios to help understand portfolio behavior under various market conditions.
 
-- **Figma Design File:** https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System
-- **Design Tokens:** `src/assets/theme.css` (colors, typography, CSS variables)
-- **Component Library:** `src/components/`
-  - Base UI primitives: `src/components/ui/`
-  - Probity-specific components: `src/components/probity/`
+### Authentication & Settings
+Secure user authentication with session management. Settings interface for portfolio configuration, risk parameters, and user preferences.
 
-## Quick Start
+### Data Visualization
+Interactive charts built with Chart.js for time-series analysis, distribution plots, and correlation matrices. Real-time updates with responsive design.
 
-Run `npm i` to install the dependencies.
+## Tech Stack
 
-Run `npm run dev` to start the development server.
+- **Frontend:** React 18, TypeScript, Vite
+- **Styling:** Tailwind CSS with custom design tokens
+- **Components:** Radix UI, shadcn/ui primitives
+- **Charts:** Chart.js
+- **Backend:** [Java 21, Spring Boot, Hexagonal Architecture][1]
 
-The application will be available at the configured dev server URL.
+## Design & Implementation
+
+The frontend is built on a **custom component library and design system** I designed and implemented from scratch:
+
+- **Design Tokens:** Centralized color palette, typography, and spacing (`src/assets/theme.css`)
+- **Component System:** Semantic HTML primitives with accessibility built-in
+- **Data State Handling:** Loading, empty, error, and partial states across all components
+- **Accessibility:** WCAG-compliant components with keyboard navigation and screen reader support
+- **Design File:** [Figma design system](https://www.figma.com/design/hHFsgg0w6U3DahPG2qTKHE/Fintech-Design-System)
+
+For detailed design principles and implementation guidelines, see [Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md).
 
 ## Project Structure
 
 ```
 src/
-├── assets/              # Global styles and design tokens
-│   ├── theme.css       # Color palette, typography, CSS variables
-│   ├── tailwind.css    # Tailwind CSS entry point
-│   └── index.css       # Global CSS imports
 ├── components/
-│   ├── ui/             # Base Radix/shadcn-style primitives
-│   ├── probity/        # Probity-specific component system
-│   └── auth/           # Authentication components
-├── pages/              # Page-level layouts and screens
-├── api/                # API service layer
-├── hooks/              # Custom React hooks
-├── context/            # Context providers
-├── types/              # TypeScript type definitions
-└── docs/               # Design system documentation
+│   ├── ui/              # Base Radix/shadcn primitives
+│   ├── probity/         # Product-specific components
+│   └── auth/            # Authentication UI
+├── pages/               # Page-level layouts
+├── api/                 # API service layer
+├── hooks/               # Custom React hooks
+├── context/             # Context providers
+├── types/               # TypeScript definitions
+├── assets/              # Design tokens and global styles
+└── docs/                # Design documentation
 ```
 
-## Key Design System Principles
+## Getting Started
 
-1. **Data States First** — Every component handles loading, empty, error, and partial data states
-2. **Semantic HTML** — Proper heading hierarchy, table structure, and ARIA attributes
-3. **Progressive Loading** — Show layouts immediately with skeletons; replace section by section
-4. **Accessible By Default** — Keyboard navigation, screen reader support, color + non-color signals
-5. **Consistent Patterns** — Reuse components, maintain action placement, same state = same UI
-6. **Data Formatting** — Numbers in IBM Plex Mono with proper currency, percentage, and date formats
-7. **Micro-interactions** — Smooth, responsive feedback with <200ms animations
+### Prerequisites
+- Node.js 18+
+- npm or yarn
 
-## Component Usage
+### Installation
 
-Always refer to existing components when building features:
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173` (or your configured dev server URL).
+
+### Building for Production
+
+```bash
+npm run build
+```
+
+## Key Components
 
 ### Data States
-- `SkeletonLoader` — Loading state with shimmer animation
-- `EmptyState` — Dashed border container with icon, message, and CTA
-- Alert components — Error and warning messages
+- **SkeletonLoader** — Progressive loading with shimmer animation
+- **EmptyState** — Dashed containers for empty data states
+- **Alert Components** — Error and warning messaging
 
-### Tables & Cards
-- `DataTable` — Semantic table with headers and proper markup
-- `StatCard` — Metric summary cards
-- `PortfolioCard` — Content cards for portfolio displays
+### Visualizations
+- **DonutChart** — Portfolio composition breakdown
+- **LineChart** — Time-series portfolio performance
+- **Sparkline** — Compact metric trends
 
-### Actions
-- `ProbityButton` — Primary, secondary, ghost, and danger button variants
-- `InputField` — Form inputs with labels
-- `DropdownSelect` — Accessible select menus
-- `Modal` & `Tooltip` — Overlays and help text
+### Forms & Inputs
+- **InputField** — Accessible text inputs with labels
+- **DropdownSelect** — Semantic select menus
+- **ProbityButton** — Primary, secondary, ghost variants
 
-### Charts
-- `DonutChart`, `LineChart`, `Sparkline` — Data visualization components
+## Full-Stack Project
 
-For complete implementation guidance, see [Global Behavior Rules](./src/docs/GLOBAL_BEHAVIOR_RULES.md).
+This is one half of Probity. The complete platform includes:
 
-## Contributing to the Design System
+- **Frontend (this repo):** React/TypeScript interface for portfolio analysis and Monte Carlo visualization
+- **Backend:** [Java 21, Spring Boot backend with hexagonal architecture and Monte Carlo simulations][1]
 
-When adding new features or components:
-
-1. **Read the Global Behavior Rules** — Ensure your implementation follows the established patterns
-2. **Reuse Components** — Don't create custom variants; extend or reuse existing components
-3. **Use Design Tokens** — Always reference `--pb-*` CSS variables, never hardcode colors
-4. **Handle Data States** — Every data-driven component must support all 4 states
-5. **Test Accessibility** — Keyboard navigation, screen readers, color contrast
-6. **Follow Semantic HTML** — Use proper heading structure, `<table>`, `<label>`, etc.
-7. **Format Data Consistently** — Use IBM Plex Mono for numbers; follow currency/date rules
+[1]: [link]
 
 ---
 
-**Last Updated:** 2026
-**Maintainer:** Probity Design System Team
-  
+Built by [Veselin Nikolaev](https://linkedin.com/in/veselinnikolaev)
