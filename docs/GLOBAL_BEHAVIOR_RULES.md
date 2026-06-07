@@ -1597,15 +1597,6 @@ This design system is based on the Probity Fintech Design System Figma:
 
 ---
 
-## Document History
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.1 | 2026 | Added form validation patterns (InputField states, error handling), animation conventions (keyframes, timing, spinner pattern), chart implementation patterns (SVG-based, ResizeObserver, interactions), modal & dialog patterns (structure, focus, animations), button implementation details (variants, sizes, states), CSS Modules & styling strategy |
-| 1.0 | 2026 | Initial global behavior rules; codified data states, semantic structure, loading strategy, micro-interactions, feedback, data formatting, edge cases, consistency rules |
-
----
-
 ## Questions & Updates
 
 For questions, refer to the implementation components or contact the author.
