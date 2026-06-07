@@ -167,7 +167,7 @@ This is one half of Probity. The complete platform includes:
 - **Frontend (this repo):** React/TypeScript interface for portfolio analysis and Monte Carlo visualization
 - **Backend:** [Java 21, Spring Boot backend with hexagonal architecture and Monte Carlo simulations][1]
 
-[1]: [link]
+[1]: https://github.com/veselinnikolaev/probity-backend
 
 ---
 
