@@ -171,4 +171,4 @@ This is one half of Probity. The complete platform includes:
 
 ---
 
-Built by [Veselin Nikolaev](https://linkedin.com/in/veselinnikolaev)
+Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
