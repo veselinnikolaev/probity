@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/auth';
 import { SidebarNavItem } from '@/components/probity/SidebarNavItem';
 import { TopbarProvider, useTopbarDisplay } from '@/context/TopbarContext';
+import AiAssistant from '@/components/probity/AiAssistant';
 import styles from './app-layout.module.css';
 import {ROUTES} from "@/constants/routes";
 
@@ -64,6 +65,8 @@ const AppShell: React.FC = () => {
                     <Outlet />
                 </main>
             </div>
+
+            <AiAssistant />
         </div>
     );
 };
