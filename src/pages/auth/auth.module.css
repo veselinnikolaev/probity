@@ -245,11 +245,11 @@
 
 .strengthLabel {
   font-family: var(--font-body), sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  min-width: 50px;
+  min-width: 60px;
   text-align: right;
 }
 
@@ -421,4 +421,186 @@
 
 .showPasswordBtn:hover {
   color: var(--pb-text-primary, rgba(255,255,255,0.8));
+}
+
+/* ---- Progress Indicator (3-step wizard) ---- */
+.progressIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.progressDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--pb-border);
+  transition: all 150ms ease-in-out;
+}
+
+.progressDotActive {
+  width: 8px;
+  height: 8px;
+  background-color: var(--pb-accent);
+}
+
+/* ---- Step Content Container ---- */
+.stepContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--font-display), sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--pb-text-primary);
+}
+
+.cardSubtitle {
+  margin: 6px 0 0;
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  color: var(--pb-text-secondary);
+}
+
+/* ---- Input Row (side-by-side fields) ---- */
+.inputRowContainer {
+  display: flex;
+  gap: 12px;
+}
+
+/* ---- Button Row Layout ---- */
+.buttonRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.buttonRow > button:last-child {
+  flex: 1;
+}
+
+/* ---- Code Input Verification ---- */
+.codeInputContainer {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.codeInput {
+  width: 44px;
+  height: 52px;
+  background-color: var(--pb-surface-elevated);
+  border: 1px solid var(--pb-border);
+  border-radius: 8px;
+  font-family: var(--font-mono), monospace;
+  font-size: 20px;
+  color: var(--pb-text-primary);
+  text-align: center;
+  transition: all 150ms ease-in-out;
+  cursor: text;
+}
+
+.codeInput:focus {
+  outline: none;
+  border-color: var(--pb-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.codeInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.codeError {
+  margin: 0 0 12px;
+  font-family: var(--font-body), sans-serif;
+  font-size: 12px;
+  color: var(--pb-danger);
+  text-align: center;
+}
+
+/* ---- Resend Code Container ---- */
+.resendContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.resendLabel {
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  color: var(--pb-text-secondary);
+}
+
+.resendButton {
+  background: none;
+  border: none;
+  color: var(--pb-accent);
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.resendButton:hover:not(:disabled) {
+  color: var(--pb-accent-hover);
+}
+
+.resendButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.resendCountdown {
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  color: var(--pb-text-secondary);
+}
+
+/* ---- Email Highlight in Subtitle ---- */
+.emailHighlight {
+  color: var(--pb-text-primary);
+  font-weight: 500;
+}
+
+/* ---- Password Input Wrapper (for eye toggle) ---- */
+.passwordInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInputWrapper .input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+/* ---- Eye Toggle Button ---- */
+.eyeToggleBtn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--pb-text-secondary);
+  display: flex;
+  align-items: center;
+  transition: color 0.15s ease;
+  line-height: 1;
+}
+
+.eyeToggleBtn:hover {
+  color: var(--pb-text-primary);
 }
