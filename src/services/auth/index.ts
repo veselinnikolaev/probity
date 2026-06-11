@@ -13,6 +13,14 @@ export const authService = {
     await api.post('/auth/register', payload);
   },
 
+  async verifyEmail(token: string): Promise<void> {
+    await api.post(`/auth/verify?token=${token}`, null);
+  },
+
+  async resendVerification(email: string): Promise<void> {
+    await api.post(`/auth/resend-verification?email=${email}`, null);
+  },
+
   async refresh(): Promise<User> {
     // Browser sends refresh_token cookie automatically via withCredentials.
     // Backend rotates both cookies and returns user info.

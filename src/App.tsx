@@ -5,6 +5,7 @@ import ProtectedRoute from './components/core/ProtectedRoute';
 import { ErrorBoundary } from './components/probity/ErrorBoundary';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import { VerifyEmail } from './pages/auth/VerifyEmail';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import PortfoliosPage from './pages/portfolios/PortfoliosPage';
 import PortfolioDetailPage from './pages/portfolio-detail/PortfolioDetailPage';
@@ -24,6 +25,7 @@ const App: React.FC = () => {
             {/* Public routes */}
             <Route path={ROUTES.LOGIN} element={<LoginPage />} />
             <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+            <Route path={ROUTES.VERIFY} element={<VerifyEmail />} />
 
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>

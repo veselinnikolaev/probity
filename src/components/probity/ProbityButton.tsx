@@ -1,6 +1,6 @@
 import React, { ButtonHTMLAttributes, useState, forwardRef } from "react";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ProbityButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -75,6 +75,20 @@ const VARIANT_STYLES: Record<ButtonVariant, { base: React.CSSProperties; hover: 
     },
     active: {
       backgroundColor: "rgba(239,68,68,0.25)",
+    },
+  },
+  "danger-ghost": {
+    base: {
+      backgroundColor: "transparent",
+      border: "1px solid transparent",
+      color: "#EF4444",
+    },
+    hover: {
+      backgroundColor: "rgba(239,68,68,0.1)",
+      borderColor: "rgba(239,68,68,0.25)",
+    },
+    active: {
+      backgroundColor: "rgba(239,68,68,0.15)",
     },
   },
 };

@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InputField } from '../probity/InputField';
 import { ProbityButton } from '../probity/ProbityButton';
 import { ROUTES } from '@/constants/routes';
+import { authService } from '@/services/auth';
 import styles from '@/pages/auth/auth.module.css';
 
 interface RegisterProps {
@@ -21,27 +22,30 @@ const calculatePasswordStrength = (password: string): number => {
 
 const basicEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type Step = 1 | 2 | 'confirmation';
+
 export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<Step>(1);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [codeSent, setCodeSent] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: { state: 'error'; message: string } }>({});
+  const [resendSuccess, setResendSuccess] = useState(false);
 
-  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
 
   // Password strength for step 2
   const passwordStrength = useMemo(() => calculatePasswordStrength(password), [password]);
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
+  const passwordValid = passwordStrength === 4 && passwordsMatch;
 
   // Resend countdown timer
   useEffect(() => {
@@ -54,31 +58,19 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
     return () => clearInterval(interval);
   }, [resendCountdown]);
 
-  // Send verification code when arriving at step 3
+  // Reset resend success message after 3 seconds
   useEffect(() => {
-    if (step === 3 && !codeSent) {
-      sendVerificationCode();
+    if (resendSuccess) {
+      const timeout = setTimeout(() => setResendSuccess(false), 3000);
+      return () => clearTimeout(timeout);
     }
-  }, [step, codeSent]);
-
-  const sendVerificationCode = async () => {
-    try {
-      await fetch('/api/v1/auth/send-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      setCodeSent(true);
-      setResendCountdown(60);
-    } catch (err) {
-      setErrors({ code: 'Failed to send verification code' });
-    }
-  };
+  }, [resendSuccess]);
 
   const validateStep1 = (): boolean => {
     const newErrors: { [key: string]: string } = {};
     if (!firstName.trim()) newErrors['first-name'] = 'First name is required';
     if (!lastName.trim()) newErrors['last-name'] = 'Last name is required';
+    if (!username.trim()) newErrors['username'] = 'Username is required';
     if (!email.trim()) {
       newErrors['email'] = 'Email is required';
     } else if (!basicEmailRegex.test(email)) {
@@ -88,33 +80,11 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const validateStep2 = (): boolean => {
-    const newErrors: { [key: string]: string } = {};
-    if (!password) {
-      newErrors['password'] = 'Password is required';
-    } else if (password.length < 8) {
-      newErrors['password'] = 'Password must be at least 8 characters';
-    }
-    if (!confirmPassword) {
-      newErrors['confirm-password'] = 'Please confirm your password';
-    } else if (password !== confirmPassword) {
-      newErrors['confirm-password'] = 'Passwords do not match';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleStep1Continue = () => {
     if (validateStep1()) {
       setErrors({});
+      setFieldErrors({});
       setStep(2);
-    }
-  };
-
-  const handleStep2Continue = () => {
-    if (validateStep2()) {
-      setErrors({});
-      setStep(3);
     }
   };
 
@@ -123,77 +93,58 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
     setStep(1);
   };
 
-  const handleStep3Back = () => {
-    setErrors({});
-    setStep(2);
-  };
-
-  const handleCodeChange = (index: number, value: string) => {
-    // Only allow digits
-    if (!/^\d*$/.test(value)) return;
-    const newCode = [...code];
-    newCode[index] = value.slice(0, 1); // Keep only one digit
-    setCode(newCode);
-
-    // Auto-focus next field
-    if (value && index < 5) {
-      codeInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !code[index] && index > 0) {
-      codeInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleCodePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    const newCode = [...code];
-    for (let i = 0; i < pasted.length; i++) {
-      newCode[i] = pasted[i];
-    }
-    setCode(newCode);
-    if (pasted.length === 6) {
-      codeInputRefs.current[5]?.blur();
-    }
-  };
-
-  const handleVerifyAndCreate = async () => {
-    const codeString = code.join('');
-    if (codeString.length !== 6) {
-      setErrors({ code: 'Please enter all 6 digits' });
+  const handleCreateAccount = async () => {
+    if (!passwordValid) {
+      setErrors({ general: 'Password does not meet all requirements' });
       return;
     }
 
     setIsLoading(true);
+    setErrors({});
     try {
-      const response = await fetch('/api/v1/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          email,
-          password,
-          verificationCode: codeString,
-        }),
+      await authService.register({
+        firstName,
+        lastName,
+        username,
+        email,
+        password,
       });
-
-      if (response.status === 200) {
-        navigate(ROUTES.DASHBOARD, { replace: true });
-      } else if (response.status === 400) {
-        const data = await response.json();
-        setErrors({ code: data.message || 'Invalid code' });
+      setStep('confirmation');
+      setResendCountdown(300);
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        const body = err.response.data;
+        if (body && body.includes('Username')) {
+          setFieldErrors({ username: { state: 'error', message: 'Username already taken' } });
+          setStep(1);
+        } else if (body && body.includes('Email')) {
+          setFieldErrors({ email: { state: 'error', message: 'Email already registered' } });
+          setStep(1);
+        } else {
+          setErrors({ general: 'Registration failed. Please try again.' });
+        }
       } else {
-        setErrors({ code: 'Something went wrong' });
+        setErrors({ general: 'Registration failed. Please try again.' });
       }
-    } catch (err) {
-      setErrors({ code: 'Failed to verify code' });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleResendEmail = async () => {
+    try {
+      await authService.resendVerification(email);
+      setResendSuccess(true);
+      setResendCountdown(300);
+    } catch (err) {
+      // Error handling - could show inline error
+    }
+  };
+
+  const formatCountdown = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -231,15 +182,17 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
           <span className={styles.wordmarkText}>PROBITY</span>
         </div>
 
-        {/* Progress indicator */}
-        <div className={styles.progressIndicator}>
-          {[1, 2, 3].map((dotStep) => (
-            <div
-              key={dotStep}
-              className={`${styles.progressDot} ${step === dotStep ? styles.progressDotActive : ''}`}
-            ></div>
-          ))}
-        </div>
+        {/* Progress indicator - only show on steps 1 and 2 */}
+        {step !== 'confirmation' && (
+          <div className={styles.progressIndicator}>
+            {[1, 2].map((dotStep) => (
+              <div
+                key={dotStep}
+                className={`${styles.progressDot} ${step === dotStep ? styles.progressDotActive : ''}`}
+              ></div>
+            ))}
+          </div>
+        )}
 
         <p className={styles.tagline}>Portfolio Risk Intelligence</p>
 
@@ -248,7 +201,7 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
           <div className={styles.stepContent}>
             <div>
               <h2 className={styles.cardTitle}>Create your account</h2>
-              <p className={styles.cardSubtitle}>Step 1 of 3 — Who are you?</p>
+              <p className={styles.cardSubtitle}>Step 1 of 2 — Who are you?</p>
             </div>
 
             <div className={styles.form}>
@@ -260,8 +213,8 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                     placeholder="John"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    inputState={errors['first-name'] ? 'error' : 'default'}
-                    errorMessage={errors['first-name']}
+                    inputState={errors['first-name'] ? 'error' : fieldErrors['first-name']?.state || 'default'}
+                    errorMessage={errors['first-name'] || fieldErrors['first-name']?.message}
                   />
                 </div>
                 <div style={{ flex: 1 }}>
@@ -271,11 +224,21 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                     placeholder="Doe"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    inputState={errors['last-name'] ? 'error' : 'default'}
-                    errorMessage={errors['last-name']}
+                    inputState={errors['last-name'] ? 'error' : fieldErrors['last-name']?.state || 'default'}
+                    errorMessage={errors['last-name'] || fieldErrors['last-name']?.message}
                   />
                 </div>
               </div>
+
+              <InputField
+                label="Username"
+                id="username"
+                placeholder="johndoe"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                inputState={errors['username'] ? 'error' : fieldErrors['username']?.state || 'default'}
+                errorMessage={errors['username'] || fieldErrors['username']?.message}
+              />
 
               <InputField
                 label="Email"
@@ -284,8 +247,8 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                inputState={errors['email'] ? 'error' : 'default'}
-                errorMessage={errors['email']}
+                inputState={errors['email'] ? 'error' : fieldErrors['email']?.state || 'default'}
+                errorMessage={errors['email'] || fieldErrors['email']?.message}
               />
 
               <ProbityButton
@@ -314,7 +277,7 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
           <div className={styles.stepContent}>
             <div>
               <h2 className={styles.cardTitle}>Secure your account</h2>
-              <p className={styles.cardSubtitle}>Step 2 of 3 — Choose a password</p>
+              <p className={styles.cardSubtitle}>Step 2 of 2 — Choose a password</p>
             </div>
 
             <div className={styles.form}>
@@ -422,6 +385,20 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                 )}
               </div>
 
+              {errors['general'] && (
+                <div style={{
+                  padding: '12px',
+                  marginTop: '16px',
+                  border: '1px solid var(--pb-danger)',
+                  backgroundColor: 'rgba(239,68,68,0.08)',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  color: 'var(--pb-text-primary)',
+                }}>
+                  {errors['general']}
+                </div>
+              )}
+
               <div className={styles.buttonRow}>
                 <ProbityButton
                   variant="ghost"
@@ -433,88 +410,118 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                 <ProbityButton
                   variant="primary"
                   size="lg"
-                  onClick={handleStep2Continue}
+                  onClick={handleCreateAccount}
+                  loading={isLoading}
+                  disabled={isLoading}
                   style={{ flex: 1 }}
                 >
-                  Continue →
+                  Create Account
                 </ProbityButton>
               </div>
             </div>
           </div>
         )}
 
-        {/* Step 3: Email Verification */}
-        {step === 3 && (
+        {/* Confirmation Screen */}
+        {step === 'confirmation' && (
           <div className={styles.stepContent}>
-            <div>
-              <h2 className={styles.cardTitle}>Check your email</h2>
-              <p className={styles.cardSubtitle}>
-                We sent a 6-digit code to <span className={styles.emailHighlight}>{email}</span>
-              </p>
-            </div>
-
-            <div className={styles.form}>
-              <div className={styles.codeInputContainer}>
-                {code.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (codeInputRefs.current[i] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleCodeChange(i, e.target.value)}
-                    onKeyDown={(e) => handleCodeKeyDown(i, e)}
-                    onPaste={i === 0 ? handleCodePaste : undefined}
-                    className={styles.codeInput}
-                    disabled={isLoading}
-                    aria-label={`Digit ${i + 1}`}
-                  />
-                ))}
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ marginBottom: '24px' }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--pb-success)" strokeWidth="2.5">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
               </div>
 
-              {errors['code'] && (
-                <p className={styles.codeError}>{errors['code']}</p>
-              )}
+              <h2 className={styles.cardTitle} style={{ textAlign: 'center', marginBottom: '8px' }}>
+                Check your inbox
+              </h2>
 
-              <div className={styles.resendContainer}>
-                <span className={styles.resendLabel}>Didn't receive it? </span>
+              <p style={{
+                fontFamily: 'DM Sans, sans-serif',
+                fontSize: '14px',
+                color: 'var(--pb-text-secondary)',
+                textAlign: 'center',
+                marginBottom: '8px',
+                lineHeight: '1.5',
+              }}>
+                We sent a verification link to{' '}
+                <span style={{ color: 'var(--pb-text-primary)', fontWeight: 'bold' }}>{email}</span>.
+                Click the link to activate your account.
+              </p>
+
+              <p style={{
+                fontFamily: 'DM Sans, sans-serif',
+                fontSize: '12px',
+                color: 'var(--pb-text-muted)',
+                textAlign: 'center',
+                marginBottom: '20px',
+              }}>
+                The link expires in 24 hours. Check your spam folder if you don't see it.
+              </p>
+
+              <div style={{
+                width: '100%',
+                height: '1px',
+                backgroundColor: 'var(--pb-border)',
+                margin: '20px 0',
+              }}></div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginBottom: '20px' }}>
+                <span style={{
+                  fontFamily: 'DM Sans, sans-serif',
+                  fontSize: '13px',
+                  color: 'var(--pb-text-secondary)',
+                }}>
+                  Didn't get it?
+                </span>
                 {resendCountdown > 0 ? (
-                  <span className={styles.resendCountdown}>
-                    Resend in {resendCountdown}s
+                  <span style={{
+                    fontFamily: 'IBM Plex Mono, monospace',
+                    fontSize: '13px',
+                    color: 'var(--pb-text-muted)',
+                  }}>
+                    Resend in {formatCountdown(resendCountdown)}
+                  </span>
+                ) : resendSuccess ? (
+                  <span style={{
+                    fontFamily: 'DM Sans, sans-serif',
+                    fontSize: '13px',
+                    color: 'var(--pb-success)',
+                  }}>
+                    Sent!
                   </span>
                 ) : (
                   <button
                     type="button"
-                    className={styles.resendButton}
-                    onClick={sendVerificationCode}
-                    disabled={isLoading}
+                    onClick={handleResendEmail}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      fontFamily: 'DM Sans, sans-serif',
+                      fontSize: '13px',
+                      color: 'var(--pb-accent)',
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                    }}
                   >
-                    Resend code
+                    Resend email
                   </button>
                 )}
               </div>
 
-              <div className={styles.buttonRow}>
-                <ProbityButton
-                  variant="ghost"
-                  size="lg"
-                  onClick={handleStep3Back}
-                  disabled={isLoading}
-                >
-                  ← Back
-                </ProbityButton>
-                <ProbityButton
-                  variant="primary"
-                  size="lg"
-                  onClick={handleVerifyAndCreate}
-                  disabled={code.join('').length !== 6 || isLoading}
-                  loading={isLoading}
-                  style={{ flex: 1 }}
-                >
-                  Verify & Create Account
-                </ProbityButton>
-              </div>
+              <button
+                onClick={() => navigate(ROUTES.LOGIN)}
+                className={styles.linkButton}
+                style={{
+                  display: 'block',
+                  margin: '0 auto',
+                  textAlign: 'center',
+                }}
+              >
+                Back to sign in
+              </button>
             </div>
           </div>
         )}
