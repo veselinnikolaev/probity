@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/auth';
 import { AxiosError } from 'axios';
 import { ROUTES } from '@/constants/routes';
+import { authService } from '@/services/auth';
 import styles from '@/pages/auth/auth.module.css';
 
 interface LoginProps {
@@ -16,6 +17,8 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   const identifierRef = useRef<HTMLInputElement>(null); // was: emailRef
   const { login, isAuthenticated } = useAuth();
@@ -45,6 +48,7 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
+    setEmailNotVerified(false);
 
     if (!identifier || !password) { // was: !email
       setError('Please fill in all fields');
@@ -55,9 +59,31 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
     try {
       await login({ identifier, password }); // was: { email, password }
     } catch (err) {
-      const axiosError = err as AxiosError<{ message?: string }>;
+      const axiosError = err as AxiosError<{ message?: string; email?: string }>;
       if (axiosError.response?.status === 401) {
-        setError('Invalid credentials'); // was: 'Invalid email or password'
+        const message = axiosError.response.data?.message?.toLowerCase() || '';
+        const errorEmail = axiosError.response.data?.email;
+        
+        // Check if error is due to unverified email
+        if (message.includes('verify') || message.includes('verified') || message.includes('confirmation')) {
+          setEmailNotVerified(true);
+          setUserEmail(errorEmail || identifier.includes('@') ? identifier : '');
+          setError('Please verify your email before signing in');
+        } else {
+          setError('Invalid credentials'); // was: 'Invalid email or password'
+        }
+      } else if (axiosError.response?.status === 403) {
+        // Some backends use 403 for unverified accounts
+        const message = axiosError.response.data?.message?.toLowerCase() || '';
+        const errorEmail = axiosError.response.data?.email;
+        
+        if (message.includes('verify') || message.includes('verified') || message.includes('confirmation')) {
+          setEmailNotVerified(true);
+          setUserEmail(errorEmail || identifier.includes('@') ? identifier : '');
+          setError('Please verify your email before signing in');
+        } else {
+          setError('Access denied. Please check your account status.');
+        }
       } else if (axiosError.response?.status === 429) {
         setError('Too many attempts. Please wait a moment.');
       } else if (!axiosError.response) {
@@ -65,6 +91,25 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
       } else {
         setError(axiosError.response.data?.message ?? 'Something went wrong');
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!userEmail) {
+      setError('No email address available to resend verification');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      await authService.resendVerification(userEmail);
+      setSuccessMessage('Verification email sent! Please check your inbox.');
+      setError('');
+      setEmailNotVerified(false);
+    } catch (err) {
+      setError('Failed to resend verification email. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +156,32 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
             {successMessage && (
                 <div className={styles.successMessage}>{successMessage}</div>
             )}
-            {error && <div className={styles.errorMessage}>{error}</div>}
+            {error && (
+              <div className={styles.errorMessage}>
+                {error}
+                {emailNotVerified && userEmail && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={isLoading}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '4px 0 0 0',
+                      color: 'var(--pb-accent)',
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '13px',
+                      textDecoration: 'underline',
+                      display: 'block',
+                      marginTop: '8px',
+                      opacity: isLoading ? 0.5 : 1,
+                    }}
+                  >
+                    {isLoading ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* was: Email / type="email" */}
             <div className={styles.inputGroup}>

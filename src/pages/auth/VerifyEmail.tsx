@@ -14,6 +14,13 @@ export const VerifyEmail: React.FC = () => {
   const token = searchParams.get('token');
 
   useEffect(() => {
+    // Check if verification was already completed
+    const savedState = localStorage.getItem('email_verification_state');
+    if (savedState === 'success') {
+      setState('success');
+      return;
+    }
+
     const verifyToken = async () => {
       if (!token) {
         setState('error');
@@ -23,6 +30,7 @@ export const VerifyEmail: React.FC = () => {
       try {
         await authService.verifyEmail(token);
         setState('success');
+        localStorage.setItem('email_verification_state', 'success');
       } catch (err) {
         setState('error');
       }
@@ -92,7 +100,7 @@ export const VerifyEmail: React.FC = () => {
 
           {state === 'success' && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--pb-success)" strokeWidth="2.5">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
@@ -117,7 +125,10 @@ export const VerifyEmail: React.FC = () => {
                 variant="primary"
                 size="lg"
                 style={{ width: '100%' }}
-                onClick={() => navigate(ROUTES.LOGIN)}
+                onClick={() => {
+                  localStorage.removeItem('email_verification_state');
+                  navigate(ROUTES.LOGIN);
+                }}
               >
                 Go to Login
               </ProbityButton>
@@ -126,7 +137,7 @@ export const VerifyEmail: React.FC = () => {
 
           {state === 'error' && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--pb-danger)" strokeWidth="2.5">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                   <line x1="12" y1="9" x2="12" y2="13" />

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { usePortfolios } from '@/hooks/portfolio';
 import { PortfolioCard, EmptyPortfolioCard } from '@/components/probity/PortfolioCard';
 import { CreatePortfolioModal } from '@/components/probity/CreatePortfolioModal';
+import { EditPortfolioModal } from '@/components/probity/EditPortfolioModal';
+import { DeletePortfolioModal } from '@/components/probity/DeletePortfolioModal';
 import { ProbityButton } from '@/components/probity/ProbityButton';
 import { DataBoundary } from '@/components/core/DataBoundary';
 import { EmptyState } from '@/components/probity/EmptyState';
@@ -11,6 +13,7 @@ import styles from './portfolios.module.css';
 import { portfolioService } from "@/services/portfolio";
 import {useTopbarSlot} from "@/hooks/useTopbarSlot";
 import { ROUTES } from '@/constants/routes';
+import type { Portfolio } from '@/types/portfolio';
 
 const PortfoliosPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +21,8 @@ const PortfoliosPage: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [editTarget, setEditTarget] = useState<Portfolio | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Portfolio | null>(null);
 
   const handleCreatePortfolio = async (data: { name: string; description?: string }) => {
     setIsCreating(true);
@@ -87,6 +92,7 @@ const PortfoliosPage: React.FC = () => {
                                     key={portfolio.id}
                                     id={portfolio.id}
                                     name={portfolio.name}
+                                    description={portfolio.description}
                                     createdAt={portfolio.createdAt}
                                     positionsCount={portfolio.positionsCount || 0}
                                     totalValue={portfolio.totalValue || 0}
@@ -97,6 +103,12 @@ const PortfoliosPage: React.FC = () => {
                                         `${ROUTES.PORTFOLIO_DETAIL}?portfolio=${portfolio.id}`,
                                         { state: { name: portfolio.name } }
                                     )}
+                                    onView={() => navigate(
+                                        `${ROUTES.PORTFOLIO_DETAIL}?portfolio=${portfolio.id}`,
+                                        { state: { name: portfolio.name } }
+                                    )}
+                                    onEdit={() => setEditTarget(portfolio)}
+                                    onDelete={() => setDeleteTarget(portfolio)}
                                 />
                             ))}
                             <EmptyPortfolioCard onClick={() => setIsModalOpen(true)} />
@@ -110,6 +122,20 @@ const PortfoliosPage: React.FC = () => {
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={handleCreatePortfolio}
                 loading={isCreating}
+            />
+
+            <EditPortfolioModal
+                open={editTarget !== null}
+                onClose={() => setEditTarget(null)}
+                portfolio={editTarget}
+                onSuccess={() => portfoliosState.refetch()}
+            />
+
+            <DeletePortfolioModal
+                open={deleteTarget !== null}
+                onClose={() => setDeleteTarget(null)}
+                portfolio={deleteTarget}
+                onSuccess={() => portfoliosState.refetch()}
             />
         </>
     );

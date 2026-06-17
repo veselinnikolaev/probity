@@ -1,42 +1,22 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 const api: AxiosInstance = axios.create({
-  baseURL: '/api',
-  withCredentials: true,
+    baseURL: 'http://localhost:8080/api/v1',
+    withCredentials: true,
 });
 
-// Request interceptor to add CSRF token
+// Minimal interceptor just to bypass Axios's cross-origin restriction
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getCsrfToken();
-  if (token) {
-    config.headers['X-XSRF-TOKEN'] = token;
-  }
-  return config;
-});
+    const isMutating = ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() ?? '');
 
-// Response interceptor to store CSRF token
-api.interceptors.response.use(
-  (response: AxiosResponse) => {
-    const token = response.headers['x-xsrf-token'];
-    if (token) {
-      storeCsrfToken(token);
+    if (isMutating) {
+        // Read the token directly from the browser's cookie jar
+        const match = document.cookie.match(new RegExp('(^|;\\s*)(XSRF-TOKEN)=([^;]*)'));
+        if (match && match[3]) {
+            config.headers['X-XSRF-TOKEN'] = match[3];
+        }
     }
-    return response;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-export function getCsrfToken(): string | null {
-  return document.cookie
-    .split('; ')
-    .find((row) => row.startsWith('XSRF-TOKEN='))
-    ?.split('=')[1] || null;
-}
-
-export function storeCsrfToken(token: string): void {
-  document.cookie = `XSRF-TOKEN=${token}; path=/; SameSite=Strict`;
-}
+    return config;
+});
 
 export default api;

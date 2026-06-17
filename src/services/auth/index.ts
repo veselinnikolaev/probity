@@ -1,12 +1,10 @@
-import api, {storeCsrfToken} from '@/services/api';
+import api from '@/services/api';
 import { LoginPayload, RegisterPayload, User } from '@/types/auth';
 
 export const authService = {
   async login(payload: LoginPayload): Promise<User> {
-    // Backend sets access_token + refresh_token httpOnly cookies in Set-Cookie header.
-    // Browser stores them automatically — nothing to do on our side.
     const { data } = await api.post<User>('/auth/login', payload);
-    return data; // { username, role }
+    return data;
   },
 
   async register(payload: RegisterPayload): Promise<void> {
@@ -18,13 +16,17 @@ export const authService = {
   },
 
   async resendVerification(email: string): Promise<void> {
-    await api.post(`/auth/resend-verification?email=${email}`, null);
+    await api.post(`/auth/resend-verification?email=${encodeURIComponent(email)}`, null);
+  },
+
+  async checkEmailAvailability(email: string): Promise<{ available: boolean }> {
+    const { data } = await api.get<{ available: boolean }>(
+        `/auth/check-email?email=${encodeURIComponent(email)}`
+    );
+    return data;
   },
 
   async refresh(): Promise<User> {
-    // Browser sends refresh_token cookie automatically via withCredentials.
-    // Backend rotates both cookies and returns user info.
-    // Throws 401 if cookie is missing/expired — AuthContext catches this.
     const { data } = await api.post<User>('/auth/refresh');
     return data;
   },
@@ -32,15 +34,13 @@ export const authService = {
   async logout(): Promise<void> {
     try {
       await api.post('/auth/logout');
-      // Backend clears both cookies server-side via Set-Cookie: Max-Age=0
     } catch {
-      // Server unreachable — cookies will expire naturally
+      // Server unreachable — cookies expire naturally
     }
   },
 
-  async refreshCsrfToken(): Promise<void> {
-    const res = await api.get('/auth/csrf');
-    const token = res.headers['x-xsrf-token'];
-    if (token) storeCsrfToken(token);
+  // Called once on application mount by the AuthContext
+  async ensureCsrf(): Promise<void> {
+    await api.get('/auth/csrf');
   },
 };

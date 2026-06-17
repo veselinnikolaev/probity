@@ -1,6 +1,7 @@
 export interface Portfolio {
   id: string;
   name: string;
+  description?: string;
   totalValue: number;
   createdAt: string;
   positionsCount: number;

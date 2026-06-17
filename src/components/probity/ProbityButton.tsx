@@ -21,7 +21,9 @@ const VARIANT_STYLES: Record<ButtonVariant, { base: React.CSSProperties; hover: 
   primary: {
     base: {
       backgroundColor: "#3B82F6",
-      border: "1px solid rgba(96,165,250,0.3)",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: "rgba(96,165,250,0.3)",
       color: "#ffffff",
       boxShadow: "0 0 0 0 rgba(59,130,246,0)",
     },
@@ -36,7 +38,9 @@ const VARIANT_STYLES: Record<ButtonVariant, { base: React.CSSProperties; hover: 
   secondary: {
     base: {
       backgroundColor: "var(--pb-surface-elevated)",
-      border: "1px solid var(--pb-border)",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: "var(--pb-border)",
       color: "var(--pb-text-primary)",
     },
     hover: {
@@ -50,7 +54,9 @@ const VARIANT_STYLES: Record<ButtonVariant, { base: React.CSSProperties; hover: 
   ghost: {
     base: {
       backgroundColor: "transparent",
-      border: "1px solid transparent",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: "transparent",
       color: "var(--pb-text-secondary)",
     },
     hover: {
@@ -65,7 +71,9 @@ const VARIANT_STYLES: Record<ButtonVariant, { base: React.CSSProperties; hover: 
   danger: {
     base: {
       backgroundColor: "rgba(239,68,68,0.1)",
-      border: "1px solid rgba(239,68,68,0.25)",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: "rgba(239,68,68,0.25)",
       color: "#EF4444",
     },
     hover: {
@@ -80,7 +88,9 @@ const VARIANT_STYLES: Record<ButtonVariant, { base: React.CSSProperties; hover: 
   "danger-ghost": {
     base: {
       backgroundColor: "transparent",
-      border: "1px solid transparent",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: "transparent",
       color: "#EF4444",
     },
     hover: {

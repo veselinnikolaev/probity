@@ -5,7 +5,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { authService} from '@/services/auth';
+import { authService } from '@/services/auth';
 import {User, LoginPayload, RegisterPayload} from '@/types/auth'
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        await authService.refreshCsrfToken();
+        await authService.ensureCsrf();
         const restoredUser = await authService.refresh();
         setUser(restoredUser);
       } catch {
@@ -58,7 +58,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // -------------------------------------------------------------------------
   const login = useCallback(async (payload: LoginPayload) => {
     const loggedInUser = await authService.login(payload);
-    await authService.refreshCsrfToken(); // re-fetch after login rotates the token
     setUser(loggedInUser);
   }, []);
 

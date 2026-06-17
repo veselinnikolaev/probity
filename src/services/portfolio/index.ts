@@ -14,6 +14,12 @@ export const portfolioService = {
     createPortfolio: (data: CreatePortfolioRequest) =>
         api.post<Portfolio>('/portfolios', data).then(r => r.data),
 
+    updatePortfolio: (id: string, data: { name: string; description?: string }) =>
+        api.patch<Portfolio>(`/portfolios/${id}`, data).then(r => r.data),
+
+    deletePortfolio: (id: string) =>
+        api.delete(`/portfolios/${id}`).then(r => r.data),
+
     // ── Portfolio detail ──────────────────────────────────────────────────────
     getSummary: (id: string, range: string) =>
         api.get<PortfolioSummary>(`/portfolios/${id}/summary`, { params: { range } }).then(r => r.data),

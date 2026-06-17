@@ -5,6 +5,7 @@ import { ProbityButton } from '../probity/ProbityButton';
 import { ROUTES } from '@/constants/routes';
 import { authService } from '@/services/auth';
 import styles from '@/pages/auth/auth.module.css';
+import { Check, X } from 'lucide-react';
 
 interface RegisterProps {
   onSignInClick?: () => void;
@@ -16,7 +17,7 @@ const calculatePasswordStrength = (password: string): number => {
   if (password.length >= 8) score++;
   if (/[A-Z]/.test(password)) score++;
   if (/[0-9]/.test(password)) score++;
-  if (/[^a-zA-Z0-9]/.test(password)) score++;
+  if (/[@$!%*?&]/.test(password)) score++;
   return Math.min(score, 4);
 };
 
@@ -39,13 +40,15 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: { state: 'error'; message: string } }>({});
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
 
   const navigate = useNavigate();
 
   // Password strength for step 2
   const passwordStrength = useMemo(() => calculatePasswordStrength(password), [password]);
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
-  const passwordValid = passwordStrength === 4 && passwordsMatch;
+  const passwordValid = passwordStrength === 4 && passwordsMatch && password.length <= 64;
 
   // Resend countdown timer
   useEffect(() => {
@@ -65,6 +68,75 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
       return () => clearTimeout(timeout);
     }
   }, [resendSuccess]);
+
+  // Debounced email availability check
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (email && basicEmailRegex.test(email)) {
+        setEmailChecking(true);
+        try {
+          const result = await authService.checkEmailAvailability(email);
+          setEmailAvailable(result.available);
+          if (!result.available) {
+            setFieldErrors(prev => ({
+              ...prev,
+              email: { state: 'error', message: 'Email already registered' }
+            }));
+          } else {
+            setFieldErrors(prev => {
+              const newErrors = { ...prev };
+              delete newErrors.email;
+              return newErrors;
+            });
+          }
+        } catch (err) {
+          // If endpoint doesn't exist or fails, don't show error - will be caught on submit
+          setEmailAvailable(null);
+        } finally {
+          setEmailChecking(false);
+        }
+      } else {
+        setEmailAvailable(null);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [email]);
+
+  // LocalStorage persistence for registration state
+  useEffect(() => {
+    const savedState = localStorage.getItem('registration_state');
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        if (parsed.step === 'confirmation' && parsed.email) {
+          setFirstName(parsed.firstName || '');
+          setLastName(parsed.lastName || '');
+          setUsername(parsed.username || '');
+          setEmail(parsed.email);
+          setStep('confirmation');
+          setResendCountdown(parsed.resendCountdown || 300);
+        }
+      } catch (err) {
+        localStorage.removeItem('registration_state');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step === 'confirmation') {
+      localStorage.setItem('registration_state', JSON.stringify({
+        step: 'confirmation',
+        firstName,
+        lastName,
+        username,
+        email,
+        resendCountdown
+      }));
+    } else {
+      localStorage.removeItem('registration_state');
+    }
+  }, [step, firstName, lastName, username, email, resendCountdown]);
 
   const validateStep1 = (): boolean => {
     const newErrors: { [key: string]: string } = {};
@@ -114,10 +186,11 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
     } catch (err: any) {
       if (err.response?.status === 409) {
         const body = err.response.data;
-        if (body && body.includes('Username')) {
+        const message = typeof body === 'string' ? body : body?.message ?? '';
+        if (message.includes('Username')) {
           setFieldErrors({ username: { state: 'error', message: 'Username already taken' } });
           setStep(1);
-        } else if (body && body.includes('Email')) {
+        } else if (message.includes('Email')) {
           setFieldErrors({ email: { state: 'error', message: 'Email already registered' } });
           setStep(1);
         } else {
@@ -249,6 +322,15 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                 onChange={(e) => setEmail(e.target.value)}
                 inputState={errors['email'] ? 'error' : fieldErrors['email']?.state || 'default'}
                 errorMessage={errors['email'] || fieldErrors['email']?.message}
+                suffix={
+                  email && !emailChecking && emailAvailable !== null && (
+                    emailAvailable ? (
+                      <Check size={14} style={{ color: 'var(--pb-success)' }} />
+                    ) : (
+                      <X size={14} style={{ color: 'var(--pb-danger)' }} />
+                    )
+                  )
+                }
               />
 
               <ProbityButton
@@ -358,6 +440,17 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className={`${styles.input} ${errors['confirm-password'] ? styles.inputError : ''}`}
                     disabled={isLoading}
+                    style={
+                      confirmPassword && (passwordsMatch || !passwordsMatch)
+                        ? {
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: passwordsMatch
+                              ? 'var(--pb-success)'
+                              : 'var(--pb-danger)',
+                          }
+                        : undefined
+                    }
                   />
                   <button
                     type="button"
@@ -379,7 +472,21 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                       </svg>
                     )}
                   </button>
+                  {confirmPassword && passwordsMatch && (
+                    <Check size={16} style={{ color: 'var(--pb-success)', position: 'absolute', right: '40px' }} />
+                  )}
                 </div>
+                {confirmPassword && !passwordsMatch && (
+                  <span style={{
+                    fontFamily: 'DM Sans, sans-serif',
+                    fontSize: '11px',
+                    color: 'var(--pb-danger)',
+                    marginTop: '4px',
+                    display: 'block'
+                  }}>
+                    Passwords do not match
+                  </span>
+                )}
                 {errors['confirm-password'] && (
                   <span className={styles.errorText}>{errors['confirm-password']}</span>
                 )}

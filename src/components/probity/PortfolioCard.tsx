@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Sparkline } from './Sparkline';
 import { RiskBadge } from './RiskBadge';
+import { ProbityButton } from './ProbityButton';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
 
 interface PortfolioCardProps {
   id: string;
   name: string;
+  description?: string;
   createdAt: string;
   positionsCount: number;
   totalValue: number;
@@ -12,6 +15,9 @@ interface PortfolioCardProps {
   sharpeRatio: number;
   sparklineData: number[];
   onClick?: () => void;
+  onView?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 interface EmptyCardProps {
@@ -21,6 +27,7 @@ interface EmptyCardProps {
 export const PortfolioCard: React.FC<PortfolioCardProps> = ({
   id,
   name,
+  description,
   createdAt,
   positionsCount,
   totalValue,
@@ -28,6 +35,9 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({
   sharpeRatio,
   sparklineData,
   onClick,
+  onView,
+  onEdit,
+  onDelete,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -53,6 +63,26 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({
         <h3 className="portfolio-card__title">{name}</h3>
         <span className="portfolio-card__date">{formattedDate}</span>
       </div>
+
+      {description !== undefined && (
+        <div
+          className="portfolio-card__description"
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '14px',
+            color: description ? 'var(--pb-text-secondary)' : 'var(--pb-text-muted)',
+            fontStyle: description ? 'normal' : 'italic',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            marginTop: '8px',
+          }}
+        >
+          {description || 'No description'}
+        </div>
+      )}
 
       <div className="portfolio-card__meta">
         <div className="portfolio-card__meta-item">
@@ -89,6 +119,52 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({
           )}
         </div>
         <RiskBadge level={volatilityRisk} size="sm" />
+      </div>
+
+      <div
+        style={{
+          borderTop: '1px solid var(--pb-border)',
+          paddingTop: '12px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <ProbityButton
+          variant="primary"
+          size="sm"
+          iconLeft={<Eye size={14} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onView?.();
+          }}
+        >
+          View
+        </ProbityButton>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ProbityButton
+            variant="ghost"
+            size="sm"
+            iconLeft={<Pencil size={14} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.();
+            }}
+          >
+            Edit
+          </ProbityButton>
+          <ProbityButton
+            variant="danger"
+            size="sm"
+            iconLeft={<Trash2 size={14} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.();
+            }}
+          >
+            Delete
+          </ProbityButton>
+        </div>
       </div>
     </div>
   );
