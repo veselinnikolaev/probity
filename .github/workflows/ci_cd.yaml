@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: test-results
-          path: target/surefire-reports/
+          path: probity-api/target/surefire-reports/
 
   build-and-push:
     name: Build & Push Docker Image

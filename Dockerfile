@@ -1,15 +1,16 @@
 # Build stage
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
-COPY pom.xml .
+COPY pom.xml probity-api/pom.xml probity-shared/pom.xml ./
 RUN mvn dependency:go-offline -B
-COPY src ./src
+COPY probity-api ./probity-api
+COPY probity-shared ./probity-shared
 RUN mvn clean package -DskipTests
 
 # Run stage
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/probity-api/target/*.jar app.jar
 
 RUN addgroup -S probity && adduser -S probity -G probity
 USER probity
