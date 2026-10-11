@@ -8,6 +8,8 @@ import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.exception.SimulationClaimLostException;
 import me.veselin.probity.simulation.port.SimulationPort;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -15,7 +17,6 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,13 @@ import java.util.UUID;
  * groups via property placeholder {@code ${probity.simulation.consumer-group:probity-simulation-worker}}.
  * On success: status → COMPLETED via fenced complete. On failure: release PROCESSING → PENDING
  * (fenced) before rethrowing so the next delivery can reclaim; exhausted retries flow to DLT.
+ * <p>
+ * An unclaimable delivery (a fresh {@code PROCESSING} row, or a lost claim race against a
+ * {@code PENDING} row) is parked per-partition: the record is seeked back to its own offset,
+ * only the partition that owns it is paused, and it is resumed after
+ * {@code probity.simulation.unclaimable-backoff}. Unlike the former whole-consumer
+ * {@code nack}, sibling partitions on the same consumer keep flowing, so one slow or
+ * poisoned partition cannot stall the worker.
  */
 @Component
 @RequiredArgsConstructor
@@ -35,21 +43,20 @@ import java.util.UUID;
 public class SimulationRequestedEventConsumer {
 
     /**
-     * Redelivery delay for a record we decline to run yet.
-     *
-     * <p>Spring floors this at the container's poll timeout (5 s by default), so the value
-     * only bites when it is the larger of the two. That is fine: the loop this drives is
-     * bounded by the lease, not by this number — it terminates the moment {@code updated_at}
-     * falls outside {@code claimLease} and the row becomes reclaimable. A long lease delays
-     * recovery; it never prevents it.
+     * The listener container id used by the {@code @KafkaListener @KafkaListener(id=...)}
+     * declaration and resolved through {@link org.springframework.kafka.config.KafkaListenerEndpointRegistry}
+     * when parking an unclaimable partition. An explicit id keeps the container lookup
+     * deterministic.
      */
-    private static final Duration NACK_BACKOFF = Duration.ofSeconds(1);
+    public static final String LISTENER_ID = "simulation-requested";
 
     private final SimulationPort simulationPort;
     private final SimulationRepository simulationRepository;
     private final SimulationProperties simulationProperties;
+    private final UnclaimablePartitionParker unclaimablePartitionParker;
 
     @KafkaListener(
+            id = LISTENER_ID,
             topics = "${probity.kafka.simulation-requested-topic:simulation-requested}",
             groupId = "${probity.simulation.consumer-group:probity-simulation-worker}",
             containerFactory = "kafkaListenerContainerFactory"
@@ -57,9 +64,11 @@ public class SimulationRequestedEventConsumer {
     public void consume(
             @Payload SimulationRequestedEvent event,
             @Header(KafkaHeaders.RECEIVED_KEY) String kafkaKey,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
-            Acknowledgment ack) {
+            Acknowledgment ack,
+            Consumer<?, ?> consumer) {
 
         log.info("Received simulation request event: simulationId={}, portfolioId={}, partition={}, offset={}",
                 event.simulationId(), event.portfolioId(), partition, offset);
@@ -74,7 +83,7 @@ public class SimulationRequestedEventConsumer {
                 .claimForProcessing(simulationId, simulationProperties.getClaimLease());
 
         if (fenceToken.isEmpty()) {
-            handleUnclaimable(simulationId, partition, offset, ack);
+            handleUnclaimable(simulationId, topic, partition, offset, ack, consumer);
             return;
         }
 
@@ -137,11 +146,12 @@ public class SimulationRequestedEventConsumer {
      * <table border="1">
      *   <caption>Row state → response</caption>
      *   <tr><th>State</th><th>Response</th><th>Why</th></tr>
-     *   <tr><td>{@code PROCESSING}, fresh</td><td>nack</td>
+     *   <tr><td>{@code PROCESSING}, fresh</td><td>park, seek, redeliver</td>
      *       <td>A peer holds it, or a dead consumer did and this is its first redelivery.
-     *           Acknowledging would destroy the message with no recovery. Stale after one
-     *           lease, so the loop terminates.</td></tr>
-     *   <tr><td>{@code PENDING}</td><td>nack</td>
+     *           Acknowledging would destroy the message with no recovery. Only the owning
+     *           partition is paused, so the record resurfaces once its backoff elapses; the
+     *           row is stale after one lease, so the loop terminates.</td></tr>
+     *   <tr><td>{@code PENDING}</td><td>park, seek, redeliver</td>
      *       <td>Lost the claim race to a concurrent claimant that has since released. The
      *           row is claimable and genuinely ours, so redeliver it.</td></tr>
      *   <tr><td>{@code COMPLETED}</td><td>ack + skip</td>
@@ -153,7 +163,8 @@ public class SimulationRequestedEventConsumer {
      *       <td>Nothing to run. Acknowledging prevents an infinite redelivery loop.</td></tr>
      * </table>
      */
-    private void handleUnclaimable(UUID simulationId, int partition, long offset, Acknowledgment ack) {
+    private void handleUnclaimable(UUID simulationId, String topic, int partition, long offset,
+            Acknowledgment ack, Consumer<?, ?> consumer) {
         Optional<SimulationStatus> live = simulationRepository.findLiveStatus(simulationId);
 
         if (live.isEmpty()) {
@@ -170,10 +181,29 @@ public class SimulationRequestedEventConsumer {
                 ack.acknowledge();
             }
             case PROCESSING, PENDING -> {
-                log.info("Simulation {} is {} and not claimable; nacking so it comes back once "
-                        + "the lease has lapsed. partition={}, offset={}", simulationId, live.get(), partition, offset);
-                ack.nack(NACK_BACKOFF);
+                log.info("Simulation {} is {} and not claimable; parking partition {} (seeking to "
+                        + "offset {}) so the record comes back once the lease has lapsed. partition={}, offset={}",
+                        simulationId, live.get(), topic + "-" + partition, offset, partition, offset);
+                requeue(topic, partition, offset, consumer);
             }
         }
+    }
+
+    /**
+     * Parks the partition that owns this record and rewinds the consumer to the record's
+     * offset, so the same record is delivered again after {@code unclaimable-backoff}.
+     *
+     * <p>The offset is deliberately <em>not</em> acknowledged: committing would destroy the
+     * redelivery that the park cycle depends on. Only the owning partition is paused —
+     * {@link UnclaimablePartitionParker} resolves the child container that holds the
+     * partition, so when the consumer owns several partitions the siblings keep flowing.
+     *
+     * <p>{@code consumer.seek} is safe here: the listener runs on the container's consumer
+     * thread, and Kafka allows a seek to an already-assigned partition from that thread.
+     */
+    private void requeue(String topic, int partition, long offset, Consumer<?, ?> consumer) {
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        consumer.seek(topicPartition, offset);
+        unclaimablePartitionParker.park(LISTENER_ID, topicPartition);
     }
 }

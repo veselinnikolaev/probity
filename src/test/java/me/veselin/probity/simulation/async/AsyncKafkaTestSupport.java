@@ -125,6 +125,25 @@ public final class AsyncKafkaTestSupport {
     public static void registerAsyncBroker(DynamicPropertyRegistry registry,
                                           boolean autoStartup,
                                           String groupSuffix) {
+        registerAsyncBroker(registry, autoStartup, groupSuffix, true);
+    }
+
+    /**
+     * As {@link #registerAsyncBroker(DynamicPropertyRegistry, boolean, String)}, with a
+     * choice on the value deserializer.
+     *
+     * <p>Passing {@code wrapValueDeserializer = false} keeps the production
+     * {@code spring.kafka.consumer.value-deserializer} from {@code application.yaml}
+     * untouched, so a test can prove the production config itself wraps the value
+     * deserializer in an {@code ErrorHandlingDeserializer} (the PR-D0 fix) instead of
+     * relying on the override this support class normally injects.
+     *
+     * @param wrapValueDeserializer {@code false} to keep the production deserializer config.
+     */
+    public static void registerAsyncBroker(DynamicPropertyRegistry registry,
+                                          boolean autoStartup,
+                                          String groupSuffix,
+                                          boolean wrapValueDeserializer) {
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("spring.kafka.listener.auto-startup", () -> autoStartup);
         registry.add("probity.simulation.consumer-group", () -> consumerGroup(groupSuffix));
@@ -134,13 +153,15 @@ public final class AsyncKafkaTestSupport {
         // 'earliest' means "everything this JVM published" - which removes the
         // assignment-vs-position-resolution race that 'latest' would leave open.
         registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
-        // ErrorHandlingDeserializer around the production JsonDeserializer: a value that fails
-        // to deserialise becomes a recoverable listener exception instead of a Fetcher-level
-        // SerializationException that DefaultErrorHandler refuses (see the T4a javadoc).
-        registry.add("spring.kafka.consumer.value-deserializer",
-                () -> "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer");
-        registry.add("spring.kafka.consumer.properties.spring.deserializer.value.delegate.class",
-                () -> "org.springframework.kafka.support.serializer.JsonDeserializer");
+        if (wrapValueDeserializer) {
+            // ErrorHandlingDeserializer around the production JsonDeserializer: a value that fails
+            // to deserialise becomes a recoverable listener exception instead of a Fetcher-level
+            // SerializationException that DefaultErrorHandler refuses (see the T4a javadoc).
+            registry.add("spring.kafka.consumer.value-deserializer",
+                    () -> "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer");
+            registry.add("spring.kafka.consumer.properties.spring.deserializer.value.delegate.class",
+                    () -> "org.springframework.kafka.support.serializer.JsonDeserializer");
+        }
     }
 
     /**
