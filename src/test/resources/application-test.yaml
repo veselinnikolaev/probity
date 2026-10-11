@@ -28,6 +28,11 @@ probity:
     secret: J7d3kK29a91Lx8m4P2sQ6tUvWxYzA1B3C5D7E9F0G2H4I6J8K
   app:
     base-url: http://localhost:8080
+  kafka:
+    # The async slice historically assumed a single-partition topic. Keep that here so the
+    # existing classes are unaffected by the PR-D0 production default of 6; the new
+    # per-partition tests opt into 2 partitions explicitly via @DynamicPropertySource.
+    simulation-topic-partitions: 1
 
 sendgrid:
   api-key: test-key

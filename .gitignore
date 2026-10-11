@@ -7,6 +7,14 @@ target/
 .env.prod
 graphify-out/
 
+# Local run artifacts (manual server runs, build logs, load-test output)
+/app-out.txt
+/app-err.txt
+/build-out.txt
+/build-err.txt
+/k6-*.txt
+/app.pid
+
 ### STS ###
 .apt_generated
 .classpath
