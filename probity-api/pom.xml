@@ -25,6 +25,15 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Worker module: simulation/portfolio/market data/risk types extracted in
+             Phase 4, plus the Kafka consumer infrastructure. The api keeps consuming
+             the async path at PR-D2; PR-D3 gates it behind a feature flag. -->
+        <dependency>
+            <groupId>me.veselin</groupId>
+            <artifactId>probity-worker</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Core -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -1,0 +1,40 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+
+  # The @ServiceConnection Postgres container in BaseAsyncSimulationIntegrationTest
+  # supplies the real connection details (probity_test/test/test, mirroring the api's
+  # BaseIntegrationTest). This datasource block is the same vestigial tc-url shape the
+  # api test profile carries, kept for parity.
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+    url: jdbc:tc:postgresql:16:///probity
+    username: postgres
+    password: postgres
+
+  # The production worker profile ships with Flyway OFF - the api owns the migrations.
+  # Under test we bootstrap the throwaway Postgres with the same migration set, copied
+  # into worker test resources so the shipped worker jar never carries them.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  kafka:
+    # Default OFF for the whole worker test profile: only the async slice
+    # (me.veselin.probity.simulation.async) starts its listener, via
+    # @DynamicPropertySource against its own Testcontainers broker.
+    listener:
+      auto-startup: false
+
+probity:
+  kafka:
+    # The async slice historically assumed a single-partition topic. The 6-partition
+    # production default is exercised against the compose Kafka; in this integration
+    # slice a class opts into more partitions with its own @DynamicPropertySource
+    # (PartitionPark does exactly that).
+    simulation-topic-partitions: 1

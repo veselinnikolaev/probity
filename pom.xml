@@ -23,6 +23,7 @@
     <modules>
         <module>probity-shared</module>
         <module>probity-api</module>
+        <module>probity-worker</module>
     </modules>
 
     <properties>
