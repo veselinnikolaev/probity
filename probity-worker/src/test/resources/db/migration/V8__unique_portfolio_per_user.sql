@@ -1,0 +1,1 @@
+ALTER TABLE portfolios ADD CONSTRAINT uq_portfolio_name_user UNIQUE (name, user_id);
