@@ -963,6 +963,34 @@ The system is ready for production deployment with confidence in its reliability
 
 ---
 
+## Phase 4 progress (PR-D0..PR-D2)
+
+### PR-D0 — worker prerequisites (PR #8)
+
+- **Changed:** 6 partitions on `simulation-requested`; `max.poll.interval.ms=600000` (10 m) with `probity.simulation.claim-lease=12 m` (lease > poll, enforced by a config-invariant test); `handleUnclaimable` parks/seeks/resumes only its partition (`UnclaimablePartitionParker`, `probity.simulation.unclaimable-backoff=1 s`) instead of `nack()`; the value deserializer is wrapped in `ErrorHandlingDeserializer` → `JsonDeserializer` for DLT routing; new `loadtest/` k6 harness and the 1-replica baseline in `docs/PHASE_4_MEASUREMENTS.md`.
+- **Why:** make the topic, the delivery-timeout contract and the failure paths safe under real concurrency, and record the "before" number.
+- **Verified:** offline `mvnw -o clean verify` exit 0 / BUILD SUCCESS, 361 run, 1 skipped (the `@Disabled` placeholder); 6 new tests green; k6 baseline (Scenario A 6 VUs × 60, Scenario B 1 VU × 20) over two sessions, median (min–max) at p95 and p99.
+- **Left out:** concurrency stays 1; no separate worker image, HPA or DB role split (PR-D1+); redelivery of an unclaimable record at concurrency > 1 is uncovered (`@Disabled` placeholder, `PHASE_4_WORKER_EXTRACTION.md` §2.7).
+- **Key findings:** completion-write bound, not poll- or CPU-bound — `server_latency_ms` p95 ≈ 34–50 ms, but the completion `UPDATE`'s execute+commit logged 0.13–3.2 s on a dirty table (looks WAL/disk I/O; autovacuum/checkpoint contention not ruled out); with `-ResetBetweenRuns` B's e2e p95 ≈ 1.35 s. Payload per row: raw JSON ≈ 4.27 MB, stored jsonb ≈ 1.47 MB/row, ≈ 7.89 MB bytes-per-row incl. TOAST + indexes. The baseline is best-case (fresh `TRUNCATE`) and host-load dependent; the single-consumer ceiling is ≈ 1.5–1.6 sims/s.
+
+### PR-D1 — shared kernel + multi-module restructure (PR #9)
+
+- **Changed:** root aggregator `pom.xml` (`probity-shared`, `probity-api`); a new `probity-shared` kernel — 13 files `git mv`-ed with packages unchanged (the simulation aggregate/persistence slice plus the `DomainEvent`/`BaseEntity`/`BaseEntitySoftDelete` dependency closure); all remaining sources moved under `probity-api` with its own pom + Boot plugin; two move-forced path fixes (`Dockerfile`, CI surefire path).
+- **Why:** create a shared kernel so the worker can later be extracted into its own deployable against the same kernel.
+- **Verified:** offline `mvnw -o clean verify` exit 0 / BUILD SUCCESS, 361 run / 1 skipped (unchanged); 258 renames at 100 % similarity with zero content changes in moved files (`git diff -M` shows every moved file `| 0`).
+- **Left out:** concurrency 1 and every partitions/lease/poll/park/seek value untouched; the k6 baseline and `docs/PHASE_4_MEASUREMENTS.md` were not re-run; the `@Disabled` placeholder stays disabled; compose/worker image/HPA deferred to PR-D2+; doc jar paths intentionally left stale for the docs PR.
+- **Key findings:** the §2.9 move list as literally written cannot compile — leaving the base classes behind would force `probity-shared → probity-api`, a Maven cycle, so the dependency closure moved with the kernel plus two path fixes (decided up front with the reviewer). Use a merge commit or rebase-and-merge, **not squash**, to keep the pure `git mv` commit visible. Follow-up: no `.dockerignore` (the build context was 131 MB).
+
+### PR-D2 — extract the worker module (PR #10)
+
+- **Changed:** a new `probity-worker` module — `WorkerApplication` (explicit `@EntityScan`/`@EnableJpaRepositories`), worker `application.yaml` (`WORKER_PORT` 8081, consumer group `probity-simulation-worker`, `ddl-auto: validate`, `flyway.enabled: false`), `Dockerfile.worker`; the async consumer machinery `git mv`-ed into the worker (packages unchanged) and the api now depends on the worker; the 12-test async slice moved to `probity-worker/src/test` with a `@ServiceConnection` base; `V18__worker_role_grants.sql` (grants-only, `IF EXISTS`-guarded, idempotent, never creates the role or password); a `simulation-worker` service in `compose.yaml` under the `worker` profile; the worker repackage published with an `exec` classifier; worker Flyway deps test-scoped.
+- **Why:** extract the async simulation machinery into its own deployable sharing the same kernel packages and Postgres schema.
+- **Verified:** offline `mvnw -o clean verify` exit 0; api 349 + worker 14 = **363 run, 1 skipped** (baseline 361 = 12 moved + 2 new ArchRule tests); Docker: the worker ran as `probity_worker` (grants applied), joined consumer group `probity-simulation-worker` with all 6 partitions, `/actuator/health` UP on 8081. Post-merge smoke test: one `run-async` → **`COMPLETED` in ≈ 3.7 s from accept** (≈ 3.9 s from POST; server latency 272 ms), consumer-group lag 0, both health endpoints UP.
+- **Left out:** a module split only — concurrency 1, no behavior change; the PR-D3 `@ConditionalOnProperty` monolith gate is not included; the `@Disabled` placeholder stays disabled; the k6 re-baseline and HPA are not in this PR.
+- **Key findings:** annotations on the application class are `scanBasePackages`-independent — `@EntityScan`/`@EnableJpaRepositories` had to be explicit; without the `exec` classifier `repackage` replaces the thin jar and the api compile classpath breaks ("package me.veselin.probity.* does not exist"); the worker test DB needs test-scoped `flyway-core` + `flyway-database-postgresql` or it stays empty under `ddl-auto: validate`; the `probity_worker` role must be provisioned out of band (Q7).
+
+---
+
 ## Questions & Updates
 
 For questions, refer to the implementation components or contact the author.

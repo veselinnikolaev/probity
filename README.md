@@ -106,7 +106,7 @@ Near-linear scalability with CPU cores and zero GC pauses due to primitive `doub
 | Portfolio Valuation | 92% | 3ms | 80ms |
 | Risk Calculations | 78% | 1ms | 45ms |
 
-**Test suite**: 354/354 passing tests (`./mvnw -o clean verify`), including end-to-end coverage of the async Kafka simulation pipeline.
+**Test suite**: 363 run, 1 skipped (`./mvnw -o clean verify`; 349 api + 14 worker), including end-to-end coverage of the async Kafka simulation pipeline. The skip is the `@Disabled` concurrency placeholder (§2.7).
 
 ## Mathematical Foundations
 
@@ -233,20 +233,45 @@ export REDIS_PASSWORD="redis_password"
 
 ### Run Locally
 
+Since PR-D2 the system is **two processes**: the API (`probity-api`, :8080) and the
+async worker (`probity-worker`, :8081). Both are needed — the API only queues a
+simulation; the worker consumes it and drives it to `COMPLETED`.
+
 1. Start infrastructure:
    ```bash
-   docker compose up -d postgres redis
+   docker compose up -d kafka postgres redis
    ```
 
-2. Start backend:
+2. Build both jars:
    ```bash
-   ./mvnw spring-boot:run
+   ./mvnw -o clean package -DskipTests
+   # API:    probity-api/target/probity-api-0.0.1-SNAPSHOT.jar
+   # worker: probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar
    ```
 
-3. Verify:
+3. Start the API:
    ```bash
-   curl http://localhost:8080/actuator/health
+   java -jar probity-api/target/probity-api-0.0.1-SNAPSHOT.jar
    ```
+
+4. Start the worker as a separate process:
+   ```bash
+   export DB_USERNAME="probity_worker"                  # NOT the API's postgres credentials
+   export DB_PASSWORD="<probity_worker role password>"  # provisioned out of band (Q7)
+   export WORKER_PORT="8081"
+   java -jar probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar
+   ```
+   Or run the worker from the compose profile: `docker compose --profile worker up -d`.
+
+5. Verify:
+   ```bash
+   curl http://localhost:8080/actuator/health   # API
+   curl http://localhost:8081/actuator/health   # worker
+   ```
+
+> The worker connects to Postgres as the least-privilege **`probity_worker`** role
+> (granted by the API's `V18` migration) with its own out-of-band password — not the
+> API's `postgres` credentials from the env block above.
 
 ### Run Tests
 
@@ -261,6 +286,8 @@ Run specific test classes:
 ```
 
 **Note**: Integration tests use Testcontainers and require Docker to be running.
+
+Agent workflow: see docs/AGENT_PROTOCOL.md and docs/AGENT_LESSONS.md.
 
 ## Running With Docker Compose
 
@@ -302,6 +329,10 @@ Run specific test classes:
 ## Async Simulation Execution
 
 Probity supports **asynchronous Monte Carlo simulations** via a Kafka-backed event-driven pipeline:
+
+> **Since PR-D2** the Kafka consumer runs in the separate **`probity-worker`**
+> process (see *Run Locally*), not in the API — the API only publishes. A
+> simulation stays `PENDING` until a worker consumes `simulation-requested`.
 
 ### Flow Overview
 
