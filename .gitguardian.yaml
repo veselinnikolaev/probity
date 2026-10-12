@@ -1,0 +1,11 @@
+# GitGuardian repository-monitoring configuration (https://docs.gitguardian.com).
+#
+# Test sources contain intentional, dev-only credential *fixtures* — e.g.
+# `password: postgres` in the Testcontainers test profile and
+# `.withPassword("test")` on a Testcontainers Postgres container. These are not
+# secrets and must not gate PRs (see the PR-D2 GitGuardian finding on the worker
+# test slice). Only `src/test/**` is ignored; main sources are still scanned.
+version: 2
+secret:
+  ignored_paths:
+    - "**/src/test/**"
