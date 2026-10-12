@@ -1,0 +1,26 @@
+# Build stage
+FROM maven:3.9.6-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY pom.xml .
+COPY probity-shared/pom.xml probity-shared/pom.xml
+COPY probity-worker/pom.xml probity-worker/pom.xml
+RUN mvn dependency:go-offline -B
+COPY probity-shared ./probity-shared
+COPY probity-worker ./probity-worker
+RUN mvn clean package -DskipTests -pl probity-worker -am
+
+# Run stage
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /app/probity-worker/target/*.jar app.jar
+
+RUN addgroup -S probity && adduser -S probity -G probity
+USER probity
+
+# Actuator health only - the worker exposes no traffic port.
+EXPOSE 8081
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://localhost:8081/actuator/health || exit 1
+
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", "-jar", "app.jar"]

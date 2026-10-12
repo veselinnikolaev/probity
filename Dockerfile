@@ -4,9 +4,11 @@ WORKDIR /app
 COPY pom.xml .
 COPY probity-shared/pom.xml probity-shared/pom.xml
 COPY probity-api/pom.xml probity-api/pom.xml
+COPY probity-worker/pom.xml probity-worker/pom.xml
 RUN mvn dependency:go-offline -B
 COPY probity-api ./probity-api
 COPY probity-shared ./probity-shared
+COPY probity-worker ./probity-worker
 RUN mvn clean package -DskipTests
 
 # Run stage

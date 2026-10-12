@@ -1,0 +1,104 @@
+server:
+  port: ${WORKER_PORT:8081}
+
+probity:
+  trading:
+    trading-days-per-year: 252.0
+    history-lookback-days: 90
+    z-score-95: 1.645
+    volatility-threshold: 15
+    volatility-addon-factor: 10
+    risk-score-increment: 5
+    default-annual-volatility: 0.15
+    risk-free-rate: 0.045
+  marketdata:
+    latest-price-lookback-days: 14
+  simulation:
+    # How long a claimed row stays claimed before a peer may take it over. Also the upper
+    # bound on how long a parked record loops before it becomes reclaimable, so it must
+    # exceed the slowest legitimate run and stay ABOVE max.poll.interval.ms. The invariant
+    # (Phase 4 §2.9) is: claim-lease > max.poll.interval.ms >= slowest legitimate run.
+    claim-lease: ${SIMULATION_CLAIM_LEASE:12m}
+    # How long a partition is parked after an unclaimable (fresh PROCESSING) delivery before
+    # the same record is redelivered. Replaces the previous whole-consumer nack: only the
+    # owning partition is paused, so sibling partitions keep flowing.
+    unclaimable-backoff: ${SIMULATION_UNCLAIMABLE_BACKOFF:1s}
+    # The worker group id. A property rather than an annotation constant so a second worker
+    # deployment (canary, region) can join deliberately instead of by accident, and so the
+    # test slice can give each class its own group.
+    consumer-group: ${SIMULATION_CONSUMER_GROUP:probity-simulation-worker}
+  kafka:
+    # Partitions for the simulation-requested topic (and its DLT). Fixed at topic creation;
+    # it cannot be reduced later. PR-D0 raises the ceiling from 1 to 6 (Phase 4 note §2.9).
+    simulation-topic-partitions: ${SIMULATION_TOPIC_PARTITIONS:6}
+
+spring:
+  docker:
+    compose:
+      enabled: false
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:probity}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+
+  # The api is the single Flyway owner (Phase 4 §2.4). The worker validates its entities
+  # against the schema the api migrations maintain; the dedicated worker role is granted
+  # SELECT (and SELECT/UPDATE on simulations) by V<next>__worker_role_grants.sql.
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # No Redis in the worker (Phase 4 Q8). @Cacheable on the market data path is a no-op.
+  cache:
+    type: none
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: probity-simulation-worker
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Wrap the value deserializer so a poison payload becomes a DeserializationException
+      # the error handler can route to the DLT, instead of an infinite re-poll failure.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "me.veselin.probity.common.domain.event"
+        max.poll.records: 1
+        max.poll.interval.ms: 600000
+    listener:
+      ack-mode: manual_immediate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: probity-worker
