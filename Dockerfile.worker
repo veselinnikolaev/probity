@@ -12,7 +12,7 @@ RUN mvn clean package -DskipTests -pl probity-worker -am
 # Run stage
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/probity-worker/target/*.jar app.jar
+COPY --from=build /app/probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar app.jar
 
 RUN addgroup -S probity && adduser -S probity -G probity
 USER probity

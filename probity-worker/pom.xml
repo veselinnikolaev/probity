@@ -164,6 +164,15 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Keep the thin jar as the main artifact: the api module compiles
+                         against probity-worker, and an unreclassified repackage would
+                         replace the thin jar with the BOOT-INF-nested fat jar, hiding every
+                         worker class from the api's compile classpath. The runnable fat jar
+                         is published as probity-worker-<version>-exec.jar for the Docker
+                         image (see Dockerfile.worker). -->
+                    <classifier>exec</classifier>
+                </configuration>
             </plugin>
         </plugins>
     </build>
