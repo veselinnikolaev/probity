@@ -43,3 +43,9 @@ Append-only. One entry = the failure, then the rule. Read together with
 8. **Temptation to change recorded measurement numbers while tidying docs.**
    Rule: annotate instead (e.g. the pre-extraction baseline caveat) — never edit a
    recorded number.
+
+9. **A follow-up prompt referenced a previous prompt's steps, and the fresh
+   context did not contain them.** The referenced spec (`AGENT_PROTOCOL.md` /
+   `AGENT_LESSONS.md`) was absent from the prompt actually received.
+   Rule: prompts are self-contained, and an agent that finds a referenced spec
+   missing must stop and say so before reconstructing it.
