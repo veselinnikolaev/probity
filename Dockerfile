@@ -1,7 +1,9 @@
 # Build stage
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
-COPY pom.xml probity-api/pom.xml probity-shared/pom.xml ./
+COPY pom.xml .
+COPY probity-shared/pom.xml probity-shared/pom.xml
+COPY probity-api/pom.xml probity-api/pom.xml
 RUN mvn dependency:go-offline -B
 COPY probity-api ./probity-api
 COPY probity-shared ./probity-shared
