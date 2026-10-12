@@ -45,6 +45,24 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+          Flyway is test-scoped on purpose: the api is the single owner of the deployed
+          schema (Phase 4 note 2.4), so the shipped worker jar neither carries Flyway nor
+          any migration source. Under test, Flyway migrates the throwaway @ServiceConnection
+          Postgres with the same V1..V18 set so Hibernate's ddl-auto=validate (main yaml)
+          has a real schema to check against.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Kafka: listener container, producer, error handling -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
