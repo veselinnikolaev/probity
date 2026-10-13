@@ -178,6 +178,7 @@ as open for the design owner; does not alter decisions Q1–Q8.
 **PR-D3 — disable the listener in the monolith.**
 - Modify: `SimulationRequestedEventConsumer.java` (add `@ConditionalOnProperty`), `KafkaConsumerConfig.java` (gate if chosen), `application.yaml` (flag default).
 - Add: monolith "no longer consumes" integration test.
+- **Note (2026-10-13, split baseline):** the PR-D2 build still consumes in the api — the api → worker dependency puts the listener on the api classpath, so the consumer group had **two members**. This makes the gate a **correctness** fix, not just hygiene; the new test must boot the api slice with the flag `false` and assert, at runtime, that the api forms **no** consumer membership and holds **no** partitions (while the worker holds all 6). See `docs/PHASE_4_MEASUREMENTS.md` → *Split baseline*.
 
 **PR-D4 — Kubernetes.**
 - Add: `k8s/simulation-worker-deployment.yaml`, `k8s/simulation-worker-service.yaml`, `k8s/simulation-worker-hpa.yaml` (`maxReplicas = partitions ÷ concurrency-per-pod`), `k8s/README.md`.

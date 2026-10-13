@@ -49,3 +49,12 @@ Append-only. One entry = the failure, then the rule. Read together with
    `AGENT_LESSONS.md`) was absent from the prompt actually received.
    Rule: prompts are self-contained, and an agent that finds a referenced spec
    missing must stop and say so before reconstructing it.
+
+10. **Regarded the listener as "moved out of the API" from a source-level grep,
+    so the split baseline was first measured with the API still consuming.**
+    The api → worker dependency puts `SimulationRequestedEventConsumer` on the api
+    classpath and its component scan registers the `@KafkaListener` — invisible in
+    the source layout, visible only at runtime: `kafka-consumer-groups --describe`
+    showed **two members, 3 partitions each**.
+    Rule: verify consumer topology at runtime (`kafka-consumer-groups`), never from
+    source; a classpath move can register a listener in a process you did not expect.

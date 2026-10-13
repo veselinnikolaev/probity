@@ -31,7 +31,9 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
 - Maven green does not prove Docker or CI. Build the image when a Dockerfile, a pom or a
   path changes; never infer a green CI run from a local build.
 - Before moving a listener between modules, check the consumer group, the committed
-  offsets, and that exactly one consumer exists.
+  offsets, and that exactly one consumer exists. Verify that at **runtime**
+  (`kafka-consumer-groups --describe`), never from source: a relocating classpath can
+  register a `@KafkaListener` in a process you did not expect (api → worker, PR-D2).
 
 ## 3. Token economy
 
