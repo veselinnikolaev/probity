@@ -1,6 +1,7 @@
 # Phase 4 — Extracting the async simulation worker into a separately deployable unit
 
 **Status:** design note for review. Prose and signatures only — no implementation code, no code changes.
+**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master` (PR-D3 onward not started). Decisions Q1–Q8 below are unchanged.
 **Location:** `docs/plans/` did not exist; this note creates it. Existing phase notes live flat in `docs/` (`PHASE_2_IMPLEMENTATION_NOTES.md`, `TECHNICAL_REPORT.md`); move this file if you prefer a flat layout.
 
 ---
@@ -157,17 +158,17 @@ as open for the design owner; does not alter decisions Q1–Q8.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
-**PR-D0 — prerequisites (FIRST).** Partitions → 6; `max.poll.interval.ms` → 10m; `claim-lease` → 12m; replace `nack()` with per-partition pause/seek/resume; add `ErrorHandlingDeserializer`; add the k6 harness and 1-replica baseline.
+**PR-D0 — prerequisites (FIRST).** *(merged)* Partitions → 6; `max.poll.interval.ms` → 10m; `claim-lease` → 12m; replace `nack()` with per-partition pause/seek/resume; add `ErrorHandlingDeserializer`; add the k6 harness and 1-replica baseline.
 - Modify: `src/main/resources/application.yaml` (partitions, poll interval, lease, deserializer), `src/main/java/.../common/config/KafkaConsumerConfig.java` (concurrency, container registry wiring), `src/main/java/.../simulation/event/SimulationRequestedEventConsumer.java` (per-partition pause on unclaimable), `src/main/java/.../simulation/config/SimulationProperties.java` (lease default).
 - Add: `loadtest/run-async.js`, `loadtest/README.md`, `docs/PHASE_4_MEASUREMENTS.md` (baseline).
 
-**PR-D1 — shared kernel + multi-module restructure (api + shared, behavior unchanged).**
+**PR-D1 — shared kernel + multi-module restructure (api + shared, behavior unchanged).** *(merged)*
 - Add: root aggregator `pom.xml` (`<modules>`), `probity-shared/pom.xml`.
 - Move into `probity-shared`: `common/domain/event/Simulation*.java`, `simulation/domain/**` (Simulation + status), `simulation/persistence/**`.
 - Move the current module's sources under `probity-api/` (all remaining `src/main` + `src/test`).
 - **Tests stay green and unmodified.** Every test file is moved with `git mv` only — no edits to test bodies. The *only* permitted edits are path-forced mechanical ones: the `package`/`import` lines for the types relocated into `probity-shared`. Any such edit will be listed in the PR description. No assertions, fixtures, or `@Test` methods change.
 
-**PR-D2 — worker module.**
+**PR-D2 — worker module.** *(merged)*
 - Add: `probity-worker/pom.xml`, `probity-worker/src/main/java/.../WorkerApplication.java`, worker `application.yaml`, `Dockerfile.worker`.
 - Move: async test slice to `probity-worker/src/test/java/...` (`git mv`; see PR-D1 note on path-forced edits).
 - Modify: `compose.yaml` (add `simulation-worker`).

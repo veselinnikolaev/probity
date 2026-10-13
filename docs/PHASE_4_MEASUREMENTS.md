@@ -16,11 +16,19 @@ default ON), so each run starts from a ~empty table instead of competing with ro
 written by earlier runs. This document records **two independent sessions** to show
 the session-to-session spread as well as the within-session spread.
 
+> **Post-PR-D2 note (2026-10-13).** Every number below was recorded on the
+> **pre-extraction single JVM** — the PR-D0 build, one process running both the API
+> and the async listener. PR-D2 has since split the worker into its own process
+> (`probity-worker`), and these figures have **not** been re-measured against the
+> split. Do **not** compare numbers across the split without re-running
+> `loadtest/run-baseline.ps1` against the new topology. No recorded number has been
+> changed; they still describe the PR-D0 1-replica baseline.
+
 ## Topology under test
 
 | Item | Value |
 | --- | --- |
-| App replicas | **1** (single JVM host process, `java -jar target/Probity-0.0.1-SNAPSHOT.jar`) |
+| App replicas | **1** (single JVM host process, `java -jar probity-api/target/probity-api-0.0.1-SNAPSHOT.jar`) |
 | Consumer threads | **1** (`spring.kafka.listener.concurrency` unset → default) |
 | `simulation-requested` partitions | **6** (`probity.kafka.simulation-topic-partitions: 6`) |
 | `max.poll.interval.ms` | `600000` (10m) |
@@ -241,12 +249,32 @@ $env:ANTHROPIC_API_KEY="pass"; $env:SENDGRID_API_KEY="pass"
 $env:COOKIE_SECURE="false"; $env:SAME_SITE="Lax"; $env:PORT="8080"
 
 docker compose up -d kafka postgres redis        # broker + store + cache
-java -jar target/Probity-0.0.1-SNAPSHOT.jar      # 1 replica of the PR-D0 build
+java -jar probity-api/target/probity-api-0.0.1-SNAPSHOT.jar   # the API, :8080
 ```
 
 > The `password` above is the local compose Postgres/Redis password, and the seed's
 > login is `admin` / `Password123!`. Both are **dev-only** and must never be used
-> outside a local stack.
+> outside a local stack. The worker connects as the `probity_worker` role, whose
+> password is provisioned out of band (Q7) and is never committed.
+
+### The worker is a separate process since PR-D2
+
+The API only queues requests: a simulation never reaches `COMPLETED` unless a
+worker consumes `simulation-requested`. Start it alongside the API — either as a
+jar (below), or via the compose profile: `docker compose --profile worker up -d`.
+
+```powershell
+$env:DB_HOST="localhost"; $env:DB_PORT="5432"; $env:DB_NAME="probity"
+$env:DB_USERNAME="probity_worker"                  # least-privilege role, V18 grants
+$env:DB_PASSWORD="<probity_worker role password>"  # set out of band when the role is created (Q7)
+$env:KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
+$env:SPRING_DOCKER_COMPOSE_ENABLED="false"
+$env:WORKER_PORT="8081"
+java -jar probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar
+```
+
+Health: `http://localhost:8080/actuator/health` (API) and
+`http://localhost:8081/actuator/health` (worker) both return `{"status":"UP"}`.
 
 Seed one verified user + portfolio + positions + price bars, then read the
 portfolio id:

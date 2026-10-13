@@ -15,9 +15,16 @@ k6 harness for the async simulation worker pipeline. Introduced by **PR-D0**
 ## Prerequisites
 
 - The compose stack: `docker compose up -d kafka postgres redis`
-- One app replica built from the branch under test, e.g.
-  `java -jar target/Probity-0.0.1-SNAPSHOT.jar` (see the env block in the
-  measurements doc).
+- The API built from the branch under test, e.g.
+  `java -jar probity-api/target/probity-api-0.0.1-SNAPSHOT.jar` (see the env block
+  in the measurements doc).
+- **A running worker.** Since PR-D2 the async listener lives in its own
+  `probity-worker` process, so a simulation only reaches `COMPLETED` when a worker
+  consumes `simulation-requested`. Start it as a jar — e.g.
+  `java -jar probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar` with
+  `DB_USERNAME=probity_worker` and its out-of-band role password, `WORKER_PORT=8081`
+  (full env block in the measurements doc) — or via the compose profile:
+  `docker compose --profile worker up -d`.
 - The `grafana/k6` image: `docker pull grafana/k6`
 
 ## Run
