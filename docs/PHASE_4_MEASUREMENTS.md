@@ -23,6 +23,10 @@ the session-to-session spread as well as the within-session spread.
 > split. Do **not** compare numbers across the split without re-running
 > `loadtest/run-baseline.ps1` against the new topology. No recorded number has been
 > changed; they still describe the PR-D0 1-replica baseline.
+>
+> **Re-measured against the split (2026-10-13).** The figures above remain the
+> pre-extraction reference and are unchanged; the split re-measurement is recorded in
+> *Split baseline* below.
 
 ## Topology under test
 
@@ -233,6 +237,101 @@ slower (A 0.79–0.80, B 0.44–0.45 sims/s) because payload writes then dominat
 (degradation case — same root cause as the 2.6–3.2 s completion `UPDATE`s above). Treat
 the medians here as the contemporaneous baseline and always compare future runs on the
 same host, shape and reset setting.
+
+## Split baseline (PR-D2 build, API + worker; 2026-10-13)
+
+Re-measured after the PR-D2 split with the **same method** as the pre-extraction
+baseline above: `loadtest/run-baseline.ps1`, two independent sessions, one discarded
+warm-up + 3 runs each of Scenario A (6 VUs × 60) and Scenario B (1 VU × 20),
+`-ResetBetweenRuns` ON, Grafana/Prometheus/Loki containers stopped, k6 `grafana/k6`
+**v2.3.0** (`docker run --rm grafana/k6 version`). Both processes are `java -jar` on
+the default JVM with **no extra flags** (Java 21.0.9):
+`probity-api/target/probity-api-0.0.1-SNAPSHOT.jar` (:8080) and
+`probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar` (:8081). Units are
+unchanged — throughput in simulations/second (sims/s), every latency in milliseconds
+at p95/p99 (`accept`/`e2e`/`server` as defined in *What each latency metric measures*).
+
+The PR-D2 build runs the `@KafkaListener` in **two** processes unless the API's
+listener is disabled, so two topologies were measured (root cause in the technical
+report's PR-D2 *Finding*):
+
+- **(i) One consumer — intended concurrency 1.** API started with the config-only flag
+  `SPRING_KAFKA_LISTENER_AUTO_STARTUP=false`, worker unchanged. Runtime verification
+  (`kafka-consumer-groups --describe --group probity-simulation-worker --members`):
+  **1 member, 6 partitions**, lag 0.
+- **(ii) Two consumers — what PR-D2 actually shipped.** API and worker both start the
+  listener; the same command showed **2 members, 3 partitions each**.
+
+### (i) One consumer (API listener disabled)
+
+Scenario A — 6 VUs × 60 sims, 3 runs per session:
+
+| Metric | Session 1 — median (min–max) | Session 2 — median (min–max) |
+| --- | --- | --- |
+| throughput (sims/s) | **1.405** (1.385–1.420) | **1.527** (1.383–1.768) |
+| `accept_latency_ms` p95 | 57.5 (35.3–58.0) | 45.1 (38.1–53.2) |
+| `accept_latency_ms` p99 | 66.1 (62.4–169.2) | 95.4 (46.8–1948.6) |
+| `e2e_latency_ms` p95 | 6062.2 (5759.5–6224.8) | 5486.3 (4837.0–5766.7) |
+| `e2e_latency_ms` p99 | 6731.5 (6693.0–6827.6) | 6861.3 (5794.8–7365.0) |
+| `server_latency_ms` p95 | 4710.0 (4531.0–5243.4) | 4121.0 (3948.9–4518.7) |
+| `server_latency_ms` p99 | 5545.2 (5378.9–5915.5) | 5431.8 (4873.8–6241.5) |
+
+Scenario B — 1 VU × 20 sims, 3 runs per session:
+
+| Metric | Session 1 — median (min–max) | Session 2 — median (min–max) |
+| --- | --- | --- |
+| throughput (sims/s) | **0.885** (0.846–0.886) | **0.888** (0.879–0.907) |
+| `accept_latency_ms` p95 | 46.6 (32.7–67.3) | 29.1 (25.5–169.9) |
+| `accept_latency_ms` p99 | 54.9 (42.5–86.3) | 47.5 (45.8–411.6) |
+| `e2e_latency_ms` p95 | 1368.6 (1295.1–1503.0) | 1330.5 (1275.3–1360.9) |
+| `e2e_latency_ms` p99 | 1408.1 (1402.2–1517.4) | 1383.7 (1279.9–1693.0) |
+| `server_latency_ms` p95 | 91.3 (66.8–101.3) | 58.8 (48.0–92.4) |
+| `server_latency_ms` p99 | 121.1 (78.2–126.3) | 78.4 (70.2–524.1) |
+
+- `simulations_completed`: 60/60 (A) and 20/20 (B) in every run; `simulations_failed`:
+  **0**; `http_req_failed`: **0.00 %**. Consumer lag after the last run: **0** on all 6
+  partitions.
+- Process CPU during Scenario A (method: `(Get-Process …).CPU` seconds delta over a
+  15.1 s window; unit = cores): **API 0.60**, **worker 0.28** (≈ 0.88 cores total).
+
+### (ii) Two consumers (API + worker both consuming) — what PR-D2 shipped
+
+Recorded before the API listener was disabled. Throughput only; the run-level failure
+counters matched (i): `simulations_failed` 0, `http_req_failed` 0.00 %, end lag 0.
+
+| Scenario | Session 1 — throughput median (min–max) | Session 2 — throughput median (min–max) |
+| --- | --- | --- |
+| A (6 VUs × 60) | **2.125** (2.075–2.497) | **2.472** (2.376–2.600) |
+| B (1 VU × 20) | **0.960** (0.943–0.970) | **0.980** (0.941–1.009) |
+
+- Process CPU during Scenario A (same method): **API 0.98**, **worker 0.23**
+  (≈ 1.21 cores total).
+
+### Comparison against the pre-extraction single JVM
+
+Throughput (sims/s) — Session 1 / Session 2 medians:
+
+| Topology | Scenario A | Scenario B | Δ vs pre-extraction |
+| --- | --- | --- | --- |
+| Pre-extraction single JVM, 1 consumer | 1.562 / 1.606 | 0.863 / 0.872 | — (reference) |
+| Split (i): API listener off, 1 consumer | 1.405 / 1.527 | 0.885 / 0.888 | A −10 %/−5 %, B +3 %/+2 % |
+| Split (ii): API + worker, 2 consumers | 2.125 / 2.472 | 0.960 / 0.980 | A +36 %/+54 %, B +11 %/+12 % |
+
+- **(i) one consumer — not distinguishable from the pre-extraction single JVM.**
+  Every (i) median is inside the run-to-run spread seen on this host: the
+  pre-extraction A session-2 range was 1.498–1.613 and the (i) A session-2 range was
+  1.383–1.768, which brackets it; the B medians differ by less than 3 %. Moving the
+  listener into a second `java -jar` did **not** measurably change throughput or
+  latency at concurrency 1.
+- **(ii) two consumers — distinguishable; throughput is higher.** A ≈ +36–54 %, B
+  ≈ +11–12 %, and Scenario A `server_latency_ms` p95/p99 is lower (≈ 2.4–4.1 s vs the
+  pre-extraction ≈ 3.9–4.1 s). The group then consumes from two processes, so two
+  partitions' work is served concurrently — but whether that is the *cause* of the
+  difference (as opposed to host variance) is **not investigated**. Treat (ii) as the
+  PR-D2 build's actual behaviour and (i) as the intended single-consumer topology.
+- Per-process CPU during A is higher for the API in (ii) (0.98 vs 0.60 cores) because
+  the API is then also consuming; worker CPU is similar in both (0.28 vs 0.23). No
+  other cause was measured.
 
 ## Reproduce
 
