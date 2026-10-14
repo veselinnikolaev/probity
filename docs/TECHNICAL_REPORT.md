@@ -963,7 +963,7 @@ The system is ready for production deployment with confidence in its reliability
 
 ---
 
-## Phase 4 progress (PR-D0..PR-D2)
+## Phase 4 progress (PR-D0..PR-D3)
 
 ### PR-D0 — worker prerequisites (PR #8)
 
@@ -989,6 +989,14 @@ The system is ready for production deployment with confidence in its reliability
 - **Left out:** a module split only — concurrency 1, no behavior change; the PR-D3 `@ConditionalOnProperty` monolith gate is not included; the `@Disabled` placeholder stays disabled; the k6 re-baseline and HPA are not in this PR.
 - **Key findings:** annotations on the application class are `scanBasePackages`-independent — `@EntityScan`/`@EnableJpaRepositories` had to be explicit; without the `exec` classifier `repackage` replaces the thin jar and the api compile classpath breaks ("package me.veselin.probity.* does not exist"); the worker test DB needs test-scoped `flyway-core` + `flyway-database-postgresql` or it stays empty under `ddl-auto: validate`; the `probity_worker` role must be provisioned out of band (Q7).
 - **Finding — the api still consumes (split baseline, 2026-10-13):** `probity-api` depends on `probity-worker`, so the API's component scan registers the worker's `SimulationRequestedEventConsumer` (`@KafkaListener`) and the API still consumes from the same group (`probity-simulation-worker`) until PR-D3 adds the `@ConditionalOnProperty` gate. Measured at runtime: `kafka-consumer-groups --describe` showed **two members (3 partitions each)** with the API and worker both running, versus **one member with all 6 partitions** when the API is started with `SPRING_KAFKA_LISTENER_AUTO_STARTUP=false`. Consequence: the split baseline differs by topology (see `docs/PHASE_4_MEASUREMENTS.md` → *Split baseline*). Any **deployed** API replica would also consume and take partitions from the worker; the production impact of that is **not investigated** here.
+
+### PR-D3 — gate the simulation listener out of the API (PR #13)
+
+- **Changed:** `SimulationRequestedEventConsumer` gains `@ConditionalOnProperty(name = "probity.simulation.worker.enabled", matchIfMissing = true)`; the api ships `probity.simulation.worker.enabled: false` and the worker ships the same flag `true`, so a running api registers **no** listener container while the worker is unchanged. The gate is on the listener bean only — `KafkaConsumerConfig` (`@EnableKafka`, the api's `@Primary KafkaTemplate<String,DomainEvent>` and `kafkaListenerContainerFactory`) is deliberately **not** gated (the api producer needs it), and the flag is a plain literal (no `${...}` env placeholder) so a shared environment variable cannot silently turn the worker off. No concurrency / partition / lease / poll / park / seek value changed; the `@Disabled` placeholder stays disabled. One existing test — `SimulationRunAsyncRequestIntegrationTest` — adds `probity.simulation.worker.enabled=true` to its own `@DynamicPropertySource` (its assertion is unchanged).
+- **Why:** close the PR-D2 *Finding* above — the api→worker dependency put the worker's `@KafkaListener` on the api classpath, so **every** running API replica joined `probity-simulation-worker` and took partitions from the worker. This is a correctness fix, not hygiene.
+- **Verified:** offline `mvnw -o clean verify` exit 0 / BUILD SUCCESS (164 s); api 350 + worker 15 = **365 run, 1 skipped** (baseline 363 = the 2 new tests; skip unchanged). Both new tests are sensitive: removing the gate turns the api test red (`registered ids=[simulation-requested]`); forcing the worker flag `false` turns the worker test red (`registered ids=[]`). Runtime with **no listener-related environment variable**: `kafka-consumer-groups --describe --group probity-simulation-worker --members` showed **exactly one member owning all 6 partitions**, lag 0; one `run-async` reached `COMPLETED` (e2e 1.9 s, server 133 ms, accept 31 ms). Docker: `probity-api:pr-d3` (526 MB) and `probity-worker:pr-d3` (442 MB) build clean.
+- **Left out:** `KafkaConsumerConfig` stays ungated (the api producer needs it); concurrency 1 and every partitions/lease/poll/park/seek value untouched; the k6 re-baseline and the HPA are PR-D4/PR-D5.
+- **Key findings:** `KafkaListenerEndpointRegistry.getListenerContainer(String)` returns `null` for an absent id (it only asserts a non-empty id, then `map.get`), so "the api has no listener" is asserted container/bean-first, never by log-string matching; `matchIfMissing = true` keeps the listener present for any context that does not set the flag, so the gate can only turn the listener **off**, never on.
 
 ---
 

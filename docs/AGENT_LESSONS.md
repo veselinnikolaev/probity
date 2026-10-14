@@ -58,3 +58,19 @@ Append-only. One entry = the failure, then the rule. Read together with
     showed **two members, 3 partitions each**.
     Rule: verify consumer topology at runtime (`kafka-consumer-groups`), never from
     source; a classpath move can register a listener in a process you did not expect.
+
+11. **A filtered test run that matched nothing still reported `BUILD SUCCESS`.**
+    The sensitivity check used `-Dtest=ClassA+ClassB` (`+`, not the comma
+    separator) together with `-Dsurefire.failIfNoSpecifiedTests=false`; Surefire
+    ran **zero** tests and Maven exited 0, which reads as "the check passed".
+    Rule: a scoped `-Dtest=` run is evidence only if its output shows
+    `Tests run: N` for the intended class(es) — never accept a green filtered run
+    without the count.
+
+12. **Ran two temporary toggles in one experiment, so one check passed
+    vacuously.** To prove the new listener tests are sensitive to the gate the
+    same run removed the `@ConditionalOnProperty` **and** forced the worker flag
+    `false`; the worker "container present" test then passed for the wrong reason
+    (no gate = always registered) and proved nothing.
+    Rule: change one variable per verification run, observe, then restore before
+    the next — bundle toggles and you cannot attribute the result.
