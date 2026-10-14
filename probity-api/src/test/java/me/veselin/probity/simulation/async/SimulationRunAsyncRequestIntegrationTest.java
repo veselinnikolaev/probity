@@ -49,6 +49,12 @@ class SimulationRunAsyncRequestIntegrationTest extends BaseAsyncSimulationIntegr
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
         registerDormantListener(registry);
+        // PR-D3: the api ships probity.simulation.worker.enabled=false, so a production api has
+        // no simulation listener at all. This request-contract test asserts on the listener
+        // container's presence but dormancy, so it re-enables the flag for its own context only;
+        // auto-startup stays false, so the container exists but never runs. The api-has-no-listener
+        // invariant is asserted separately (SimulationListenerAbsentInApiIntegrationTest).
+        registry.add("probity.simulation.worker.enabled", () -> true);
     }
 
     @Test

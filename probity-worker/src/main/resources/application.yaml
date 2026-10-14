@@ -27,6 +27,11 @@ probity:
     # deployment (canary, region) can join deliberately instead of by accident, and so the
     # test slice can give each class its own group.
     consumer-group: ${SIMULATION_CONSUMER_GROUP:probity-simulation-worker}
+    # PR-D3: the worker is the one process that runs the simulation listener. Fixed true so the
+    # worker consumes exactly as before regardless of the flag's value anywhere else; the api
+    # ships the same flag false. See Phase 4 §2.3.
+    worker:
+      enabled: true
   kafka:
     # Partitions for the simulation-requested topic (and its DLT). Fixed at topic creation;
     # it cannot be reduced later. PR-D0 raises the ceiling from 1 to 6 (Phase 4 note §2.9).
