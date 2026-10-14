@@ -1,0 +1,103 @@
+# Probity simulation worker — Deployment (Phase 4 §2.6).
+#
+# The worker exposes no business API; its only port is the actuator/metrics port
+# (8081). It consumes the `simulation-requested` topic as a member of the Kafka
+# group `probity-simulation-worker`, so replicas *are* the scaling unit: each pod
+# owns a disjoint set of the topic's 6 partitions.
+#
+# terminationGracePeriodSeconds is set from the delivery-timeout invariant
+# (lease 12m > max.poll.interval.ms 10m >= slowest legitimate run):
+#   * 660 s = max.poll.interval.ms (600 s) + a margin, per §2.6, so a scale-down or
+#     rolling update never kills an in-flight simulation that the 12 m lease would
+#     then have to recover.
+#   * maxUnavailable: 0 keeps every partition owned during a rollout.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: probity-simulation-worker
+  labels:
+    app.kubernetes.io/name: probity-simulation-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: probity
+spec:
+  # §2.6: start 2 replicas. 6 partitions / concurrency 1 gives a ceiling of 6
+  # (see the HPA); beyond that a replica would idle with no partition to own.
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: probity-simulation-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: probity-simulation-worker
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: probity
+    spec:
+      terminationGracePeriodSeconds: 660
+      containers:
+        - name: simulation-worker
+          # Pin a tag (or digest) in real overlays; `latest` is the compose default.
+          image: vesko49/probity-worker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: management
+              containerPort: 8081
+          env:
+            - name: SPRING_DOCKER_COMPOSE_ENABLED
+              value: "false"
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: probity
+            # Least-privilege worker role (Phase 4 §2.2 / Q7): SELECT+UPDATE on
+            # `simulations`, SELECT on the read tables. The role is provisioned out
+            # of band and its password lives in a Secret — never in a migration or
+            # this manifest. The api-owned grant migration skips when the role is absent.
+            - name: DB_USERNAME
+              value: probity_worker
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: probity-worker-db
+                  key: password
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: SIMULATION_CONSUMER_GROUP
+              value: probity-simulation-worker
+            # Surfaces the lease > max.poll.interval.ms invariant (§2.9) explicitly.
+            - name: SIMULATION_CLAIM_LEASE
+              value: 12m
+          resources:
+            # §2.6: tune after load testing (the PR-D0 baseline suggests the ceiling
+            # is the Postgres payload write, not worker CPU — see k8s/README.md).
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          # Probe endpoints exist because the worker enables
+          # management.endpoint.health.probes.enabled (Phase 4 §2.6).
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3

@@ -104,6 +104,12 @@ management:
   endpoint:
     health:
       show-details: never
+      # PR-D4 (Phase 4 §2.6): expose the /actuator/health/liveness and
+      # /actuator/health/readiness groups the k8s Deployment probes. Boot also
+      # auto-enables these when it detects it is running in Kubernetes; set
+      # explicitly so the endpoints exist however the worker is deployed.
+      probes:
+        enabled: true
   metrics:
     tags:
       application: probity-worker
