@@ -10,6 +10,7 @@ import me.veselin.probity.simulation.port.SimulationPort;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -36,8 +37,19 @@ import java.util.UUID;
  * {@code probity.simulation.unclaimable-backoff}. Unlike the former whole-consumer
  * {@code nack}, sibling partitions on the same consumer keep flowing, so one slow or
  * poisoned partition cannot stall the worker.
+ * <p>
+ * <strong>PR-D3:</strong> this listener bean is gated by
+ * {@code probity.simulation.worker.enabled}. The api module depends on probity-worker for its
+ * producer ({@code me.veselin.probity.common.config.KafkaConsumerConfig}), so this class is on
+ * the api classpath too. The api ships the flag {@code false} in its {@code application.yaml},
+ * which keeps a running api out of the {@code probity-simulation-worker} group without any
+ * environment variable; the worker ships it {@code true}, so the worker consumes exactly as
+ * before. {@code matchIfMissing = true} keeps the listener present for any context that does
+ * not set the flag (for example a slice test), so the gate only ever turns the listener
+ * <em>off</em> when a deployment explicitly says so.
  */
 @Component
+@ConditionalOnProperty(name = "probity.simulation.worker.enabled", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class SimulationRequestedEventConsumer {
