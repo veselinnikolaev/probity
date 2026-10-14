@@ -1,0 +1,41 @@
+# Probity simulation worker — HorizontalPodAutoscaler (Phase 4 §2.6 / Q4).
+#
+# maxReplicas = partitions / concurrency-per-pod = 6 / 1 = 6. Replicas beyond the
+# partition count would hold no partition and just idle, so the partition count is
+# the real ceiling (Phase 4 §2.6).
+#
+# Signal: CPU utilisation, 70% — the recorded Q4 decision (realistic with only
+# metrics-server; Kafka-lag autoscaling needs KEDA or a Prometheus adapter and is a
+# later option).
+#
+# MEASURED CAVEAT (§2.8.1): the 1-replica baseline and the PR-D2 split run looked
+# bound by the Postgres WAL/disk write of the completion payload (≈1.47 MB stored /
+# ≈7.89 MB per row), NOT worker CPU (worker CPU stayed 0.23-0.28 cores with one or
+# two consumers; two consumers gave only ≈1.4-1.5x). §2.8.1 requires re-checking
+# this (pg_stat_wal/checkpoint counters around one run) before this CPU signal can
+# be relied on: if the write is the real constraint, CPU utilisation may saturate
+# late or not at all and the signal (or the write cost, Q9) must change. The
+# manifest is shipped as recorded, with that re-check as an open follow-up.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: probity-simulation-worker
+  labels:
+    app.kubernetes.io/name: probity-simulation-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: probity
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: probity-simulation-worker
+  # Matches the Deployment's start replicas (§2.6).
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

@@ -963,7 +963,7 @@ The system is ready for production deployment with confidence in its reliability
 
 ---
 
-## Phase 4 progress (PR-D0..PR-D3)
+## Phase 4 progress (PR-D0..PR-D4)
 
 ### PR-D0 — worker prerequisites (PR #8)
 
@@ -997,6 +997,14 @@ The system is ready for production deployment with confidence in its reliability
 - **Verified:** offline `mvnw -o clean verify` exit 0 / BUILD SUCCESS (164 s); api 350 + worker 15 = **365 run, 1 skipped** (baseline 363 = the 2 new tests; skip unchanged). Both new tests are sensitive: removing the gate turns the api test red (`registered ids=[simulation-requested]`); forcing the worker flag `false` turns the worker test red (`registered ids=[]`). Runtime with **no listener-related environment variable**: `kafka-consumer-groups --describe --group probity-simulation-worker --members` showed **exactly one member owning all 6 partitions**, lag 0; one `run-async` reached `COMPLETED` (e2e 1.9 s, server 133 ms, accept 31 ms). Docker: `probity-api:pr-d3` (526 MB) and `probity-worker:pr-d3` (442 MB) build clean.
 - **Left out:** `KafkaConsumerConfig` stays ungated (the api producer needs it); concurrency 1 and every partitions/lease/poll/park/seek value untouched; the k6 re-baseline and the HPA are PR-D4/PR-D5.
 - **Key findings:** `KafkaListenerEndpointRegistry.getListenerContainer(String)` returns `null` for an absent id (it only asserts a non-empty id, then `map.get`), so "the api has no listener" is asserted container/bean-first, never by log-string matching; `matchIfMissing = true` keeps the listener present for any context that does not set the flag, so the gate can only turn the listener **off**, never on.
+
+### PR-D4 — Kubernetes manifests for the worker (PR #14)
+
+- **Changed:** new `k8s/` manifests (§2.6/§2.9) — `simulation-worker-deployment.yaml` (2 replicas; `RollingUpdate` `maxSurge: 1` / `maxUnavailable: 0`; `terminationGracePeriodSeconds: 660`; liveness/readiness HTTP probes at `/actuator/health/{liveness,readiness}` on the `management` port 8081; requests `500m`/`1Gi`, limits `2`/`2Gi`; `DB_PASSWORD` from `secretKeyRef` `probity-worker-db`/`password`), `simulation-worker-service.yaml` (ClusterIP, only the `:8081` actuator/metrics port; no Ingress/host port), `simulation-worker-hpa.yaml` (`autoscaling/v2`, CPU 70 %, `minReplicas: 2`, `maxReplicas: 6` = 6 partitions ÷ concurrency 1), `k8s/README.md`; plus one runtime line — the worker `application.yaml` enables `management.endpoint.health.probes.enabled: true` so the probe endpoints exist however the worker is deployed.
+- **Why:** the worker's scaling unit is replicas (each pod owns a disjoint set of the topic's 6 partitions); the manifests make that deployable and probe-able, and the grace period outlasts the poll window so a rollout/scale-down never kills an in-flight simulation the lease would then have to recover.
+- **Verified:** offline `mvnw -o clean verify` exit 0 / BUILD SUCCESS (177 s); **365 run, 1 skipped** (350 api + 15 worker) — **unchanged**, no tests added (manifest-only PR). Manifests validated statically with `kubeconform` (**3 valid / 0 invalid / 0 errors**). Runtime against the compose stack: image `probity-worker:pr-d4` (442 MB) built and run; `/actuator/health` → `{"status":"UP","groups":["liveness","readiness"]}` and `/liveness` + `/readiness` both `{"status":"UP"}`; `kafka-consumer-groups --describe --group probity-simulation-worker --members` showed **exactly one member owning all 6 partitions**, lag 0; one `run-async` reached **`COMPLETED`** (cold first run: e2e 7.8 s, server 748 ms, accept 689 ms, 4 polls). Stopped by real PID (listening-socket owner) + `docker stop`; no java process held either jar afterwards.
+- **Left out:** not applied to a live cluster (none in this environment); the §2.8.1 CPU-signal re-check (the recorded baseline looks Postgres-write-bound, not CPU-bound) — the HPA ships **as recorded** with the caveat documented and **no scaling behaviour claimed**; the `compose.yaml` Kafka healthcheck bug and `.dockerignore` are noted follow-ups; concurrency 1 and every partitions/lease/poll/park/seek value and the PR-D3 gate are untouched.
+- **Key findings:** `kubectl`'s client-side `--dry-run` is **not** offline (it needs an API server), so manifest validation used `kubeconform`; Spring Boot auto-enables the liveness/readiness groups only when it detects Kubernetes, so the worker sets the probes flag explicitly; `terminationGracePeriodSeconds: 660` only helps if the JVM actually waits that long — the worker's Kafka listener-container `shutdownTimeout` / Boot graceful-shutdown phase timeout are shorter and were **not investigated** (graceful-shutdown gap).
 
 ---
 
