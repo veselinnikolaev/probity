@@ -104,3 +104,15 @@ Append-only. One entry = the failure, then the rule. Read together with
     `XSRF-TOKEN` on authentication, so `run-async` returned **403 Forbidden**.
     Rule: read the `XSRF-TOKEN` cookie **after** login (and carry the session
     cookie) — a pre-login token is stale.
+
+17. **Ran `docker compose` from this repo against a stack that belonged to a
+    different clone.** `docker compose ps` returned nothing, yet `docker compose ls`
+    showed project `probity` created from `IdeaProjects\Probity\compose.yaml` (an older
+    clone). Driving that project from `probity-backend` with `-p probity` **recreated
+    every service** (postgres, redis, grafana, prometheus, loki) — the recorded
+    config-file path differs, so compose force-recreates even when the content matches;
+    without `-p` it would instead have started a second stack colliding on 9092/5432/6379.
+    Rule: before `docker compose up`, run `docker compose ls` and check the project's
+    recorded config file; when the running project lives in another directory, drive it
+    with an explicit `-p <name>` (its services get recreated, but named volumes — and
+    the data — are kept) or use a throwaway project name.

@@ -1,0 +1,16 @@
+# Keep the Docker build context to what the Dockerfiles actually COPY:
+#   root pom.xml, the three module pom.xml files, and probity-*/src.
+# Everything below is build noise, docs, local logs or VCS metadata.
+.git
+**/target
+graphify-out
+docs
+loadtest
+k8s
+*.md
+build-*.txt
+app-*.txt
+k6-*.txt
+.idea
+.vscode
+node_modules
