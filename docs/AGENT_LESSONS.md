@@ -74,3 +74,33 @@ Append-only. One entry = the failure, then the rule. Read together with
     (no gate = always registered) and proved nothing.
     Rule: change one variable per verification run, observe, then restore before
     the next — bundle toggles and you cannot attribute the result.
+
+13. **Assumed `kubectl --dry-run=client` validates a manifest offline.** It does
+    not — even client dry-run needs an API server, so it died with a
+    `failed to download openapi` / connection error and validated nothing.
+    Rule: validate manifests offline with a schema checker (`kubeconform` /
+    `kubeval`) in Docker, and name the tool in the report — never imply a live
+    cluster check.
+
+14. **Added manifest probe paths without making the endpoints exist.** Spring
+    Boot only auto-enables the `liveness`/`readiness` health groups when it
+    detects it is running in Kubernetes, so a probe path can 404 outside a
+    cluster.
+    Rule: when a manifest probes `/actuator/health/{liveness,readiness}`, set
+    `management.endpoint.health.probes.enabled: true` explicitly and confirm the
+    endpoints resolve at runtime.
+
+15. **Started the API without every required env placeholder.** `SENDGRID_API_KEY`
+    was omitted; startup died in `UnsatisfiedDependencyException` naming
+    `emailVerificationService` → `mailService` → `emailConfiguration`, far from
+    the missing variable. A later start while Docker was down failed the same way
+    on a DB connection.
+    Rule: bring the infra up and export every placeholder with no default
+    (`DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`, `ANTHROPIC_API_KEY`,
+    `SENDGRID_API_KEY`) before starting; read the `Caused by` chain — the failing
+    bean names a group, not the variable.
+
+16. **Sent the CSRF token captured before login.** Spring Security rotates
+    `XSRF-TOKEN` on authentication, so `run-async` returned **403 Forbidden**.
+    Rule: read the `XSRF-TOKEN` cookie **after** login (and carry the session
+    cookie) — a pre-login token is stale.
