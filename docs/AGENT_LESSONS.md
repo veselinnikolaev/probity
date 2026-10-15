@@ -116,3 +116,23 @@ Append-only. One entry = the failure, then the rule. Read together with
     recorded config file; when the running project lives in another directory, drive it
     with an explicit `-p <name>` (its services get recreated, but named volumes — and
     the data — are kept) or use a throwaway project name.
+
+18. **Started a disruptive load test before the consumer group had joined.**
+    The rolling-restart run began with fresh replicas whose logs showed no
+    `partitions assigned` line yet — stale members left by the just-removed run still
+    held the group — so every request sat `PENDING`, the 150-poll client budget expired
+    and the harness aborted on its own failure threshold. It read like "SIGTERM loses
+    simulations"; the database afterwards held every row `COMPLETED`, so the aborted
+    client was a poll-budget artifact, not lost work.
+    Rule: before a disruption test, wait for the group to be **empty** and for the live
+    replicas to own **every** partition before starting load; and treat the load
+    generator's failure counter as client-visible latency, never as the server's verdict —
+    read the database (and the DLT offsets) for the verdict.
+
+19. **Read a lagging statistics view as if it were live.** `pg_stat_wal.wal_bytes` read
+    immediately after the write returned **0** — the Postgres stats collector flushes with
+    multi-second lag — which would have been recorded as "the write wrote no WAL".
+    Rule: for a counter view, prefer an exact source when one exists
+    (`pg_current_wal_insert_lsn()` + `pg_wal_lsn_diff()`), or settle (≥ 20 s here) and
+    cross-check the two methods; a zero delta right after an action is a freshness bug,
+    not a result.
