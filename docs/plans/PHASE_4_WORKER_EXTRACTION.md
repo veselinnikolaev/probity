@@ -159,6 +159,10 @@ as open for the design owner; does not alter decisions Q1–Q8.
 *Write-path investigation - writes per simulation and WAL under local Postgres config
 (2026-10-15)* — exactly one statement writes the payload per simulation, and the local WAL
 knobs cut under-load WAL by 14–34 % without improving throughput.
+**Payload-write diagnostic for Q9 (no decision here, throwaway build):**
+`docs/PHASE_4_MEASUREMENTS.md` → *Payload-write diagnostic - a no-payload worker build
+(throwaway, 2026-10-15)* — a local-only worker build that skips the completion payload write
+shows ≈ 10x throughput at 1 replica and a flat 1-vs-3-replica result; Q9 stays open.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
