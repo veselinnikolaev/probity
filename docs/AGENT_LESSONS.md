@@ -136,3 +136,14 @@ Append-only. One entry = the failure, then the rule. Read together with
     (`pg_current_wal_insert_lsn()` + `pg_wal_lsn_diff()`), or settle (≥ 20 s here) and
     cross-check the two methods; a zero delta right after an action is a freshness bug,
     not a result.
+
+20. **Let a preceding operation's checkpoint land inside a measurement window and read it
+    as the operation's own WAL.** The standalone per-simulation run took its before/after
+    `pg_stat_wal` snapshots right after a 1.3 GB 60-simulation run; a checkpoint still
+    flushing attributed ~16 MB of full-page images to one 4.5 MB simulation (one condition
+    read 21 MB). The LSN-diff figure was correct throughout, and only cross-checking the
+    two methods exposed the skew.
+    Rule: bracket a before/after snapshot around **only** the measured operation — run the
+    small operation before any bulk load, or wait until the checkpoint counters stop
+    moving — and treat a counter read that disagrees with the exact source as
+    contamination, not a result.
