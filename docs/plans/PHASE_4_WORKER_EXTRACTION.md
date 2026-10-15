@@ -1,7 +1,7 @@
 # Phase 4 — Extracting the async simulation worker into a separately deployable unit
 
 **Status:** design note for review. Prose and signatures only — no implementation code, no code changes.
-**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master` (PR-D3 onward not started). Decisions Q1–Q8 below are unchanged.
+**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9** remains open (the §2.8.1 re-check in `docs/PHASE_4_MEASUREMENTS.md` confirms the payload-write cost and keeps the Q4 CPU-signal caution).
 **Location:** `docs/plans/` did not exist; this note creates it. Existing phase notes live flat in `docs/` (`PHASE_2_IMPLEMENTATION_NOTES.md`, `TECHNICAL_REPORT.md`); move this file if you prefer a flat layout.
 
 ---
@@ -175,15 +175,15 @@ as open for the design owner; does not alter decisions Q1–Q8.
 - Add: `probity-api/src/main/resources/db/migration/V<next>__worker_role_grants.sql` — **guarded and idempotent**: it only grants privileges, skips the grants when the role is absent, and never contains the role password (the role is created out of band) (§2.2, §2.4).
 - **Ordering dependency:** the worker DB role is created **out of band** and must exist before this grant migration runs; the migration itself does nothing to create it.
 
-**PR-D3 — disable the listener in the monolith.**
+**PR-D3 — disable the listener in the monolith.** *(merged, PR #13)*
 - Modify: `SimulationRequestedEventConsumer.java` (add `@ConditionalOnProperty`), `KafkaConsumerConfig.java` (gate if chosen), `application.yaml` (flag default).
 - Add: monolith "no longer consumes" integration test.
 - **Note (2026-10-13, split baseline):** the PR-D2 build still consumes in the api — the api → worker dependency puts the listener on the api classpath, so the consumer group had **two members**. This makes the gate a **correctness** fix, not just hygiene; the new test must boot the api slice with the flag `false` and assert, at runtime, that the api forms **no** consumer membership and holds **no** partitions (while the worker holds all 6). See `docs/PHASE_4_MEASUREMENTS.md` → *Split baseline*.
 
-**PR-D4 — Kubernetes.**
+**PR-D4 — Kubernetes.** *(merged, PR #14)*
 - Add: `k8s/simulation-worker-deployment.yaml`, `k8s/simulation-worker-service.yaml`, `k8s/simulation-worker-hpa.yaml` (`maxReplicas = partitions ÷ concurrency-per-pod`), `k8s/README.md`.
 
-**PR-D5 — docs + measurements.**
+**PR-D5 — docs + measurements.** *(this PR, #16 — docs-only)*
 - Modify: `docs/PHASE_4_MEASUREMENTS.md` (N-replica numbers, p95/p99, rolling-restart result), `docs/plans/PHASE_4_WORKER_EXTRACTION.md` (status).
 
 Extraction must not start before **PR-D0** lands: without >1 partition and the per-partition fix, replicas cannot scale past one, and the load-test harness is what proves it.

@@ -333,6 +333,228 @@ Throughput (sims/s) — Session 1 / Session 2 medians:
   the API is then also consuming; worker CPU is similar in both (0.28 vs 0.23). No
   other cause was measured.
 
+## N-replica scaling, rolling restart, and the §2.8.1 WAL re-check (PR-D5 build, 2026-10-15)
+
+Everything above is the PR-D0 1-replica baseline and the PR-D2 split baseline; everything
+below is new in PR-D5 and answers §2.8 of `docs/plans/PHASE_4_WORKER_EXTRACTION.md`.
+The build is `probity-worker:prd5`, built in this session from `f9e3f33`; there is **no
+`src`/`pom`/migration/compose change** since the PR-D4 image, so this is a re-measure of
+the same code as the `vesko49/probity-worker:latest` image PR-D4 recorded.
+
+### Method - replicas as containers on host networking (recorded deviation)
+
+The PR-D0 method ran the app as host JVMs. For N > 1 this section ran the replicas as
+**containers on Docker host networking** (`--network host`), for two reasons, both
+probed:
+
+- a container on the **compose bridge network cannot consume from this Kafka**: the
+  broker advertises `PLAINTEXT://localhost:9092`, so a bridge container resolves the
+  advertised address to its own loopback and never joins the group (observed: it stayed
+  out of `probity-simulation-worker`). This is a pre-existing dev-stack limitation,
+  recorded as a follow-up in the PR description - PR-D5 does not change Kafka config.
+- `--network host` makes `localhost:9092` the real broker and `localhost:5432` the
+  published Postgres, and makes `docker stop` deliver a **real SIGTERM to PID 1** - the
+  signal the k8s `terminationGracePeriodSeconds` path produces, which the rolling-restart
+  check needs.
+
+Otherwise the recorded method is unchanged: same compose Postgres/Kafka/Redis, same
+`loadtest/seed.sql` data, same `loadtest/run-baseline.ps1` driver and `baseline.js`, same
+protocol (1 discarded warm-up + 3 measured runs, `-ResetBetweenRuns` ON, `TRUNCATE`
+before each). Per replica:
+
+```powershell
+docker run -d --name prd5-w1 --network host `
+  --health-cmd "wget -qO- http://localhost:8081/actuator/health || exit 1" `
+  --health-interval=10s --health-timeout=5s --health-retries=5 --health-start-period=20s `
+  -e DB_HOST=localhost -e DB_PORT=5432 -e DB_NAME=probity `
+  -e DB_USERNAME=probity_worker -e DB_PASSWORD=<worker role password> `
+  -e KAFKA_BOOTSTRAP_SERVERS=localhost:9092 `
+  -e SIMULATION_CONSUMER_GROUP=probity-simulation-worker -e SIMULATION_CLAIM_LEASE=12m `
+  -e SPRING_DOCKER_COMPOSE_ENABLED=false -e WORKER_PORT=8081 `
+  probity-worker:prd5
+# replica 2 -> WORKER_PORT=8082, replica 3 -> 8083, ... on the shared host namespace.
+```
+
+The `WORKER_PORT` override is required (each replica needs its own management port on the
+one host namespace), and the healthcheck override is required because the image hard-codes
+8081.
+
+**Test machine:** one dev laptop, **32 logical cores, 31.6 GB RAM**, shared by k6, the API
+JVM, Postgres, Kafka and Redis. Every figure below is **relative** (same machine, different
+replica count) and is **not capacity**.
+
+### Scenario A - concurrency 6, 60 simulations (throughput under load)
+
+| replicas | partitions / replica | throughput (sims/s, median [min-max]) | accept p95 / p99 (ms) | e2e p95 / p99 (ms) | server p95 / p99 (ms) |
+|---|---|---|---|---|---|
+| 1 | 6 | 1.724 [1.653-1.776] | 43.1 / 51.0 | 4612.6 / 5506.0 | 3592.6 / 4576.3 |
+| 3 | 2 / 2 / 2 | 3.155 [2.679-3.184] | 47.5 / 892.0 | 4230.8 / 5149.8 | 3254.5 / 4060.5 |
+| 6 | 1 each | 3.770 [3.514-4.340] | 69.4 / 1084.2 | 2388.1 / 4085.1 | 1570.3 / 1775.0 |
+
+Where the accept/e2e/server metrics are defined is unchanged from the PR-D0 section:
+`e2e_latency_ms` is the only metric that includes the completion `UPDATE`'s execute+commit
+and the payload write; `server_latency_ms` (`updatedAt - createdAt`) structurally excludes
+it and is a lower bound.
+
+Scaling is **sub-linear**: 1 -> 3 replicas is **1.83x**, 3 -> 6 replicas only **1.19x**
+(6 replicas = 2.19x of 1). §2.8 expected "near-linear scaling until the partition count is
+the ceiling". The partition ceiling was **never reached** - ownership was observed per
+topology (`--describe --members`: `[0,1,2,3,4,5]` for 1 replica, `[0,1] [2,3] [4,5]` for
+3, one partition each for 6) - so at 6 replicas each worker already owns exactly one
+partition, and throughput still barely moved. The ceiling measured is therefore a
+**server-side resource shared by all replicas** (Postgres on the same laptop), not the
+partition count.
+
+`accept_latency_ms` **degrades monotonically** as replicas grow (p99 51 -> 892 -> 1084 ms),
+while e2e and server latency **improve** (the queue drains faster, so a completed
+simulation is picked up sooner). The p99 accept blow-up is the one clear regression.
+
+**The plateau is not a k6 client-VU ceiling.** A higher-concurrency probe (18 VUs x 90
+iterations, two runs each) gave **2.97 sims/s at 6 replicas** - *lower* than the 3.77
+sims/s measured at 6 VUs - and 1.63 sims/s at 1 replica. Doubling client concurrency did
+not raise throughput, so the limit is on the server side. Whether the shared Postgres
+(checkpoint/WAL I/O) or the API accept path is the binding resource is **not investigated**.
+
+### Scenario B - concurrency 1, 20 simulations (single-flight)
+
+| replicas | throughput (sims/s) | accept p95 / p99 (ms) | e2e p95 / p99 (ms) | server p95 / p99 (ms) |
+|---|---|---|---|---|
+| 1 | 1.079 [1.064-1.099] | 15.1 / 15.8 | 1115.4 / 1122.8 | 16.1 / 16.8 |
+| 3 | 1.049 [1.017-1.100] | 16.0 / 16.0 | 1110.2 / 1112.4 | 18.0 / 18.0 |
+| 6 | 1.036 [1.036-1.064] | 14.1 / 14.8 | 1128.1 / 1140.8 | 19.0 / 19.0 |
+
+Scenario B is **flat** at ~1.0-1.08 sims/s regardless of replica count, and that is by
+construction: one VU runs one simulation to a terminal state before starting the next, so
+the rate is set by the single-flight e2e (dominated by the 200 ms status-poll granularity
+plus the run itself), not by how many replicas can consume. Nothing here contradicts the
+PR-D0 reading; it does mean Scenario B cannot show replica scaling.
+
+Consumer-group lag was **0** for all 6 partitions at the settled end of every run.
+
+### §2.8.1 re-check - WAL written per simulation vs the stored payload
+
+Method: `pg_current_wal_insert_lsn()` before/after the operation and
+`pg_wal_lsn_diff()` (exact, no sampling), **cross-checked** against `pg_stat_wal`, read
+only after a **>=20 s settle** - `pg_stat_wal` does not flush with the write, and a read
+taken immediately after the write returned 0 (method note, recorded). Unit: bytes.
+`stored` = `pg_column_size(result_payload)`; `raw` = `octet_length(result_payload)`.
+
+**One simulation** (default shape: 1000 paths, 90 days, confidence 0.95):
+
+| quantity | value |
+|---|---|
+| WAL, LSN-diff method | **4,506,280 B** |
+| `pg_stat_wal.wal_bytes` (settled) | 4,539,255 B (two methods agree within **0.7 %**) |
+| `pg_stat_wal.wal_records` / `wal_full_page_imgs` | 2,136 / 5 |
+| stored payload (`pg_column_size`) | 1,471,708 B (≈ 1.47 MB) |
+| raw payload (`octet_length`) | 4,270,549 B (≈ 4.27 MB) |
+| **WAL : stored** | **≈ 3.06x** |
+| WAL : raw | ≈ 1.06x |
+
+So one completion writes about **3x the stored payload** in WAL. This answers §2.8.1's
+question directly: **WAL written per simulation *is* several times the stored payload, so
+the cost is *how the row is written* (a full rewrite of the TOASTed compressed jsonb into
+a new row version), not the hardware.** Note `pg_stat_wal` runs an order of magnitude
+fewer WAL records than the LSN method implies bytes (2,136 records for 4.5 MB), i.e. a few
+large records (TOAST chunks), which is consistent with that write pattern.
+
+**One Scenario A run** (6 VUs x 60 = 60 completions, 1 replica):
+
+| quantity | value |
+|---|---|
+| WAL total, LSN-diff method | **1,364,749,048 B** = **22.75 MB / simulation** |
+| `pg_stat_wal.wal_bytes` (settled) | 1,343,053,514 B = 22.38 MB / sim (agree within **1.6 %**) |
+| `wal_records` / `wal_full_page_imgs` | 5,630,187 / **122,064** |
+| WAL attributable to full-page images | ≈ 1.00 GB ≈ **73 %** of the WAL |
+| `checkpoints_req` during the run | +2 (`checkpoint_write_time` ≈ 132,731 ms) |
+
+Under sustained load the per-simulation WAL **balloons from ≈ 4.5 MB to ≈ 22.7 MB** (≈ 15x
+the stored payload). The extra is checkpoint-driven: `checkpoint_timeout = 300 s` and
+`max_wal_size = 1024 MB` mean this 1.36 GB run forces checkpoints, and with
+`full_page_writes = on` and `wal_compression = off` each dirty page is then written whole
+as a full-page image (~1 GB). This is a **Postgres configuration + write-pattern effect,
+not worker CPU**.
+
+**Verdict on Q4 (CPU-based HPA):** the re-check **does not clear** the concern PR-D4
+recorded. Write amplification is real at both scales, so CPU utilisation may saturate late
+or not at all; the HPA ships **as recorded** and **no scaling behaviour is claimed**.
+Candidate follow-ups (none implemented in PR-D5): write the payload once / in chunks,
+`wal_compression = on`, tune `checkpoint_timeout`/`max_wal_size`, or act on **Q9** (store a
+summary and percentiles instead of all paths). The root cause of the sub-linear replica
+scaling (WAL I/O vs. something else) is **not investigated**.
+
+### Rolling restart under load (§2.8)
+
+Two experiments.
+
+**(1) Restart one of 3 replicas mid-load.** 6 VUs x 200 iterations ran against 3 replicas
+while one replica was `docker stop`ped (SIGTERM) and then replaced. k6 ran with
+`--no-thresholds`: the recorded harness aborts the whole run when `simulations_failed > 0`
+(`abortOnFail`), which would truncate exactly the load the restart is supposed to disturb
+(a deliberate, recorded deviation).
+
+- stopped replica: `docker stop` returned in **0.6 s**, exit code **143** (graceful);
+  log order `unsubscribed from all topics` -> `Consumer stopped` -> `Graceful shutdown
+  complete`.
+- replacement replica: `/actuator/health` UP, and all 6 partitions owned again
+  **11.1 s** after start (the group-rebalance window).
+- **DB verdict after a 25 s settle: 200 rows, all `COMPLETED`.** No row left `PENDING`
+  with no claim. The `simulation-requested.DLT` topic exists but is **empty** (all 6
+  partitions at offset 0) - **no DLT growth**. Consumer lag 0.
+- **Zero** `parking partition` / `reclaimed by a peer` lines in any surviving replica: the
+  park/seek recovery path was **not** needed in this run.
+- Client-visible effect only: **6 of 200** iterations exceeded the harness's 150-poll
+  budget (≈ 30-35 s) and were reported by k6 as
+  `simulations_failed ... status=PENDING polls=150`; every one of them reached
+  `COMPLETED` in the database afterwards (slowest completion 49.1 s from accept). The
+  restart **delayed** those responses past the client's poll budget but **lost nothing**.
+
+**(2) Deterministic in-flight SIGTERM.** "Did an in-flight simulation finish?" needs a
+simulation provably in flight at SIGTERM, not a lucky window, so a single replica was given
+all 6 partitions, load started, and `docker stop` was issued **the moment the replica's log
+showed a `Received simulation request event` with no matching `Simulation completed
+successfully`** (detected in 0.1 s, so the record was still running):
+
+```
+02:20:35.125Z  INFO  [requested-0-C-1] SimulationRequestedEventConsumer : Received simulation request event: simulationId=03627d6a-...
+02:20:35.658Z  INFO  [requested-0-C-1] SimulationRequestedEventConsumer : Simulation completed successfully: simulationId=03627d6a-...
+02:20:35.668Z  INFO  [requested-0-C-1] KafkaMessageListenerContainer    : probity-simulation-worker: Consumer stopped
+02:20:35.670Z  INFO  [tomcat-shutdown] GracefulShutdown            : Graceful shutdown complete
+```
+
+The in-flight simulation **completed on the same replica, and its offset was acked, before
+the consumer closed** (`docker stop` returned in 0.6 s, exit 143). After the replacement
+replica joined, the database held **200/200 `COMPLETED`**, the DLT topic was empty, and
+`03627d6a` was `COMPLETED` with a 0.24 s wait. So on a graceful `SIGTERM` an in-flight
+simulation **completes** - it does not need the 12 m claim lease. The park/seek +
+claim-lease path stays the backstop for an **ungraceful** kill (the lease is the recovery
+bound, Q6); that path was not exercised here.
+
+### Graceful-shutdown timing (PR-D4 follow-up: "not investigated")
+
+Recorded worker settings: `max.poll.interval.ms: 600000` (10 m),
+`probity.simulation.claim-lease: 12m`, `probity.simulation.unclaimable-backoff: 1s`,
+`ack-mode: MANUAL_IMMEDIATE`, `max.poll.records: 1`. The worker configures **no**
+`spring.kafka.listener.shutdown-timeout` and **no** Boot graceful-shutdown phase timeout
+(Spring defaults apply), while `k8s/simulation-worker-deployment.yaml` sets
+`terminationGracePeriodSeconds: 660`.
+
+Measured `docker stop -t 60` (SIGTERM -> exit 143), several occasions:
+
+| case | observed |
+|---|---|
+| settled group, in-flight record (experiment 2) | in-flight record finished 0.53 s later; `Consumer stopped` 0.01 s after that; `docker stop` returned in 0.6 s |
+| settled group (no in-flight record) | `docker stop` returned in 0.6 s |
+| earlier runs in this session, group mid-rebalance with stale members | `docker stop` returned in **21.1 s** (idle) and **24.1 s** (loaded) |
+
+Every measured stop is far inside the 660 s grace period, so a rollout does not have to
+kill an in-flight simulation: it completes and the offset is acked before the consumer
+closes. The two long stops both followed the removal of replicas with the group still
+re-forming (stale members); **why that stop path took ~21-24 s is not investigated.** The
+exact Spring Kafka listener `shutdownTimeout` default in this build was not measured, and
+whether a record that never returns would be cut off is **not investigated**; PR-D5 makes
+**no shutdown config change**.
+
 ## Reproduce
 
 Environment (values mirror the repo `.env`):
