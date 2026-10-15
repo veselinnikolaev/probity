@@ -155,6 +155,10 @@ cost to drop).
 `result_payload` instead of all paths, with the full trace offloaded (object store or a
 separate table). That directly attacks the write cost this baseline is bound by. Recorded
 as open for the design owner; does not alter decisions Q1–Q8.
+**Write-path data for Q9 (no decision here):** `docs/PHASE_4_MEASUREMENTS.md` →
+*Write-path investigation - writes per simulation and WAL under local Postgres config
+(2026-10-15)* — exactly one statement writes the payload per simulation, and the local WAL
+knobs cut under-load WAL by 14–34 % without improving throughput.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
