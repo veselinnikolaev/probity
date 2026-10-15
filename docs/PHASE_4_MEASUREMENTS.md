@@ -781,6 +781,96 @@ totals agreed with the LSN-diff totals within ≈ 3 % on every run.
   throughput under compression (a possible compression/CPU effect) is **not investigated**
   here.
 
+### Payload-write diagnostic - a no-payload worker build (throwaway, 2026-10-15)
+
+Direct follow-up to the section above. If the completion `UPDATE` writes the ≈ 4.27 MB
+payload, does **removing that single write** move throughput? A throwaway worker build
+(branch `diag-no-payload`, **local only - never committed or pushed**) makes the completion
+write a tiny placeholder, and **P0** (master build) is compared with **P1** (placeholder
+build) at 1 and 3 worker replicas. **No `src`/test/`pom`/migration/`compose.yaml` change is
+shipped; P1 is not a proposed design.** Everything is relative to the same dev laptop as
+above (32 logical cores, 31.6 GB RAM); **no phase decision changes** - Q9 stays open and the
+HPA (Q4) is untouched.
+
+**The throwaway change (one call site, `SimulationRepository.complete`).** The Monte Carlo
+computation, the claim `UPDATE`, `status`/`updated_at`/the claim columns and the client
+contract are all unchanged; only the value written into `result_payload` by
+`completeIfClaimHeld` changes:
+
+```diff
+- completeIfClaimHeld(id, internalId, payload, ...);
++ SimulationPayload placeholder = new SimulationPayload(
++         new SimulationPayload.Statistics(0, 0, 0, 0, 0),
++         new SimulationPayload.Outcomes(0, 0, 0, 0),
++         List.of(), List.of(), List.of());
++ completeIfClaimHeld(id, internalId, placeholder, ...);
+```
+
+A literal `'{}'::jsonb` placeholder was tried first and **breaks the harness unchanged**:
+`SimulationMapper.toDto` (worker, run after the completion write) and
+`SimulationController.mapToResponse` (api, the status body k6 polls) both dereference
+`payload.statistics()`/`payload.outcomes()`, so an all-null payload NPEs the status endpoint
+and k6 never observes `COMPLETED` (measured: P1 with the all-null placeholder completed
+**0/60**, and ≈ 0 WAL). The placeholder is therefore made **structurally complete with zeros
+and empty lists**: still tiny, **322 B** raw JSON / **424 B** stored `pg_column_size`,
+against 4,270,978 B raw / 1,472,542 B stored for a real payload. `loadtest/k6/baseline.js`,
+the api endpoints and the client-side work are **identical between conditions**; only the
+worker image differs.
+
+**Method.** Same harness as the section above: Scenario A (6 VUs × 60 iterations),
+`TRUNCATE` before the warm-up and before each run, observability stopped, 1 warm-up + 3
+measured runs per condition, medians with min-max. Postgres stays at the recorded **c0
+defaults** (1024 MB / 300 s / `wal_compression=off` / `synchronous_commit=on`). Both
+conditions use the **same P0 api jar** - only the worker image differs. Conditions are
+block-interleaved in one session (P0 block, then P1 block, per replica count, back-to-back)
+so any drift is shared. WAL is the LSN-diff (`pg_current_wal_insert_lsn` /
+`pg_wal_lsn_diff`), reported per 60 simulations; `checkpoints_req` is from `pg_stat_bgwriter`.
+
+**Results (Scenario A, 60 simulations).**
+
+| condition | throughput median (min-max), sims/s | accept p95 / p99 median, ms | e2e p95 median (min-max), ms | e2e p99 median, ms | WAL/sim median, MB (LSN-diff) | `checkpoints_req` (3 runs) |
+|---|---|---|---|---|---|---|
+| P0 master, 1 replica | **1.915** (1.765-1.949) | 40.3 / 111.7 | 4,132.5 (3,915.1-4,622.6) | 4,612.2 | **23.60** | 3/2/3 |
+| P1 no-payload, 1 replica | **20.219** (14.052-21.234) | 42.0 / 43.2 | 486.1 (279.0-671.1) | 487.0 | **0.0029** | 0/0/0 |
+| P0 master, 3 replicas | **3.276** (2.750-3.470) | 53.8 / 442.4 | 3,416.1 (2,670.2-3,484.4) | 5,084.7 | **23.32** | 2/3/3 |
+| P1 no-payload, 3 replicas | **18.151** (17.032-18.364) | 30.2 | 471.4 (449.0-646.0) | 652.8 | **0.0029** | 0/0/0 |
+
+(accept p95/p99 are medians; the P0 3-replica accept p99 spread was 224.6-980.4 ms. WAL/sim
+is the LSN-diff total ÷ 60; `checkpoints_req` is listed per run.)
+
+**What the numbers say (and do not).**
+
+- Removing the payload write raised Scenario A throughput **≈ 10.6x at 1 replica** (1.915 →
+  20.219 sims/s) and **≈ 5.5x at 3 replicas** (3.276 → 18.151), cut e2e p95 **≈ 8.5x** at 1
+  replica (4,132.5 → 486.1 ms) and **≈ 7.2x** at 3, and cut WAL per simulation from
+  **≈ 23.6 MB to ≈ 0.003 MB** - two to three orders of magnitude. This is a wide gap,
+  outside the run spreads.
+- With the payload write removed, **1 and 3 replicas are not distinguishable** (20.219 vs
+  18.151 median; the ranges 14.052-21.234 and 17.032-18.364 overlap). The extra replicas
+  that helped P0 do not help P1 - **what binds P1 instead is not investigated** (api accept /
+  the PENDING insert, the DB, Kafka, or the k6 client all remain candidates).
+- P0 reproduces the section above: **1.915 vs 1.896** sims/s at 1 replica and **3.276 vs
+  3.276** at 3, so the two sessions agree within the run spread.
+- This is a **diagnostic**, not a ranking of storage designs and not a recommendation; it
+  isolates the completion write by removing it, and nothing else.
+- accept p95 barely moves between conditions (30-56 ms medians); the accept path (PENDING
+  insert + broker write) was not the constraint measured here.
+
+### Completion-write size for one simulation (simple check)
+
+One completed simulation, on the real row and on a prepared copy row (a single
+completion-shaped `UPDATE` measured by `pg_current_wal_insert_lsn` / `pg_wal_lsn_diff`,
+re-writing the same `result_payload` value; the `result_payload` GIN index is maintained as
+in a real completion):
+
+| measurement | bytes |
+|---|---|
+| WAL of one completion-shaped `UPDATE` (LSN-diff) | 4,505,576 |
+| `octet_length(result_payload::text)` (raw JSON) | 4,270,978 |
+| `pg_column_size(result_payload)` (stored) | 1,472,542 |
+
+Three figures for one simulation; no further claim is drawn from them here.
+
 ## Caveats
 
 - **k6 and the JVM share one laptop**, along with Postgres, Kafka and Redis. The load
