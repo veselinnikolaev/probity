@@ -638,6 +638,149 @@ Get-Content loadtest/k6/baseline.js -Raw |
 `-e USER` / `-e PASSWORD`). It aborts the run if any simulation fails
 (`simulations_failed: count==0`, `abortOnFail`).
 
+## Write-path investigation - writes per simulation and WAL under local Postgres config (2026-10-15)
+
+Docs-only follow-up to PR-D5: **no `src`/test/`pom`/migration/`compose.yaml` change**. Two
+questions — **how many statements write `result_payload` per simulation**, and **what a few
+local Postgres WAL settings do to WAL per simulation and throughput** at 1 and 3 worker
+replicas. Everything is **relative**: one dev laptop (32 logical cores, 31.6 GB RAM), shared
+with Postgres/Kafka/Redis and the k6 client; these are not capacity figures. **No phase
+decision changes** — Q4 (CPU-based HPA) is untouched and Q9 stays open.
+
+### Writes per simulation (static + runtime)
+
+**Static:** exactly **one** statement writes `result_payload` per simulation — the
+`completeIfClaimHeld` bulk `UPDATE` in `SimulationRepository.complete`
+(`SimulationJpaRepository`). `SimulationJpaEntity` marks `result_payload` and
+`current_portfolio_value` `updatable = false`, so JPA `save()` / dirty-checking never writes
+them; the claim path (`claimForProcessing`) writes only `status`/`updated_at`; the API's
+PENDING insert writes them as `NULL`. `runAsync` is not `@Transactional`, so there is no
+payload flush.
+
+**Runtime:** with `log_statement = 'mod'`, one `run-async` simulation produced **1**
+`insert into simulations (...)`, **2** `update simulations`
+(`status=$1,updated_at=$2` for the claim, then the completion `UPDATE`), and the string
+`result_payload` appeared in exactly **1** statement — the completion `UPDATE`. (Raw log
+4,350,837 B; `log_statement` was reset to `none` and confirmed with `SHOW`.)
+
+### Method
+
+Same harness as PR-D5 — `loadtest/k6/baseline.js`, `TRUNCATE TABLE simulations` between
+runs, observability stopped. Per condition: **1 warm-up** (discarded) + **3 measured
+Scenario A runs** (6 VUs x 60 simulations) at **1** and **3** replicas (`probity-worker:prd5`
+on `--network host`); standalone = 1 VU x 1 simulation. Units are bytes unless stated.
+
+- WAL per run: `pg_current_wal_insert_lsn()` + `pg_wal_lsn_diff()` (exact),
+  cross-checked against `pg_stat_wal.wal_bytes` after a >= 20 s settle.
+- Full-page share: `Δpg_stat_wal.wal_fpi` x 8192 B / LSN-diff (unitless share of the WAL).
+- Checkpoints: `pg_stat_bgwriter.checkpoints_req` / `checkpoints_timed` deltas per run.
+- Throughput: k6 `simulations_completed.rate` (simulations/second), median and min-max over
+  the 3 runs.
+
+`wal_compression` and `synchronous_commit` apply to new sessions only, so the worker
+replicas were **restarted** after each `ALTER SYSTEM` + `pg_reload_conf()` so pooled Hikari
+connections pick them up (`max_wal_size`/`checkpoint_timeout` are `sighup` and apply live).
+
+### Local Postgres config recorded before the experiment
+
+Postgres **16.13** (`probity-postgres-1`); the `compose.yaml` postgres service has no
+`command:`, so the image default entrypoint runs.
+
+| setting | value | context |
+|---|---|---|
+| `max_wal_size` / `min_wal_size` | 1024 MB / 80 MB | sighup |
+| `checkpoint_timeout` / `checkpoint_completion_target` | 300 s / 0.9 | sighup |
+| `wal_compression` | off | superuser |
+| `full_page_writes` | on | sighup |
+| `synchronous_commit` | on | user |
+| `shared_buffers` | 16384 x 8 kB (128 MB) | postmaster |
+| `wal_level` | replica | postmaster |
+| `fsync` | on | sighup |
+| `log_statement` | none | superuser |
+
+The four experiment GUCs were changed **local to this dev DB only** and restored at the end
+(`ALTER SYSTEM RESET` + `pg_reload_conf()`; `SHOW` confirmed 1024 MB / 5 min / off / on, and
+`postgresql.auto.conf` holds no experiment setting).
+
+### Conditions
+
+| condition | `max_wal_size` | `checkpoint_timeout` | `wal_compression` | `synchronous_commit` |
+|---|---|---|---|---|
+| c0 (recorded default) | 1024 MB | 300 s | off | on |
+| c1 | 4096 MB | 900 s | off | on |
+| c2 | 1024 MB | 300 s | pglz | on |
+| c3 | 4096 MB | 900 s | pglz | on |
+| cD - **diagnostic only, not a recommendation, durability reduced** | 4096 MB | 900 s | pglz | off |
+
+### Standalone - one simulation
+
+1 replica, dedicated pass (run before any bulk load):
+
+| condition | WAL, LSN-diff (B) | `pg_stat_wal.wal_bytes` (B) | `wal_fpi` | checkpoints req/timed |
+|---|---|---|---|---|
+| c0 | 4,514,576 | 4,506,404 | 4 | 0 / 0 |
+| c1 | 4,506,080 | 4,510,826 | 1 | 0 / 0 |
+| c2 | 4,506,776 | 4,492,133 | 0 | 0 / 0 |
+| c3 | 4,506,464 | 4,503,114 | 1 | 0 / 0 |
+| cD | 4,505,712 | 4,491,069 | 0 | 0 / 0 |
+
+One completion writes **≈ 4.51 MB in every condition** (matching PR-D5's 4,506,280 B); the
+two methods agree within **0.4 %** and the full-page share is ≈ 0. So none of the knobs
+change the standalone write — it is the row/TOAST rewrite, not checkpoint-driven. (At 3
+replicas the LSN-diff standalone was 4,505,816-4,508,600 B across the five conditions.)
+Method note: an earlier pass ran the warm-up first and read `pg_stat_wal` while a checkpoint
+was still settling, which inflated the standalone `pg_stat_wal` figure (up to 21 MB); the
+LSN-diff number was unaffected and the table above is the clean re-measure.
+
+### Scenario A - 60 simulations
+
+WAL per simulation = LSN-diff total / 60; throughput = k6 `simulations_completed.rate`.
+Median (min-max) over 3 runs, unit MB/simulation and simulations/s. **1 replica:**
+
+| condition | WAL/sim median (min-max), MB | full-page share (median) | `checkpoints_req` (3 runs) | throughput median (min-max), sims/s |
+|---|---|---|---|---|
+| c0 | **24.61** (22.85-25.91) | 0.77 | 8 | **1.896** (1.845-1.942) |
+| c1 | 20.46 (19.11-21.06) | 0.65 | 2 | 1.840 (1.711-1.881) |
+| c2 | 17.79 (16.72-17.93) | 0.93 | 6 | 1.598 (1.566-1.721) |
+| c3 | 16.16 (16.13-17.90) | 0.70 | 1 | 1.645 (1.591-1.660) |
+| cD | 16.16 (16.13-17.03) | 0.71 | 1 | 1.746 (1.701-1.775) |
+
+**3 replicas:**
+
+| condition | WAL/sim median (min-max), MB | full-page share (median) | `checkpoints_req` (3 runs) | throughput median (min-max), sims/s |
+|---|---|---|---|---|
+| c0 | **22.23** (19.85-24.96) | 0.72 | 7 | **3.276** (3.274-3.512) |
+| c1 | 19.14 (15.65-21.46) | 0.66 | 2 | 3.251 (2.901-3.909) |
+| c2 | 17.12 (9.97-17.56) | 0.87 | 5 | 2.753 (2.687-4.057) |
+| c3 | 15.94 (9.44-16.77) | 0.70 | 1 | 2.892 (2.590-3.783) |
+| cD | 16.16 (16.14-17.51) | 0.70 | 1 | 2.633 (2.441-2.828) |
+
+`checkpoints_timed` was **0** in every run at both replica counts (a run is shorter than the
+300 s / 900 s timeout), so every checkpoint above is a requested one. The `pg_stat_wal`
+totals agreed with the LSN-diff totals within ≈ 3 % on every run.
+
+### What the numbers say
+
+- Under load, WAL per simulation is **3.5x-5.5x** the standalone write and **≈ 11x-17x** the
+  1.47 MB stored payload (c0: 24.61 MB = 16.7x at 1 replica, 22.23 MB = 15.1x at 3) —
+  consistent with PR-D5's 22.75 MB / 15x. Full-page images dominate (60-93 % of the WAL).
+- Both knobs cut WAL per simulation. Relative to c0 (medians): `max_wal_size` +
+  `checkpoint_timeout` alone **-17 %** (1 rep) / **-14 %** (3 rep); `wal_compression=pglz`
+  alone **-28 %** / **-23 %**; both **-34 %** / **-28 %**. `checkpoints_req` falls from 7-8
+  to 1-2 per 3 runs.
+- **Throughput did not improve.** No condition beats c0, and where a difference exceeds the
+  3-run spread it is *lower*: at 1 replica c2 (1.566-1.721) and cD (1.701-1.775) are below
+  c0 (1.845-1.942); at 3 replicas the spreads overlap (cD 2.441-2.828 vs c0 3.274-3.512).
+  Cutting WAL bytes did not raise throughput here; **where throughput actually binds at
+  these replica counts is not investigated.**
+- **cD (`synchronous_commit=off`)** — the labelled diagnostic, durability reduced — showed
+  no throughput win outside the run spread at 3 replicas (2.441-2.828 vs c3 2.590-3.783) and
+  only a marginal one at 1 replica (1.701-1.775 vs c3 1.591-1.660). It is **not a
+  recommendation** and was not left enabled.
+- Differences **within the run spread are not distinguishable**; the equal-or-lower
+  throughput under compression (a possible compression/CPU effect) is **not investigated**
+  here.
+
 ## Caveats
 
 - **k6 and the JVM share one laptop**, along with Postgres, Kafka and Redis. The load
