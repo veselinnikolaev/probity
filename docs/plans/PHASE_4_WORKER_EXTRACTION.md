@@ -163,6 +163,11 @@ knobs cut under-load WAL by 14–34 % without improving throughput.
 `docs/PHASE_4_MEASUREMENTS.md` → *Payload-write diagnostic - a no-payload worker build
 (throwaway, 2026-10-15)* — a local-only worker build that skips the completion payload write
 shows ≈ 10x throughput at 1 replica and a flat 1-vs-3-replica result; Q9 stays open.
+**Response-size control for Q9 (no decision here, throwaway build):**
+`docs/PHASE_4_MEASUREMENTS.md` → *Write cost vs response cost (2026-10-16)* — a second
+local-only build keeps the full payload write and shrinks only the status body (P2 ≈ P0), so
+the no-payload speedup is the write, not the response, and at 3 replicas P1's own limit is
+api CPU (Kafka lag 0); Q9 stays open.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 

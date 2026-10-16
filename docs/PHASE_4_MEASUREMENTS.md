@@ -871,6 +871,141 @@ in a real completion):
 
 Three figures for one simulation; no further claim is drawn from them here.
 
+## Write cost vs response cost (2026-10-16)
+
+**Question.** The *Payload-write diagnostic* above removed the completion payload write and
+measured ≈ 10x throughput. That throwaway build changed **two** things at once: the write,
+**and** the size of the status response the harness polls — a placeholder payload is also a
+placeholder status body. This section separates them with a third condition that keeps the
+**full write** and shrinks **only the response**.
+
+**Conditions.** All three share the same harness, the same `loadtest/k6/baseline.js`, the
+same accept path and the same Postgres config (c0 defaults); they differ only in two
+local-only artifacts swapped in per condition. P0 and P1 are the two conditions of the
+*Payload-write diagnostic* above; **P2 is new here**.
+
+| id | completion write | `/status` COMPLETED body | api jar | worker image |
+|---|---|---|---|---|
+| **P0** master | full payload (≈ 4.27 MB raw / 1.47 MB stored) | full (≈ 3.90 MB) | `p0` | `probity-worker:p0` |
+| **P1** no-payload | tiny structurally-complete placeholder (322 B raw / 424 B stored) | tiny (≈ 630 B) | `p0` | `probity-worker:p1` |
+| **P2** full write, small response | full payload (as P0) | tiny (≈ 731 B) | `p2` | `probity-worker:p0` |
+
+**The throwaway P2 change (one mapper, `SimulationApplicationService.mapToResult`).** The
+Monte Carlo computation, the claim `UPDATE`, the completion `UPDATE` and the value written
+into `result_payload` are all master's; only the **response** the worker's status mapper
+builds shrinks. The api fat-jars this class and serves it from
+`GET /api/v1/simulations/{id}/status` (the body k6 polls):
+
+```diff
+             .outcomes(SimulationStatusResponse.SimulationResponseOutcomes.builder()
+                     ...
+                     .build())
+-            .allPaths(data.allPaths().stream().map(this::mapPath).toList())
+-            .percentileSeries(data.percentileSeries().stream().map(this::mapPercentile).toList())
+-            .distribution(data.distribution().stream().map(this::mapBucket).toList())
++            .allPaths(List.of())
++            .percentileSeries(List.of())
++            .distribution(List.of())
+             .build();
+```
+
+The row is **still written in full**: `stored_bytes` is 88.3 MB per 60-simulation run for P2
+(≈ 1.47 MB/sim), the same as P0. Only the bytes the client downloads on the COMPLETED poll
+shrink (3.90 MB → ≈ 731 B). This is a control, not a proposed design.
+
+**P1 also changed the response, not just the write.** The placeholder is what lands in
+`result_payload`, so `GET .../status` reads it back and returns a tiny body (measured
+≈ 630 B) — P1 alone therefore cannot say whether its ≈ 10x came from the write or from the
+response. P1 still computes the **full** payload in memory before the write site replaces
+it; `MonteCarloSimulationService.runAsync` builds it and passes it unchanged:
+
+```java
+225:  SimulationPayload payload = executeSimulationRun(new SimulationContext(positions, currentValue), params, numberOfSimulations, timeHorizonDays, confidenceLevel);
+...
+230:  Simulation completed = simulationRepository
+231:          .complete(simulationId, currentValue, payload, fenceToken)
+```
+
+Only the argument handed to `complete(...)` differs — the placeholder in the P1 build, the
+real `payload` on master (and in P2). So P1 removes the *write* cost and the *response* cost
+together; **P2 removes only the response cost**.
+
+**Method.** `loadtest/run-baseline.ps1` unchanged: Scenario A (6 VUs × 60 iterations),
+`TRUNCATE` before the warm-up and before every measured run, observability stopped, one
+warm-up + 3 measured runs per condition, medians with min-max. Three conditions at each of
+**1 and 3 worker replicas**, all six blocks back-to-back in **one session** (P0, P1, P2 per
+replica count), so any drift is shared. WAL is the LSN-diff (`pg_current_wal_insert_lsn` /
+`pg_wal_lsn_diff`), reported per simulation; `checkpoints_req` is from `pg_stat_bgwriter`.
+**api CPU** is a `Get-Process .CPU` time-delta (seconds of CPU = core-seconds) summed over
+the api's `java` processes; **worker CPU** is a cgroup `cpu.stat usage_usec` delta summed
+over the live worker containers. Both are for the whole run; divide by `wall_s` for cores.
+The `/status` body size is one `curl -w '%{size_download}'` against a completed row.
+
+**Results (Scenario A, 60 simulations).**
+
+| condition | replicas | throughput median (min-max), sims/s | accept p95 / p99 median, ms | e2e p95 median (min-max), ms | e2e p99 median, ms | WAL/sim median, MB (LSN-diff) | `checkpoints_req` (3 runs) | api CPU s | worker CPU s | kafka lag after | `/status` bytes | stored bytes/sim |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P0 master | 1 | **1.892** (1.811-1.928) | 35.1 / 41.2 | 4,376.1 (4,328.9-4,888.0) | 5,091.0 | **23.56** | 3/3/2 | 13.09 | 8.54 | 0 | 3,901,505 | 1.47 MB |
+| P1 no-payload | 1 | **16.884** (16.373-18.735) | 39.1 / 42.4 | 647.0 (475.9-651.3) | 649.9 | **0.0029** | 0/0/0 | 1.09 | 1.13 | 0 | 630 | 424 B |
+| **P2** full write, small response | 1 | **2.074** (2.064-2.105) | 49.5 / 64.6 | 3,821.1 (3,695.4-4,547.1) | 4,248.9 | **23.84** | 3/2/3 | 12.03 | 7.15 | 0 | 731 | 1.47 MB |
+| P0 master | 3 | **3.272** (3.130-3.324) | 39.0 / 454.1 | 2,856.3 (2,812.7-3,240.1) | 3,643.6 | **22.11** | 2/3/2 | 12.88 | 9.15 | 0 | 3,901,916 | 1.47 MB |
+| P1 no-payload | 3 | **17.335** (16.522-17.838) | 34.1 / 35.4 | 663.7 (662.5-667.0) | 672.0 | **0.0029** | 0/0/0 | 1.52 | 1.52 | 0 | 630 | 424 B |
+| **P2** full write, small response | 3 | **3.689** (3.581-3.989) | 355.4 / 1,362.2 | 3,188.2 (2,145.5-3,212.4) | 4,090.7 | **22.80** | 2/3/3 | 16.16 | 9.52 | 0 | 731 | 1.47 MB |
+
+(accept p95/p99 are medians over 3 runs; `checkpoints_req` is per run; api/worker CPU are
+medians of the whole-run deltas; `kafka lag after` is the consumer-group lag immediately
+after the run — **0** everywhere.)
+
+**What the numbers say (and do not).**
+
+- **P2 is closest to P0.** Keeping the full write and shrinking only the response leaves
+  throughput where P0 is: **1.892 → 2.074 sims/s** at 1 replica and **3.272 → 3.689** at 3
+  (a small **≈ +10 % / +13 %**; the P2 ranges 2.064-2.105 and 3.581-3.989 do not overlap the
+  P0 ranges). WAL per simulation and stored bytes/sim are the same within spread
+  (23.56 vs 23.84 and 22.11 vs 22.80 MB; both ≈ 1.47 MB/sim). **The response size is not
+  what moved P1.**
+- **P1 is the outlier.** **16.884** sims/s at 1 replica and **17.335** at 3 — **≈ 8.1x** P2
+  at 1 replica and **≈ 4.7x** at 3 — with e2e p95 **≈ 647/664 ms** against P0's
+  **≈ 4,376/2,856 ms**. The order-of-magnitude gap tracks the **write**: the only fast
+  condition is the one that removes the write, and the condition that removes only the
+  response is *not* fast. `checkpoints_req` says the same (7-8 per three runs for P0/P2,
+  **0** for P1).
+- **So the conclusion is P2 ≈ P0, and P1 is the outlier** — the earlier *Payload-write
+  diagnostic*'s ≈ 10x survives as "removing the payload write is what moves it", but its
+  attribution to the write **alone** rested on a confounded build; P2 is the control that
+  separates the two. The response-size effect on its own is ≈ 10 %, an order of magnitude
+  below the write effect.
+- Adding replicas still helps P0 and P2 (≈ 1.7x / 1.8x from 1 → 3) and does **not** help P1
+  (16.884 → 17.335, ranges overlap) — the same flat 1-vs-3 result the diagnostic recorded.
+- The accept path is still not the differentiator here: accept p95 medians are 34-50 ms in
+  five of the six blocks (P2 at 3 replicas is the exception, 355 ms p95 / 1,362 ms p99).
+
+**What limits P1 at 3 replicas (measured, not inferred).** To put P1 under sustained load
+well past Scenario A, the same P1 build ran 6 VUs × **300** iterations (~5x the work) at 3
+replicas, sampled every ~4 s:
+
+| candidate | measured during the probe | reading |
+|---|---|---|
+| **api** | **22.70 s** CPU over **21.6 s** wall = **≈ 1.05 cores** | the only process near a full core |
+| worker (3 containers) | 11.12 s over 21.6 s = ≈ 0.51 cores | has headroom |
+| Postgres | 0.14-6.3 % of one core | near idle |
+| Kafka | 1.5-3.7 %, one 141.7 % spike | near idle |
+| k6 client | 4.6-8.0 % of one core | near idle |
+| host (32 cores) | 17-34 % busy (≈ 5.5-11 cores) | not saturated |
+| consumer lag after | **0** | no backlog left |
+
+300/300 iterations completed, 0 failed, `kafka_lag_after = 0`. Of the four candidates
+(api CPU / k6 / Kafka lag / Postgres), **only the api shows a full core of use**; Kafka lag,
+Postgres, Kafka and the k6 client were all near idle and the host was not saturated. Whether
+the api is capped by raw CPU or by a serialisation point inside it is **not investigated**.
+(At Scenario A's own load P1 at 3 replicas used only 1.52 s api CPU over 4.2 s ≈ 0.36 cores,
+so the api reaches ≈ 1 core only under the ≈ 5x probe.)
+
+**Caveat on condition order.** Within each replica block the conditions ran in the fixed
+order P0, P1, P2, so the small P2-vs-P0 gap (≈ 10 %) shares any ordering/thermal drift this
+session had; the ≈ 5-9x P1-vs-P0 gap is far outside it. The ≈ 10 % is reported as measured,
+not as a mechanism.
+
 ## Caveats
 
 - **k6 and the JVM share one laptop**, along with Postgres, Kafka and Redis. The load

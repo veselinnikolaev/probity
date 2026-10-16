@@ -147,3 +147,13 @@ Append-only. One entry = the failure, then the rule. Read together with
     small operation before any bulk load, or wait until the checkpoint counters stop
     moving — and treat a counter read that disagrees with the exact source as
     contamination, not a result.
+
+21. **A payload placeholder also changed the response size; control confounds before
+    attributing a speedup.** The throwaway "no-payload" worker build wrote a tiny
+    `result_payload`, and the status endpoint it is measured through reads that row back —
+    so the build removed the write **and** shrank the response at once, and its headline
+    ≈ 10x was written down as the cost of the write. A later control that kept the full write
+    and shrank **only** the response (P2) reproduced **none** of the speedup (P2 ≈ P0).
+    Rule: when a change touches more than one observable, add a condition that changes each
+    one alone before naming a cause; a build that moves two things is not an experiment on
+    either one.
