@@ -168,6 +168,12 @@ shows ≈ 10x throughput at 1 replica and a flat 1-vs-3-replica result; Q9 stays
 local-only build keeps the full payload write and shrinks only the status body (P2 ≈ P0), so
 the no-payload speedup is the write, not the response, and at 3 replicas P1's own limit is
 api CPU (Kafka lag 0); Q9 stays open.
+**Q9 decision note (no decision here, docs-only):** `docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md`
+— the payload-consumer survey (which endpoints/DTOs read `allPaths`/`percentileSeries`/
+`distribution`), the per-field sizes (`allPaths` = 99.22 % of the payload), the current
+status/response flow, and four storage options with their consumer impact, migration needs,
+cost hypothesis and P0/P1/P2 verification; it names which option the measurements favour but
+**decides nothing** — Q9 stays open.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
