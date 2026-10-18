@@ -1,11 +1,13 @@
 # Q9 — Result payload storage (decision note)
 
-Status: **OPEN** (this note does not decide). Docs-only: no `src`, test, `pom.xml`,
-migration, `compose.yaml` or HPA change. The decision stays with the design/product
-owner (see *Open questions*). This note gathers the facts Q9 needs — who consumes the
-payload, how big each field is, how the result is returned today — and lays out the
-options with what each changes, what breaks, migration needs, a *hypothesis* for the
-measured cost and how to verify it (the recorded P0/P1/P2 protocol).
+Status: the facts and options below are unchanged; the owner answered the frontend
+question (2026-10-18), so §9 now records a **decision — proposed, awaiting owner
+sign-off**. Until that sign-off Q9 stays **OPEN** in
+`docs/plans/PHASE_4_WORKER_EXTRACTION.md`, and **nothing is implemented**: no `src`,
+test, `pom.xml`, migration, `compose.yaml` or HPA change. This note gathers the facts Q9
+needs — who consumes the payload, how big each field is, how the result is returned
+today — and lays out the options with what each changes, what breaks, migration needs, a
+*hypothesis* for the measured cost and how to verify it (the recorded P0/P1/P2 protocol).
 
 Q9 as recorded in `docs/plans/PHASE_4_WORKER_EXTRACTION.md` (§2.10.9): the completion
 write of the ≈ 1.47 MB stored / ≈ 7.89 MB bytes-per-row `result_payload` is the
@@ -45,8 +47,13 @@ shrinks **what is written into `result_payload`**, not on what the client downlo
 Frontend note: **there is no frontend source in this repository** (no `package.json`;
 nothing under `probity-*`). `SimulationPayload`'s javadoc says it *"Mirrors the frontend
 `SimulationResult` shape exactly"*, so a frontend exists as a **separate project not
-present in this workspace** — its use of the fields is **not investigated here** (source
-not in this repository).
+present in this workspace** — a code-level survey of its use of the fields was **not
+investigated here** (source not in this repository).
+
+**Owner answer (recorded 2026-10-18, product owner):** the UI *"draws at most N sample
+paths and the percentile bands; no calculation needs all 1000."* This is the owner's
+statement about the frontend (the source is still outside this repository), and it answers
+open questions 1 and 2 in §7; §9 turns it into a **proposed** decision.
 
 Backend consumers, each with the fields it actually uses:
 
@@ -59,15 +66,16 @@ Backend consumers, each with the fields it actually uses:
 | 5 | worker read mapper (DB row → DTO) | `probity-worker/.../simulation/mapper/SimulationMapper.java` :16 `toDto` | deserialises the **whole** `SimulationPayload` from the row for any read |
 | 6 | DTOs that carry it | `SimulationResponse` (`probity-api/.../bff/dto/simulation/SimulationResponse.java` :17–21); `SimulationData` (`probity-worker/.../simulation/dto/SimulationData.java` :17–21); `SimulationStatusResponse.SimulationResponseResult` (:42–44) | the three lists plus statistics/outcomes/parameters |
 | 7 | database column | `simulations.result_payload` jsonb (`SimulationJpaEntity`), written by `SimulationRepository.complete` (single `UPDATE`) | the whole payload |
-| 8 | frontend | **not in this repository** (separate project) | **not investigated** |
+| 8 | frontend | **not in this repository** (separate project; field use answered by the product owner, 2026-10-18) | **at most N sample paths + the percentile bands — no calculation needs all 1000** |
 
 - **Export / PDF / CSV / analytics:** none read the simulation payload. A grep for
   `pdf|export|csv|report|analytics` finds only the **VaR report**, which is computed from
   market data / returns, not from `result_payload`.
 - **What every in-repo consumer uses:** they all pass **all three lists** straight
   through. No in-repo code reads *only* `percentileSeries` or *only* `distribution`; no
-  in-repo code reads a *sample* of `allPaths`. The only in-repo consumer that would lose
-  information if the lists shrank is the frontend (item 8, not investigated).
+  in-repo code reads a *sample* of `allPaths`. The only consumer that would lose
+  information if the lists shrank is the frontend (item 8 — per the owner's answer it
+  needs a **sample** of `allPaths` and the percentile bands, not the full list; §9).
 - **Contract detail that constrains any change (recorded):** both response mappers
   (items 1–4) dereference `payload.statistics()`/`payload.outcomes()`; an all-null
   `result_payload` **breaks the status contract**. Any summary-instead-of-paths change must
@@ -238,8 +246,12 @@ is not confused with the storage decision.
 
 1. **Do users need all 1000 paths?** Or a sample (e.g. 100), the percentile band, or the
    distribution? This alone decides whether `allPaths` must be retrievable at all.
+   **ANSWERED 2026-10-18 (product owner):** a **sample** (at most N paths) plus the
+   percentile bands; *no calculation needs all 1000*.
 2. **What does the frontend actually render** — `allPaths`, `percentileSeries`, or
-   `distribution`? (Source is not in this repository; **not investigated**.)
+   `distribution`? (Source is not in this repository; not surveyed.)
+   **ANSWERED 2026-10-18 (product owner):** at most N **sample paths** (from `allPaths`)
+   and the **percentile bands** (`percentileSeries`); nothing needs the full list.
 3. **How often is a stored result re-read after completion?** (Once, by the polling client?
    Re-opened later? Exported?) This decides whether an offload read latency is acceptable.
 4. **Is a two-endpoint API acceptable** (summary status + dedicated result), or must
@@ -263,11 +275,150 @@ measurements also carry: (a) an offload is itself a write, so the real gain is a
 **hypothesis** until the P0/P1/P2 protocol measures the variant; and (b) Options B and C
 keep writing the paths and *§2.8.1*/**write-path** data (a row-rewrite cost that did not
 move when WAL fell 14–34 %) suggest they may not move throughput — "smaller" is not
-"faster" here. **No option is selected; the decision is the owner's.**
+"faster" here. This section only *names* what the measurements favour; the recorded
+decision is in §9 below (**proposed, awaiting owner sign-off**).
 
 ---
 
-## 9. Provenance / method notes
+## 9. Decision (proposed, awaiting owner sign-off)
+
+**Status: PROPOSED — awaiting owner sign-off.** Nothing here is implemented; Q9 stays
+`OPEN` in `PHASE_4_WORKER_EXTRACTION.md` until the owner signs off. No `src`, test,
+`pom.xml`, migration or `compose.yaml` change ships with this note.
+
+**Frontend answer (recorded 2026-10-18, product owner):** *"The UI draws at most ~N sample
+paths and the percentile bands; no calculation needs all 1000."*
+
+**This points at Option A** — `result_payload` keeps the summary **and the other non-path
+fields** (`percentileSeries`, `distribution`), and `allPaths` moves out of the row into a
+separate store (`simulation_paths` table), with a dedicated endpoint serving the UI's
+sample. Why, in the measured numbers only:
+
+- `allPaths` is **99.22 %** of the payload (3,869,226 B of 3,899,671 B); the owner's
+  answer says no consumer needs it inline, so it is the only byte that must move.
+- What the UI does need — summary + `percentileSeries` + `distribution` — is
+  **30,433 B** (summary alone **359 B**, summary + percentiles **27,739 B**): **0.78 %**
+  of the current payload. Keeping `distribution` costs 2,678 B (0.07 %) and avoids a
+  second, separate breaking change later.
+- The **write dominates**: the closest measured control (P1, no `allPaths` write) was
+  **≈ 10x** at 1 replica, while the response-size control (P2) reproduced **none** of it
+  (P2 ≈ P0, ≈ +10 %/+13 %) — i.e. the response is worth only ~10 %, so only removing the
+  stored paths addresses the recorded constraint; Options B/C keep writing them.
+- Options B and C keep all 1000 paths written, and *§2.8.1* + the write-path data show a
+  smaller write is **not** automatically a faster one (WAL −14–34 % moved nothing).
+
+**Open parameter for implementation (not decided here):** the exact sample size *N* the
+UI requests, and whether the paths endpoint serves a random/systematic sample server-side
+or the client picks from a full download. The owner's answer bounds it (*at most N*);
+choosing *N* belongs to PR-Q9b.
+
+### What Option A changes for each consumer line (§2 table)
+
+| # | consumer | under Option A (per PR: Q9a storage split / Q9b API split) |
+|---|---|---|
+| 1 | `POST /run` (`mapToResponse` :297) | **Q9a:** 201 body unchanged (paths reassembled). **Q9b:** 201 body drops `allPaths` → ≈ 30.4 KB + envelope instead of ≈ 3.90 MB. |
+| 2 | `GET /{id}` (:216) | same as 1. |
+| 3 | `GET /simulations` (list, :236) | **Q9a:** unchanged contract (reassembled per row). **Q9b:** per-row body ≈ 30.4 KB instead of ≈ 3.90 MB — today the list returns the full payload **for every row**, so this is the largest aggregate client-side change. |
+| 4 | `GET /{id}/status` (`mapToResult` :155–179, `allPaths` :176) | **Q9a:** unchanged (reassembled). **Q9b:** status returns summary + `percentileSeries` + `distribution` (**30,433 B**, keeping the bands the UI renders and honouring the recorded all-null contract — `statistics`/`outcomes` stay non-null); the recorded 3,901,505 B status body drops to tens of KB. `allPaths` :176 is served only by the new paths endpoint. |
+| 5 | worker read mapper `SimulationMapper.toDto` :16 | **Q9a:** gains a dual-source read — reassemble `allPaths` from `simulation_paths` when the row has none inline (new rows), else from the inline payload (existing rows). **Q9b:** read becomes summary-only for the status/list path. |
+| 6 | DTOs (`SimulationResponse` :17–21, `SimulationData` :17–21, `SimulationStatusResponse` :42–44) | **Q9a:** no change. **Q9b:** `allPaths` removed from the status/list DTOs; a DTO for the paths endpoint (sample) is added. |
+| 7 | DB `simulations.result_payload` via `SimulationRepository.complete` (single `UPDATE`) | **Q9a:** the single completion `UPDATE` writes ≈ 30.4 KB (text) instead of ≈ 1.47 MB stored, and the paths go to a new `simulation_paths` row — this changes the recorded "one completion statement" shape to one small `UPDATE` + one paths write, and **that hypothesis (the TOASTed row rewrite, not the bytes, is the cost) is exactly what the verification must measure**. Stored bytes per row: ≈ 1.47 MB → tens of KB in `result_payload` plus one paths row. |
+| 8 | frontend | **Q9a:** nothing changes (API contract identical). **Q9b:** the sample view calls the new paths endpoint for ≤ N paths; the bands come from `percentileSeries`, kept in the status/result body per line 4. |
+
+**Existing rows:** no backfill and no destructive migration. Old rows keep `allPaths`
+inline; the Q9a dual-source read serves them unchanged. An optional backfill (move old
+rows' paths into `simulation_paths`) is listed as PR-Q9c and can be skipped.
+
+---
+
+## 10. Implementation plan — small PR sequence (docs-only here; nothing implemented)
+
+Each PR is independently shippable and revertible, in the style of PR-D0…D5. Tests are
+named per PR; **the list endpoint (`GET /simulations`) is explicitly covered in every PR
+that touches a response shape** (it multiplies any per-row change by the row count).
+Verification reuses the recorded P0/P1/P2 protocol (§5 preamble): `loadtest/
+run-baseline.ps1`, `TRUNCATE` before warm-up and each measured run, observability
+stopped, one warm-up + 3 Scenario A (6 VUs × 60) runs per condition, block-interleaved in
+one session, at **1 and 3 worker replicas**; report throughput median (min–max), e2e/
+accept p95/p99, **status body bytes** (`curl -w %{size_download}`), **WAL per simulation**
+under the 60-sim run, **stored bytes per row** (`pg_column_size(result_payload)` + the
+paths row), api/worker CPU; a difference inside the run spread is "not distinguishable".
+
+**PR-Q9a — storage split, API contract unchanged (dual-source read).**
+- Changes: additive migration `V<next>__simulation_paths.sql` (new `simulation_paths`
+  table: `simulation_id` PK → `paths` jsonb, `created_at`; **no change to `simulations`**);
+  worker completion writes summary + `percentileSeries` + `distribution` (30,433 B) into
+  `result_payload` and `allPaths` into `simulation_paths` **in the same completion
+  transaction** (see deviation note below); `SimulationMapper.toDto` reassembles
+  `allPaths` for the response so every endpoint's contract is unchanged.
+  - *Deviation from Option A's "written asynchronously":* the split write lands
+    synchronously first, because the recorded risk of async was an offload failing after
+    the row is `COMPLETED` (retry/idempotency machinery). Measure the split write as-is;
+    async becomes PR-Q9c only if the split write is still a constraint.
+- Tests: unit — split write and dual-source reassembly (new row has no inline paths; old
+  row does); integration — completion produces `result_payload` ≈ tens of KB + one
+  `simulation_paths` row, and re-read returns the identical JSON contract as before;
+  **list endpoint** — `GET /simulations` returns reassembled `allPaths` for new *and*
+  existing rows (regression against the pre-Q9 response); status-contract test that
+  `statistics`/`outcomes` are non-null (recorded all-null break).
+- Migration/backfill: additive table only; no backfill; old rows untouched.
+- Rollback: revert the PR; the table remains but is unread by reverted code (drop with a
+  follow-up migration if abandoned). No data loss: inline payloads still hold the summary
+  shape only for new rows — reverting restores the full inline write for future rows;
+  rows written under Q9a still reassemble because the reverted mapper reads inline only,
+  so **the rollback path must be: revert + run the Q9c backfill (or accept that Q9a
+  rows' paths stay in `simulation_paths` unreferenced until re-applied)**. State this in
+  the PR description.
+- Verification: P0 (master) vs Q9a at 1 and 3 replicas on the four measures above. The
+  recorded hypotheses to confirm or refute: throughput moves toward P1 (≈ 10x) *or* not
+  distinguishable (row-rewrite vs bytes question); WAL/sim falls from ≈ 4.5 MB toward the
+  paths-row share; stored bytes/row falls from ≈ 1.47 MB to tens of KB + paths row;
+  status body bytes **unchanged** (contract kept — if they move, the reassembly broke).
+
+**PR-Q9b — API split: small status/list/result + new paths endpoint (the breaking PR).**
+- Changes: `GET /{id}/status` returns summary + `percentileSeries` + `distribution`
+  (30,433 B, no `allPaths`); `GET /simulations` and `GET /{id}` drop `allPaths` from the
+  DTOs; **new** `GET /api/v1/simulations/{id}/paths?n=N` serving ≤ N sampled paths (N
+  chosen here, bounded by the owner's "at most N"); the sync `POST /run` 201 body follows
+  the same shape as `GET /{id}`. `SimulationStatusResponse`/`SimulationData`/
+  `SimulationResponse` lose `allPaths`; a paths DTO is added.
+- Tests: paths endpoint (sample size respected, 404 for no-paths rows, auth = same
+  `userId` guard as `GET /{id}`); status body has no `allPaths` and non-null
+  `statistics`/`outcomes`; **list endpoint** — no `allPaths` in any row, per-row body
+  ≈ 30 KB, page of P rows measured; ETag/`ConditionalGetSupport` still correct on the new
+  status body (recorded :46–48); existing async flow test (202 → worker → status) updated
+  for the new body.
+- Migration/backfill: none.
+- Rollback: revert the PR — responses return to reassembled-full (Q9a read path), no
+  schema change involved.
+- Verification: response-side expectation is the recorded **P2** magnitude (~10 %/+13 %),
+  i.e. **not** the ≈ 10x; run the same protocol at 1 and 3 replicas and check status body
+  bytes fell to tens of KB while throughput stays inside/above the P0 spread. If
+  throughput *drops*, the reassembly/read regression is suspect — the list endpoint test
+  and per-row body measurement are the first checks.
+
+**PR-Q9c — optional follow-ups (each skippable, owner-gated).**
+- (a) backfill: move existing rows' inline `allPaths` into `simulation_paths` in batches
+  (idempotent, resumable; dual-source read makes it invisible to clients);
+  (b) async offload: paths write moves after the completion transaction, with the
+  recorded retry/idempotency requirement — only if PR-Q9a measured the split write as
+  still constraining;
+  (c) drop-table migration if the offload idea is abandoned.
+- Tests: backfill idempotency (re-run safe), post-backfill read equality (reassembled
+  JSON identical), **list endpoint** over a mixed old/new/backfilled page.
+- Rollback: backfill is data movement under the dual-source read — reverting the reader
+  first would lose access to moved paths, so the documented order is: revert reader
+  change before stopping the backfill; the migration itself is additive.
+
+**Verification gate before merging any of Q9a/Q9b:** the four measures (throughput at 1
+and 3 replicas, WAL per simulation, stored bytes per row, status body bytes) recorded in
+`docs/PHASE_4_MEASUREMENTS.md` with the run conditions, in the same style as *Write cost
+vs response cost*; a result inside the run spread is reported as "not distinguishable",
+never as a gain.
+
+---
+
+## 11. Provenance / method notes
 
 - Consumer survey, field sizes, and the frontend absence were gathered read-only on
   `89a6474` (PR #19 merged). Field sizes came from a real payload captured in a Postgres

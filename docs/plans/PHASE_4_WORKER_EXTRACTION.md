@@ -174,6 +174,13 @@ api CPU (Kafka lag 0); Q9 stays open.
 status/response flow, and four storage options with their consumer impact, migration needs,
 cost hypothesis and P0/P1/P2 verification; it names which option the measurements favour but
 **decides nothing** — Q9 stays open.
+**Q9 owner answer + proposed decision (2026-10-18, docs-only, no decision changed here):**
+the product owner answered the frontend question (UI draws at most ~N sample paths + the
+percentile bands; no calculation needs all 1000). `docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md`
+§9 records the option this points at (**Option A** — summary + percentiles in
+`result_payload`, paths offloaded) as **proposed, awaiting owner sign-off**, its per-consumer
+impact, and §10 a small PR-Q9a/Q9b/Q9c implementation plan. **Q9 stays OPEN in this note
+until that sign-off.**
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
