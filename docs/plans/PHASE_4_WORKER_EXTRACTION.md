@@ -181,6 +181,12 @@ percentile bands; no calculation needs all 1000). `docs/plans/Q9_RESULT_PAYLOAD_
 `result_payload`, paths offloaded) as **proposed, awaiting owner sign-off**, its per-consumer
 impact, and §10 a small PR-Q9a/Q9b/Q9c implementation plan. **Q9 stays OPEN in this note
 until that sign-off.**
+**Q9 frontend check (2026-10-18, docs-only, no decision changed):** audited
+`probity-frontend` at `48ccccdf250eec1029770341b86a2406d7cc5094` — `FanChart` is the sole
+`allPaths` consumer (faint spaghetti lines + y-axis scale only; bands, tooltip, histogram and
+table come from `percentileSeries`/`distribution`), drawn unsliced (default request 10 000,
+backend cap 10 000), so **sample paths + bands suffice** — details in
+`docs/plans/MONOREPO_MIGRATION.md` §3.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
