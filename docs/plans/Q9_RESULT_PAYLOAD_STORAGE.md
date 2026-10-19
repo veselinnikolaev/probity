@@ -1,13 +1,14 @@
 # Q9 — Result payload storage (decision note)
 
-Status: the facts and options below are unchanged; the owner answered the frontend
-question (2026-10-18), so §9 now records a **decision — proposed, awaiting owner
-sign-off**. Until that sign-off Q9 stays **OPEN** in
-`docs/plans/PHASE_4_WORKER_EXTRACTION.md`, and **nothing is implemented**: no `src`,
-test, `pom.xml`, migration, `compose.yaml` or HPA change. This note gathers the facts Q9
-needs — who consumes the payload, how big each field is, how the result is returned
-today — and lays out the options with what each changes, what breaks, migration needs, a
-*hypothesis* for the measured cost and how to verify it (the recorded P0/P1/P2 protocol).
+Status: **decided — Option A, owner-signed-off (2026-10-19)**; §9 records the sign-off
+and §10 the PR sequence. **PR-Q9a is implemented** — the storage split (`allPaths`
+moves out of `result_payload` into the `simulation_paths` table; responses reassembled
+so the HTTP contract is unchanged); see §10 and the "Q9a verification" block in
+`docs/PHASE_4_MEASUREMENTS.md` for the measured gate. **PR-Q9b and PR-Q9c are not
+started.** The facts below are unchanged since the frontend answer (2026-10-18): who
+consumes the payload, how big each field is, how the result is returned today, the
+options with what each changes and breaks, and the recorded P0/P1/P2 protocol the gate
+reuses.
 
 Q9 as recorded in `docs/plans/PHASE_4_WORKER_EXTRACTION.md` (§2.10.9): the completion
 write of the ≈ 1.47 MB stored / ≈ 7.89 MB bytes-per-row `result_payload` is the
@@ -53,7 +54,7 @@ investigated here** (source not in this repository).
 **Owner answer (recorded 2026-10-18, product owner):** the UI *"draws at most N sample
 paths and the percentile bands; no calculation needs all 1000."* This is the owner's
 statement about the frontend (the source is still outside this repository), and it answers
-open questions 1 and 2 in §7; §9 turns it into a **proposed** decision.
+open questions 1 and 2 in §7; §9 records it as the **signed-off** decision (2026-10-19).
 
 Backend consumers, each with the fields it actually uses:
 
@@ -276,15 +277,18 @@ measurements also carry: (a) an offload is itself a write, so the real gain is a
 keep writing the paths and *§2.8.1*/**write-path** data (a row-rewrite cost that did not
 move when WAL fell 14–34 %) suggest they may not move throughput — "smaller" is not
 "faster" here. This section only *names* what the measurements favour; the recorded
-decision is in §9 below (**proposed, awaiting owner sign-off**).
+decision is in §9 below (**signed off — Option A, 2026-10-19**).
 
 ---
 
-## 9. Decision (proposed, awaiting owner sign-off)
+## 9. Decision (signed off 2026-10-19 — Option A)
 
-**Status: PROPOSED — awaiting owner sign-off.** Nothing here is implemented; Q9 stays
-`OPEN` in `PHASE_4_WORKER_EXTRACTION.md` until the owner signs off. No `src`, test,
-`pom.xml`, migration or `compose.yaml` change ships with this note.
+**Status: SIGNED OFF — Option A (2026-10-19) and implemented by PR-Q9a.** The
+storage split ships on branch `pr-q9a-storage-split`: `V19__simulation_paths.sql`,
+the split completion write and the dual-source read, with the HTTP contract
+unchanged. Q9a is `DONE` in `PHASE_4_WORKER_EXTRACTION.md`; **PR-Q9b and PR-Q9c are
+not started.** The measured gate is recorded in §10 (PR-Q9a → gate result) and in
+`docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*.
 
 **Frontend answer (recorded 2026-10-18, product owner):** *"The UI draws at most ~N sample
 paths and the percentile bands; no calculation needs all 1000."*
@@ -331,7 +335,7 @@ rows' paths into `simulation_paths`) is listed as PR-Q9c and can be skipped.
 
 ---
 
-## 10. Implementation plan — small PR sequence (docs-only here; nothing implemented)
+## 10. Implementation plan — small PR sequence (PR-Q9a implemented; PR-Q9b/PR-Q9c not started)
 
 Each PR is independently shippable and revertible, in the style of PR-D0…D5. Tests are
 named per PR; **the list endpoint (`GET /simulations`) is explicitly covered in every PR
@@ -374,6 +378,21 @@ paths row), api/worker CPU; a difference inside the run spread is "not distingui
   distinguishable (row-rewrite vs bytes question); WAL/sim falls from ≈ 4.5 MB toward the
   paths-row share; stored bytes/row falls from ≈ 1.47 MB to tens of KB + paths row;
   status body bytes **unchanged** (contract kept — if they move, the reassembly broke).
+  - **Gate result (2026-10-19, measured; P0 = master `df2d537`, medians of 1 warm-up +
+    3 Scenario A runs per condition, full numbers and method in
+    `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*):**
+    throughput **1.767 → 2.670 sims/s** (1 replica) and **3.161 → 5.377** (3 replicas) —
+    **the ≈ 10x hypothesis is refuted** (Q9a still writes every path byte, only to a
+    second table); WAL/sim **23.82 → 1.54 MB** (1 rep) and **20.92 → 1.53 MB** (3 rep),
+    ≈ **15x** lower with checkpoints nearly disappearing (3/2/3 → 0/1/0 requested) —
+    these are run-bracketed LSN diffs ÷ 60 (the recorded run-level P0 controls, 23.56 /
+    22.11 MB, are reproduced by this run's P0; the ≈ 4.5 MB in the hypothesis line above
+    is §5's isolated single-simulation bracket, a different measure); *why* the same
+    bytes cost that much less WAL is **not investigated**; stored
+    bytes/sim **1,471,772 → 11,646 + 1,460,208 B** (1 rep) and **1,471,712 → 11,651 +
+    1,460,117 B** (3 rep) — payload + paths total identical to P0's inline row, the
+    split itself works; status body **3,901,906 → 3,901,535 B** (1 rep) and
+    **3,902,045 → 3,901,573 B** (3 rep) — unchanged within run spread, contract kept.
 
 **PR-Q9b — API split: small status/list/result + new paths endpoint (the breaking PR).**
 - Changes: `GET /{id}/status` returns summary + `percentileSeries` + `distribution`
@@ -424,5 +443,7 @@ never as a gain.
   `89a6474` (PR #19 merged). Field sizes came from a real payload captured in a Postgres
   parameter log (write-path investigation), cross-checked against the recorded 3.90 MB
   status body; they are not a fresh DB row (the current DB holds only P1 placeholders).
-- No `src`, test, `pom.xml`, migration, `compose.yaml`, `README.md` or HPA change. No
-  decision changed: Q9 stays open, Q4 (CPU-based HPA) is untouched.
+- The 2026-10-17/18 versions of this note shipped **no** `src`, test, `pom.xml`,
+  migration, `compose.yaml`, `README.md` or HPA change and **changed no decision**
+  (Q9 was open then; Q4 (CPU-based HPA) is untouched). The first code change is PR-Q9a
+  (2026-10-19, §10) under the §9 sign-off; Q4 remains untouched.

@@ -157,3 +157,16 @@ Append-only. One entry = the failure, then the rule. Read together with
     Rule: when a change touches more than one observable, add a condition that changes each
     one alone before naming a cause; a build that moves two things is not an experiment on
     either one.
+
+22. **Called a password "verified" over an auth path that never checks passwords.** The
+    local reset of `probity_worker` was first confirmed with `docker exec … psql` inside
+    the Postgres container (and would equally have passed on the container's loopback).
+    That connection matches `pg_hba.conf`'s `local all all trust` (and
+    `host all all 127.0.0.1/32 trust`) — `trust` accepts **any** password, so the green
+    connect proved nothing; a wrong password would have looked identical. Only the
+    `host all all all scram-sha-256` line (reached from outside the container) actually
+    exercises the secret, and it was the path the worker containers failed on.
+    Rule: before calling a credential verified, read the matching `pg_hba_file_rules` entry
+    for the (type, address, user) the test used; a test that lands on `trust` must be
+    reported as "auth not exercised", and the check repeated over a line that demands the
+    real mechanism (`scram-sha-256`). A check that cannot fail is not a check.

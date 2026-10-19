@@ -1006,6 +1006,158 @@ order P0, P1, P2, so the small P2-vs-P0 gap (≈ 10 %) shares any ordering/therm
 session had; the ≈ 5-9x P1-vs-P0 gap is far outside it. The ≈ 10 % is reported as measured,
 not as a mechanism.
 
+## Q9a verification - result-payload storage split vs P0 (branch `pr-q9a-storage-split`, 2026-10-19)
+
+Q9a implements the signed-off Option A of `docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md` §9:
+`allPaths` moves out of `result_payload` into the `simulation_paths` table
+(`V19__simulation_paths.sql`), the completion write is split in the same transaction, and
+the read side reassembles `allPaths` from both rows so **the HTTP contract is unchanged**.
+This is the §10 gate: **P0 (master `df2d537`, PR #22) vs the Q9a branch at 1 and 3 worker
+replicas**, one session, block order **P0@1 → Q9a@1 → P0@3 → Q9a@3**, Scenario B skipped
+(§10 requires Scenario A only).
+
+### Method
+
+- **Protocol:** the recorded PR-D5 driver — `loadtest/run-baseline.ps1` Scenario A
+  (`loadtest/k6/baseline.js`, VUS=6 ITERATIONS=60), `TRUNCATE TABLE simulations` before
+  the warm-up and before each measured run, observability containers stopped, **1
+  discarded warm-up + 3 measured runs per condition**; medians with min–max over the
+  three runs. All four blocks ran in one session through one harness, so no condition
+  crosses a session boundary.
+- **Builds:** P0 = master `df2d537` — API jar built from a clean worktree of that commit,
+  worker image `probity-worker:q9a-p0` (built 2026-10-14 10:40Z: after the last pre-Q9a
+  worker/shared change `6236a7b` 10:20Z, before any Q9a commit) and **content-checked** —
+  its jar holds none of the Q9a markers (`ResponsePathSampler`,
+  `SimulationPathsJpaEntity`, `V19__simulation_paths`), all three present in
+  `probity-worker:q9a-new` (image MD5s are useless for this: jars embed build
+  timestamps). Q9a = branch jar + `probity-worker:q9a-new`.
+- **Topology:** API as host `java -jar` (no `@KafkaListener`), workers as containers on
+  `--network host` with distinct `WORKER_PORT`s (8081–8083), `DB_USERNAME=probity_worker`
+  (**never** the `postgres` role for a worker block), `SIMULATION_CLAIM_LEASE=12m`;
+  consumer group `probity-simulation-worker` pre-checked at exactly N members before each
+  block (120 s join-poll).
+- **Latency/throughput:** k6, as recorded (*How to read this*): throughput and
+  accept/e2e/server p95–p99 per run.
+- **WAL per simulation:** run-bracketed exact source — `pg_wal_lsn_diff(after, before)`
+  over `pg_current_wal_insert_lsn()` taken immediately before and after each measured
+  run, ÷ 60 (exact source + run scope, per lessons 19/20), with
+  `pg_stat_bgwriter.checkpoints_req` per run reported alongside. These are run-level
+  figures like the recorded P0 controls (**23.56 / 22.11 MB**); §5's ≈ 4.5 MB is the
+  isolated single-simulation bracket and is a different measure.
+- **Stored bytes:** `sum(pg_column_size(result_payload))` over the 60 `COMPLETED` rows,
+  and `sum(pg_column_size(p.*))` for the paths rows joined
+  `simulations → simulation_paths` (the join excludes orphans: `Reset-Simulations`
+  truncates only `simulations`, so P0 blocks orphan any Q9a paths rows).
+- **Status body bytes:** one authenticated `GET /{id}/status` against the latest
+  completed row after each block, response length in bytes (equivalent to the recorded
+  `curl -w %{size_download}`).
+- **CPU:** api = host-process CPU seconds (`.CPU` of the `probity-api` java process(es))
+  before/after each run; worker = sum of cgroup `usage_usec` over the `q9a-w*`
+  containers for the same window.
+
+### Results - medians of the 3 measured runs (min-max where spread matters)
+
+| measure | P0 @ 1 rep | Q9a @ 1 rep | P0 @ 3 rep | Q9a @ 3 rep |
+|---|---|---|---|---|
+| throughput (sims/s) | 1.767 (1.658-1.779) | **2.670 (2.592-2.684)** | 3.161 (3.065-4.418) | **5.377 (4.867-5.594)** |
+| accept p95 / p99 (ms) | 20.1 / 31.5 | 21.0 / 29.5 | 79.9 / 1,077.3 | 22.1 / 36.0 |
+| e2e p95 / p99 (ms) | 4,599.5 / 4,876.5 | 2,959.9 / 3,319.1 | 3,251.6 / 3,994.2 | 1,581.7 / 2,001.9 |
+| server p95 / p99 (ms) | 3,515.7 / 3,887.0 | 2,231.0 / 2,536.8 | 2,350.4 / 3,118.4 | 835.1 / 1,204.8 |
+| WAL/sim (MB, LSN bracket) | 23.819 (22.050-24.420) | **1.539 (1.529-1.579)** | 20.918 (9.742-23.796) | **1.528 (1.528-1.529)** |
+| checkpoints_req (A1/A2/A3) | 3/2/3 | 0/1/0 | 3/1/3 | 0/0/1 |
+| api CPU (s per run) | 9.27 | 9.16 | 15.37 | 8.03 |
+| worker CPU (s per run) | 7.55 | 18.49 | 11.01 | 18.67 |
+| kafka lag after block | 0 | 0 | 0 | 0 |
+| status body (B) | 3,901,906 | 3,901,535 | 3,902,045 | 3,901,573 |
+| stored `result_payload`/sim (B) | 1,471,772 | **11,646** | 1,471,712 | **11,651** |
+| stored `simulation_paths`/sim (B) | 0 (no rows) | **1,460,208** | 0 (no rows) | **1,460,117** |
+
+Per run (A1-A3; wall = run wall seconds; the warm-up is discarded):
+
+| block | run | thr | e2e p95 | accept p95 | WAL/sim MB | api CPU s | worker CPU s | wall |
+|---|---|---|---|---|---|---|---|---|
+| p0-1rep | A1 | 1.779 | 3,991.2 | 20.1 | 24.420 | 8.59 | 7.55 | 34.6 |
+| p0-1rep | A2 | 1.767 | 4,599.5 | 19.0 | 22.050 | 9.31 | 7.56 | 35.0 |
+| p0-1rep | A3 | 1.658 | 4,799.8 | 47.0 | 23.819 | 9.27 | 7.51 | 37.3 |
+| q9a-1rep | A1 | 2.592 | 3,102.4 | 22.1 | 1.539 | 12.60 | 19.01 | 23.8 |
+| q9a-1rep | A2 | 2.670 | 2,959.9 | 21.0 | 1.529 | 9.16 | 18.22 | 23.2 |
+| q9a-1rep | A3 | 2.684 | 2,921.4 | 20.0 | 1.579 | 8.62 | 18.49 | 23.1 |
+| p0-3rep | A1 | 3.065 | 3,467.9 | 79.9 | 23.796 | 15.37 | 11.01 | 20.5 |
+| p0-3rep | A2 | 4.418 | 1,947.2 | 53.2 | 9.742 | 16.86 | 10.96 | 14.5 |
+| p0-3rep | A3 | 3.161 | 3,251.6 | 474.7 | 20.918 | 13.30 | 11.17 | 20.4 |
+| q9a-3rep | A1 | 5.594 | 1,559.2 | 22.0 | 1.528 | 7.40 | 18.20 | 11.4 |
+| q9a-3rep | A2 | 4.867 | 1,809.0 | 26.3 | 1.528 | 9.41 | 18.67 | 13.0 |
+| q9a-3rep | A3 | 5.377 | 1,581.6 | 22.1 | 1.529 | 8.03 | 18.78 | 11.8 |
+
+### Reading
+
+- **Throughput: +51 % at 1 replica (1.767 → 2.670), +70 % at 3 (3.161 → 5.377)**; the
+  P0 and Q9a ranges do not overlap in either block, so both gaps are outside the run
+  spread. The recorded **≈ 10x (P1) hypothesis is refuted**: Q9a still writes every path
+  byte, only to a second row, while P1 wrote none. Per-replica scaling: P0 1.79x
+  (1 → 3 replicas), Q9a 2.01x.
+- **WAL/sim: −93.5 % at 1 replica (23.819 → 1.539 MB), −92.7 % at 3 (20.918 → 1.528
+  MB)** — ≈ 15x, with requested checkpoints nearly disappearing (P0 3/2/3 and 3/1/3 →
+  Q9a 0/1/0 and 0/0/1). **Why identical logical bytes cost that much less WAL is not
+  investigated** — the number is the measurement, not a mechanism.
+- **Stored bytes: the split works and nothing is lost** — payload + paths total
+  1,471,772 → 11,646 + 1,460,208 = 1,471,854 B/sim (1 rep) and 1,471,712 → 11,651 +
+  1,460,117 = 1,471,768 B/sim (3 rep): the same ≈ 1.47 MB now as ≈ 11.6 KB inline +
+  one ≈ 1.46 MB paths row, within run-to-run data variance of P0's single inline row.
+- **Contract kept:** status bodies 3,901,906 / 3,902,045 B (P0) vs 3,901,535 / 3,901,573
+  B (Q9a) — inside the ±~140 B random-data spread and of the recorded controls
+  (3,901,505 / 3,901,916 B); the reassembled response is byte-for-byte in the same band
+  at both replica counts.
+- **Latency** moves with throughput (shorter queueing): e2e p95 −36 % (1 rep), −51 %
+  (3 rep); accept p95 flat at 1 rep (20.1 → 21.0 ms). P0@3rep's accept p99 1,077 ms and
+  its A2 outlier run (thr 4.418, WAL 9.742) sit inside that block's own spread and are
+  reported as measured; medians carry the comparison.
+- **CPU:** api per run flat at 1 rep (9.27 → 9.16 s) and lower at 3 (15.37 → 8.03 s,
+  runs also 20.5 → 11.8 s shorter; ≈ 0.75 → ≈ 0.68 cores per wall second).
+  **Worker CPU per 60-sim run rose** (7.55 → 18.49 s at 1 rep; 11.01 → 18.67 s at 3) —
+  the split path does more worker-side work per simulation; **mechanism not
+  investigated**. Kafka lag 0 after every block.
+
+### Notes and limits
+
+- **Session/environment:** one laptop, same `## Caveats` apply; conditions ran in fixed
+  order P0 → Q9a inside each replica pair (not counterbalanced — same caveat as
+  *Write cost vs response cost*), but the WAL and stored-byte gaps are far outside any
+  drift the order could explain. PG settings verified unchanged after the session
+  (`max_wal_size=1024`, `checkpoint_timeout=300`, `wal_compression=off`, `fsync`,
+  `full_page_writes`, `synchronous_commit`, `wal_level=replica`, `log_statement=none`;
+  no tuning in `auto.conf`), observability containers exited throughout and at the end,
+  apps stopped by real PID with ports 8080–8083 free afterwards. The kafka consumer
+  group was **never deleted** (offsets preserved — ~2,600 historical
+  `simulation-requested` messages would redeliver).
+- **Worker password (local reset, 2026-10-19):** `compose.yaml:161` maps the worker
+  container to `DB_PASSWORD=${DB_PASSWORD}` and the previous scram hash of
+  `probity_worker` was unrecoverable, so the role's password was reset locally from
+  `.env` (`ALTER ROLE probity_worker WITH PASSWORD …`) and verified over the
+  **scram-sha-256 host path** (lesson 22 — the container socket/loopback path is
+  `trust` and proves nothing). All worker blocks ran as `probity_worker`, never
+  `postgres`.
+- **Loadtest residue:** after the gate, 421 orphan `simulation_paths` rows (7 × 60
+  loadtest sims + 1 runtime-check sim; no FK to `simulations` by design — a `TRUNCATE`
+  orphans them, see V19) were deleted; the last run's 60 sims + 60 paths rows were left,
+  as the recorded protocol leaves the last run's rows.
+- **Pre-gate runtime check (compose stack):** V19 applied on boot; async run → 202
+  (accept 167 ms) → `COMPLETED` (e2e 3,620 ms), worker as `probity_worker`, 1 group
+  member / 6 partitions / lag 0; stored 11,656 B payload + 1,460,056 B paths row with
+  `allPaths: []` in `result_payload` (Option A), while `GET /{id}/status` returned
+  3,901,292 B and `GET /{id}` 3,901,056 B (both 200), `dayIndex` total 91,637 =
+  1000×91 + 7×91. Old inline rows are served by the dual-source read (covered by the new
+  split-read integration test); no pre-existing test was modified.
+- **Harness:** a temp-only script (not committed) mirrors the recorded driver and adds
+  the per-run LSN/checkpoint/CPU brackets; fixed while bringing it up: reversed
+  `pg_wal_lsn_diff(to, from)` arguments (negative deltas — sign fixed, affected blocks
+  re-run clean), PS 5.1 `[math]::Round` bare-argument parsing, `(Invoke-Psql …)[0]`
+  char indexing, a `to_regclass` guard for blocks run before V19 exists in the shared
+  DB, `2>&1` on native stderr under `$ErrorActionPreference='Stop'` (`cmd /c` wrapping),
+  health-gating `--network host` containers **in-container** (a Windows host cannot
+  reach the WSL2 network namespace), and the member pre-check moved behind a 120 s
+  join-poll (consumers assign ~25 s after start).
+
 ## Caveats
 
 - **k6 and the JVM share one laptop**, along with Postgres, Kafka and Redis. The load

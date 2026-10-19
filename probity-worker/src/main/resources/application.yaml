@@ -71,7 +71,7 @@ spring:
 
   # The api is the single Flyway owner (Phase 4 §2.4). The worker validates its entities
   # against the schema the api migrations maintain; the dedicated worker role is granted
-  # SELECT (and SELECT/UPDATE on simulations) by V<next>__worker_role_grants.sql.
+  # SELECT + UPDATE on simulations (V18) and SELECT + INSERT on simulation_paths (V19).
   flyway:
     enabled: false
     locations: classpath:db/migration

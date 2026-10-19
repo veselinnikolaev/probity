@@ -106,7 +106,7 @@ Near-linear scalability with CPU cores and zero GC pauses due to primitive `doub
 | Portfolio Valuation | 92% | 3ms | 80ms |
 | Risk Calculations | 78% | 1ms | 45ms |
 
-**Test suite**: 365 run, 1 skipped (`./mvnw -o clean verify`; 350 api + 15 worker), including end-to-end coverage of the async Kafka simulation pipeline. The skip is the `@Disabled` concurrency placeholder (§2.7).
+**Test suite**: 378 run, 1 skipped (`./mvnw -o clean verify`; 353 api + 25 worker), including end-to-end coverage of the async Kafka simulation pipeline. The skip is the `@Disabled` concurrency placeholder (§2.7).
 
 ## Mathematical Foundations
 
