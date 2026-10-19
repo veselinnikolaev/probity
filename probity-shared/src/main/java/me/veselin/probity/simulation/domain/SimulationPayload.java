@@ -52,4 +52,15 @@ public record SimulationPayload(
             int count,
             double percentage
     ) {}
+
+    /**
+     * The same payload with the path array emptied — what the Q9a storage split
+     * (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10) stores inline in
+     * {@code simulations.result_payload} once the paths live in {@code simulation_paths}.
+     * The dual-source read in the worker's SimulationMapper puts the two halves back
+     * together, so a reader of either half alone sees exactly the pre-split shape.
+     */
+    public SimulationPayload withoutAllPaths() {
+        return new SimulationPayload(statistics, outcomes, percentileSeries, List.of(), distribution);
+    }
 }
