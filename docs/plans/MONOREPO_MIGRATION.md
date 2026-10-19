@@ -353,3 +353,5 @@ CI surfaces that now see `frontend/` (nothing changed here — M2 work):
 **M1 (import) has been executed** on branch `m1-import-frontend` (§10a) — awaiting review, not
 merged. M2/M3/M4 still wait for explicit owner approval; the drift list (§2) and the frontend
 install baseline (now fixed in frontend PR #16) remain recorded findings.
+
+<!-- m2 path-filter test: docs-only change (throwaway PR, do not merge) -->
