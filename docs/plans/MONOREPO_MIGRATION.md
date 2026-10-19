@@ -1,14 +1,19 @@
 # Monorepo migration plan — `probity-backend` + `probity-frontend` → `probity`
 
-**Status:** proposal only. **Recommendation: execute nothing.** This document is a docs-only
-audit and a staged plan; no migration step has been run, no repository has been renamed,
-imported or archived. Each stage M1–M4 below requires an explicit owner go-ahead.
+**Status:** M1 (import) **executed** on branch `m1-import-frontend` — awaiting PR review, not
+merged. M2–M4 not started. Originally a proposal only; §10's stage numbering assumed M1=docs and
+M2=import — the owner redefined **M1 as the history-preserving import**, which is what was run
+(see §10a). No repository has been renamed or archived.
 
 Scope of this document: (1) a read-only audit of the frontend repository, (2) the
 frontend↔backend drift list, (3) the Q9 frontend check, (4) the target layout and import
 method comparison, (5) the per-file change list, (6) risks/rollback/checklist and the staged
 PR sequence. Audited frontend commit: **`48ccccdf250eec1029770341b86a2406d7cc5094`**
 (`veselinnikolaev/probity-frontend`, `master`, last commit 2026-06-19).
+
+> The §1/§3 audit facts predate frontend PR #16 (2026-10-19), which fixed the broken install
+> (`vite` 8.0.5→6.3.5, `react`/`react-dom` promoted to real deps, vitest smoke test, `.nvmrc`
+> 20.20.1, CI workflow). See `frontend/FRONTEND_BUILD_NOTES.md`.
 
 ---
 
@@ -240,9 +245,72 @@ Order matters (the name `probity` must be free on the account):
 - [ ] Rollback owner named (who executes `git rm -r frontend` if M2 verification fails).
 - [ ] Old frontend repo archiving scheduled (before M3, after M2 verification).
 
+## 10a. M1 executed — import `frontend/` with full history (2026-10-19)
+
+Owner redefined **M1 = the import** (this PR); §10's "M1 = docs / M2 = import" numbering is
+superseded for the import step. Branch `m1-import-frontend`, base `master` @ `21be06b`
+(PR #23, Q9a). **Not merged, no repo renamed or archived, M2–M4 not started.**
+
+- **Command:** `git remote add frontend-origin https://github.com/veselinnikolaev/probity-frontend.git`
+  → `git fetch frontend-origin` → `git subtree add --prefix=frontend frontend-origin master`
+  (**no `--squash`**, history kept) → `git remote remove frontend-origin`.
+- **Imported commit:** frontend `master` = **`3b4506c123d6c9e63c205f74b0a46bea4526c1bf`**
+  (PR #16 merge), tree `46dae9920ffb7b731ef127f901d599524914988f`, 86 commits.
+- **Import commit:** `329f3a6` — a **merge** with parents `21be06b` (backend) and `3b4506c`
+  (frontend), so all 86 frontend commits are reachable (`git rev-list --count 3b4506c` = 86).
+- **Backup / rollback source:** bundle at
+  `%TEMP%\opencode\m1-backup\probity-frontend.bundle` (743,923 bytes) built from a
+  `git clone --mirror`; `git bundle verify` → "The bundle records a complete history". This is
+  a temp artifact local to the operator machine, not committed (see "surprises").
+- **Only non-import change:** `.dockerignore` += `frontend/` (context hygiene; both images still
+  build — see §10b).
+- **Verification:** reactor unchanged — `mvnw.cmd -o clean verify -B` BUILD SUCCESS,
+  **45 classes / 378 tests / 1 skipped** on *both* master and the import branch (delta = 0);
+  `frontend/`: `npm ci`=0, `npm run build`=0 (`vite v6.3.5`, JS 413.79 kB / gzip 122.65 kB),
+  `npm test`=0 (1 passed). Both Docker images built (exit 0).
+- **Rollback:** branch unmerged ⇒ `git reset --hard 21be06b` (or delete the branch). If merged,
+  `git revert -m 1 <merge-commit>` (a merge commit) — the frontend repo is untouched and still
+  authoritative; the bundle re-imports at will.
+- **Surprises:**
+  1. `git log -- follow/-- <path>` on `frontend/**` shows only the merge until `-m` is added:
+     subtree's merge records no rename, so `--follow` cannot cross it. History is intact —
+     use `git log --oneline -m --follow -- frontend/<file>` or walk the second parent
+     (`git log 3b4506c`). The plan's §10 "tree hash equals audited HEAD tree" check needs this
+     caveat.
+  2. The plan's baseline figure "365/378 run, 1 skipped" is stale after Q9a; measured baseline
+     at the M1 base commit is **378 run, 1 skipped** (the per-module surefire `Results:` line
+     reads 353 — that is the API module only; the repo-wide figure comes from per-class lines or
+     the surefire XML).
+  3. The frontend clone is *not* renamed/archived, so `frontend/` and the standalone repo
+     coexist; a later M2/M3 must decide which is authoritative.
+  4. `frontend/.github/workflows/ci.yml` is imported but **inert** (GitHub reads only the repo
+     root `.github/workflows/`), so it neither runs nor needs deleting.
+
+## 10b. M1 verification detail (facts, this branch)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Reactor (import branch) | `mvnw.cmd -o clean verify -B` | BUILD SUCCESS, 45 classes / 378 run / 1 skipped; 0 frontend/npm/node_modules hits in output |
+| Reactor (master `21be06b`) | same | BUILD SUCCESS, 45 classes / 378 run / 1 skipped |
+| Frontend install | `frontend/`: `npm ci` | exit 0 (no `--legacy-peer-deps`) |
+| Frontend build | `npm run build` | exit 0, JS 413.79 kB / gzip 122.65 kB |
+| Frontend test | `npm test` | exit 0, 1 file / 1 test passed |
+| API image | `docker build -f Dockerfile -t … .` | exit 0; `/app` = `app.jar` only (no frontend files) |
+| Worker image | `docker build -f Dockerfile.worker -t … .` | exit 0 |
+
+CI surfaces that now see `frontend/` (nothing changed here — M2 work):
+- `.github/workflows/ci_cd.yaml` (root): no `paths`/`paths-ignore`, so a PR touching
+  `frontend/` triggers `mvn verify` on the backend (harmless — the reactor ignores `frontend/`
+  — but slow); and the `build-and-push` job runs only on push to `master`.
+- `frontend/.github/workflows/ci.yml`: imported but inert (root-only discovery).
+- `.gitguardian.yaml`: `ignored_paths: ["**/src/test/**"]` — **not path-scoped to the repo
+  root**, so it also covers `frontend/src/test/**` if such paths ever appear; GitGuardian still
+  scans all other `frontend/**` files (including `FRONTEND_BUILD_NOTES.md`).
+
 ## 10. Staged PR sequence
 
-> **M1 = this PR** (docs only). M2–M4 are proposals — execute nothing until prompted.
+> **M1 = docs only** was the original plan; the owner then ran **M1 = import** (§10a).
+> M2–M4 are proposals — execute nothing until prompted.
 
 ### M1 — docs (this PR)
 - **Changes:** `docs/plans/MONOREPO_MIGRATION.md` (new), `docs/TECHNICAL_REPORT.md` entry,
@@ -252,14 +320,16 @@ Order matters (the name `probity` must be free on the account):
 - **Verify:** `git diff --stat` shows docs only; no `src`, pom, test, migration, compose or
   workflow file touched; `mvnw -o clean verify` untouched (docs-only, not re-run).
 
-### M2 — import `frontend/`
-- **Changes:** `git subtree add --prefix=frontend --squash <probity-frontend-url> master`
-  (own commit); `.dockerignore` += `frontend`; CI `paths-ignore: ['frontend/**']` on the Maven
-  jobs; `frontend/README.md` header note with the original repo URL; README quickstart section.
-- **Verify:** `git log --oneline -3` shows the import commit; `frontend/package.json` present;
-  `cmd /c "mvnw.cmd -o clean verify -B"` exit 0 (reactor untouched); `docker build .` succeeds
-  and image size within ±5 % of pre-M2; CI green on the PR; frontend tree hash equals the
-  audited frontend HEAD tree (`git -C <frontend-clone> rev-parse HEAD^{tree}` comparison).
+### M2 — import `frontend/`  (**note:** largely done in §10a, but **without** `--squash` and without the CI/README parts)
+- **Done in §10a (M1-as-import):** `git subtree add --prefix=frontend frontend-origin master`
+  (**no `--squash`**; the plan recommended `--squash` — owner chose full history);
+  `.dockerignore` += `frontend/`.
+- **Still open (deferred to M2):** CI `paths-ignore: ['frontend/**']` on the Maven jobs;
+  `frontend/README.md` header note with the original repo URL; root README quickstart section.
+- **Verify (as run, §10a/§10b):** `git log --oneline -3` shows the import merge `329f3a6`;
+  `frontend/package.json` present; `mvnw.cmd -o clean verify -B` exit 0 (reactor untouched,
+  378/1); both `docker build`s succeed; frontend tree hash = `46dae992…` (audited
+  `3b4506c^{tree}`); CI green on the PR.
 
 ### M3 — rename + archive
 - **Changes:** archive `probity-frontend` (GitHub UI, no local change); rename
@@ -280,6 +350,6 @@ Order matters (the name `probity` must be free on the account):
 
 ## 11. Recommendation
 
-**Execute nothing now.** This document (M1) is the deliverable. M2/M3/M4 wait for explicit
-owner approval; the drift list (§2) and the broken frontend install (§1.3) are recorded as
-findings for the frontend backlog, not acted on here.
+**M1 (import) has been executed** on branch `m1-import-frontend` (§10a) — awaiting review, not
+merged. M2/M3/M4 still wait for explicit owner approval; the drift list (§2) and the frontend
+install baseline (now fixed in frontend PR #16) remain recorded findings.
