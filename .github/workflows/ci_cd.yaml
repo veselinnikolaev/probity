@@ -10,10 +10,51 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  # Decides which half of the monorepo a PR touched. This job always runs on
+  # pull requests (the workflow has no path filter), so the aggregated
+  # `CI Status` job below always posts a check — a path-filtered workflow that
+  # is skipped posts no check at all, which would hang branch protection.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'probity-api/**'
+              - 'probity-worker/**'
+              - 'probity-shared/**'
+              - 'pom.xml'
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - '.dockerignore'
+              - 'k8s/**'
+              - 'loadtest/**'
+              - '.github/workflows/ci_cd.yaml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend-ci.yml'
+
   test:
     name: Build & Test
     runs-on: ubuntu-latest
+    # Run on pushes (as before) and on PRs that touch backend inputs; skip on
+    # docs-only and frontend-only PRs.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true'
+    needs: [changes]
 
     steps:
       - name: Checkout code
@@ -61,3 +102,20 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/probity:latest
+
+  # The single check branch protection should require. Always reports on PRs:
+  # passes when the backend job was skipped (docs/frontend-only PR) or green.
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [changes, test]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Evaluate required jobs
+        run: |
+          echo "test result: ${{ needs.test.result }}"
+          if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.test.result }}" = "cancelled" ]; then
+            echo "Backend build/test failed."
+            exit 1
+          fi
+          echo "Required checks OK (skipped or successful)."
