@@ -5,6 +5,7 @@ import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationStatus;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,6 +24,8 @@ public class SimulationRepository {
 
     private final SimulationJpaRepository jpaRepository;
 
+    private final SimulationPathsJpaRepository pathsJpaRepository;
+
     /**
      * Saves a new simulation.
      */
@@ -35,29 +38,44 @@ public class SimulationRepository {
     /**
      * Completes a claimed simulation, fenced on the token its claim returned.
      *
-     * <p>One conditional bulk {@code UPDATE} writes the status, the result payload, the
-     * portfolio value and {@code updated_at}, and only while the worker still holds the
-     * claim. That single statement is what makes it impossible to mark a row
-     * {@code COMPLETED} without persisting the result that justifies it, and impossible for
-     * a superseded worker to overwrite the row a peer has reclaimed.
+     * <p>Since the Q9a storage split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10) this
+     * is one <em>transaction</em> holding two writes: the conditional bulk {@code UPDATE}
+     * writes the status, the trimmed result payload (summary, statistics, outcomes,
+     * percentileSeries, distribution — but no paths), the portfolio value and
+     * {@code updated_at}, and only while the worker still holds the claim; the paths array
+     * goes to {@code simulation_paths} in that same transaction. The fence still decides
+     * everything — 0 rows means the claim was lost, and the paths row is then not written
+     * either, so a superseded worker can neither overwrite a peer's row nor orphan a paths
+     * row beside it. If either write fails the whole transaction rolls back and the row
+     * stays {@code PROCESSING}: there is no state in which a row reads
+     * {@code COMPLETED} without the result that justifies it or without its paths.
      *
      * @param id the simulation ID
      * @param currentValue the current portfolio value at time of completion
-     * @param payload the full simulation result payload
+     * @param payload the full simulation result payload; its {@code allPaths} are written
+     *                off-row via {@link SimulationPayload#withoutAllPaths()}, everything
+     *                else stays inline in {@code result_payload}
      * @param fenceToken the token {@link #claimForProcessing} returned for this worker
      * @return the persisted row as read back from the database, or empty if the claim was
      *         lost and the update matched no row
      */
+    @Transactional
     public Optional<Simulation> complete(UUID id, BigDecimal currentValue, SimulationPayload payload,
                                         Instant fenceToken) {
+        List<SimulationPayload.SimulatedPath> paths = payload.allPaths();
         int updated = jpaRepository.completeIfClaimHeld(
                 id,
                 SimulationStatus.PROCESSING.name(),
                 SimulationStatus.COMPLETED.name(),
-                payload,
+                payload.withoutAllPaths(),
                 currentValue,
                 fenceToken,
                 now());
+        // The UPDATE above is the fence: only a row this worker still owns may gain a
+        // paths row, and it must be this transaction so the two halves cannot separate.
+        if (updated > 0 && !paths.isEmpty()) {
+            pathsJpaRepository.save(new SimulationPathsJpaEntity(id, paths));
+        }
         // Re-read rather than return the values just handed in: a caller that maps the same
         // in-memory instance it saved cannot tell "written" from "silently discarded", and
         // that ambiguity is exactly what hid the lost-result defect.
@@ -129,6 +147,22 @@ public class SimulationRepository {
     public Optional<Simulation> findById(UUID id) {
         return jpaRepository.findById(id)
                 .map(SimulationMapper::toDomain);
+    }
+
+    /**
+     * The off-row paths of a Q9a split-written simulation, or empty when the row keeps its
+     * paths inline (every row written before this change, and the sync {@code POST /run}
+     * write, which Q9a deliberately leaves whole) or has none at all.
+     *
+     * <p>This is the storage half of the dual-source read; the worker's SimulationMapper
+     * picks between this and the inline array. The response-side sampling that may further
+     * bound the list happens there, never here — this returns what was stored.
+     *
+     * @see SimulationPayload#withoutAllPaths()
+     */
+    public Optional<List<SimulationPayload.SimulatedPath>> findPaths(UUID simulationId) {
+        return pathsJpaRepository.findById(simulationId)
+                .map(SimulationPathsJpaEntity::getPaths);
     }
 
     /**

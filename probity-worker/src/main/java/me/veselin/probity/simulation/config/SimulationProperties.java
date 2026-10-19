@@ -42,4 +42,26 @@ public class SimulationProperties {
      * partitions on the same consumer keep flowing.
      */
     private Duration unclaimableBackoff = Duration.ofSeconds(1);
+
+    /**
+     * Maximum number of {@code allPaths} entries a response may carry (Q9a storage split,
+     * docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10).
+     *
+     * <p><strong>Default {@code 0} = disabled: every stored path is returned.</strong>
+     * That default is what keeps status/list/201 bodies byte-identical to the recorded
+     * pre-Q9a contract — §10's verification gate measures exactly that — and it keeps the
+     * choice of the real sample size N where §9 parked it, in PR-Q9b.
+     *
+     * <p>Values {@code > 0} return at most that many paths: a deterministic evenly-spaced
+     * sample that always includes the paths holding the global minimum and maximum values,
+     * so a y-range computed from the returned paths equals the full-data range (FanChart's
+     * scale derives from path values). The sample bounds responses only — statistics,
+     * percentileSeries and distribution are always computed from every path at run time and
+     * are never re-derived from a sample.
+     *
+     * <p>Set per process ({@code probity.simulation.response-paths-sample-size}, env
+     * {@code SIMULATION_RESPONSE_PATHS_SAMPLE_SIZE}) wherever responses are served: the
+     * worker for the run-async DTO, the API for HTTP reads.
+     */
+    private int responsePathsSampleSize = 0;
 }

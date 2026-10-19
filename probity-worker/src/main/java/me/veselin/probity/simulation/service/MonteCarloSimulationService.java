@@ -179,8 +179,10 @@ public class MonteCarloSimulationService {
      * second claim matched nothing because the consumer had just taken the row — so the run
      * was swallowed by a dummy DTO with a null payload while the consumer logged success.
      *
-     * <p>No {@code @Transactional}: the fenced complete is one atomic statement and the
-     * failure path belongs to the consumer, which releases the row before rethrowing.
+     * <p>No {@code @Transactional} here: the fenced complete commits atomically on its own —
+     * since the Q9a storage split one transaction of the fenced UPDATE plus its
+     * {@code simulation_paths} row — and the failure path belongs to the consumer, which
+     * releases the row before rethrowing.
      *
      * <p>Uses {@code marketDataSnapshot} (captured at request time) for stale-price safety.
      *

@@ -1,7 +1,7 @@
 # Phase 4 — Extracting the async simulation worker into a separately deployable unit
 
 **Status:** design note for review. Prose and signatures only — no implementation code, no code changes.
-**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9** remains open (the §2.8.1 re-check in `docs/PHASE_4_MEASUREMENTS.md` confirms the payload-write cost and keeps the Q4 CPU-signal caution).
+**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9 is decided — Option A, owner-signed-off 2026-10-19 — and PR-Q9a (the storage split, API contract unchanged) is implemented** (gate in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*); **PR-Q9b/PR-Q9c are not started**. The §2.8.1 re-check still confirms the payload-write cost and keeps the Q4 CPU-signal caution.
 **Location:** `docs/plans/` did not exist; this note creates it. Existing phase notes live flat in `docs/` (`PHASE_2_IMPLEMENTATION_NOTES.md`, `TECHNICAL_REPORT.md`); move this file if you prefer a flat layout.
 
 ---
@@ -16,7 +16,7 @@ Recorded, no longer open:
 - **Q4 — HPA:** **CPU-based HPA now**; KEDA is a later option.
 - **Q6 — invariant:** confirmed — **lease 12m > max.poll.interval.ms 10m ≥ slowest legitimate run**.
 
-Still open (see §2.10): **Q5, Q7, Q8, Q9**.
+Still open (see §2.10): **Q5, Q7, Q8**. (Q9 was decided 2026-10-19 — Option A — and PR-Q9a is implemented; not started: Q9b, Q9c.)
 
 ---
 
@@ -151,10 +151,11 @@ HPA (Q4)**: if payload persistence is the real constraint, CPU utilisation may
 saturate late or not at all, and the HPA signal would need to change (or the write
 cost to drop).
 
-**Open question — Q9 (payload storage):** store a summary and percentiles in
+**Q9 (payload storage) — DECIDED 2026-10-19 (Option A); PR-Q9a implemented:** store a summary and percentiles in
 `result_payload` instead of all paths, with the full trace offloaded (object store or a
-separate table). That directly attacks the write cost this baseline is bound by. Recorded
-as open for the design owner; does not alter decisions Q1–Q8.
+separate table). That directly attacks the write cost this baseline is bound by. Does not
+alter decisions Q1–Q8; the §9 sign-off, the §10 PR sequence and the measured gate are in
+`docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md`.
 **Write-path data for Q9 (no decision here):** `docs/PHASE_4_MEASUREMENTS.md` →
 *Write-path investigation - writes per simulation and WAL under local Postgres config
 (2026-10-15)* — exactly one statement writes the payload per simulation, and the local WAL
@@ -187,6 +188,19 @@ until that sign-off.**
 table come from `percentileSeries`/`distribution`), drawn unsliced (default request 10 000,
 backend cap 10 000), so **sample paths + bands suffice** — details in
 `docs/plans/MONOREPO_MIGRATION.md` §3.
+**Q9 sign-off + PR-Q9a (2026-10-19):** the design owner signed off **Option A**
+(`docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md` §9) and PR-Q9a is implemented on branch
+`pr-q9a-storage-split`: additive `V19__simulation_paths.sql`, the split completion write
+(`result_payload` ≈ 11.6 KB + one `simulation_paths` row of ≈ 1.46 MB, same transaction),
+and the dual-source read that reassembles `allPaths`, so **every HTTP contract is
+unchanged**; the sync `POST /run` path and existing inline rows keep working unchanged,
+sampling is off by default (`responsePathsSampleSize = 0`), and **PR-Q9b (API split) /
+PR-Q9c (backfill/async) are not started**. The §10 gate (P0 `df2d537` vs Q9a, 1 and 3
+replicas, PR-D5 protocol, one session) measured throughput **1.767 → 2.670 sims/s** and
+**3.161 → 5.377**, WAL/sim **23.82 → 1.54 MB** and **20.92 → 1.53 MB**, stored bytes/sim
+**1,471,772 → 11,646 + 1,460,208 B** (total unchanged) and status body **3,901,906 →
+3,901,535 B** (contract kept) — full numbers in `docs/PHASE_4_MEASUREMENTS.md` →
+*Q9a verification*.
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
@@ -232,7 +246,7 @@ Recorded decisions (resolved — see **Decisions**): Q1, Q2, Q3, Q4, Q6. Still o
 6. **Q6 — lease vs poll interval:** RESOLVED — invariant confirmed: `lease 12m > max.poll.interval.ms 10m ≥ slowest run`.
 7. **Q7 — worker DB role:** OPEN (single mechanism proposed). The role (SELECT+UPDATE on `simulations`, SELECT on the four tables + `flyway_schema_history`) is **created out of band by ops/DBA, with its password held in a secret — never in the migration**. The api-owned `V<next>__worker_role_grants.sql` **only grants privileges, skipping the grants when the role is absent**, and is idempotent. Confirm this mechanism and that ops will create the role before the grant migration.
 8. **Q8 — Redis:** OPEN. Confirmed not needed by the worker execution path; flag if a future `@Cacheable` is added to the portfolio read.
-9. **Q9 — payload storage:** OPEN. The PR-D0 baseline indicates the completion write (an ≈1.47 MB stored / ≈7.89 MB bytes-per-row `result_payload` per row) is the single-replica constraint, not worker CPU (§2.8.1); decide whether to store a summary and percentiles instead of all paths before finalising the HPA signal (Q4). The status endpoint returns the whole ≈ 3.90 MB result on completion; a separate result endpoint, or a summary in the status response, is an API change for the design owner.
+9. **Q9 — payload storage:** **DECIDED — Option A (owner sign-off 2026-10-19)**; **PR-Q9a (storage split, API contract unchanged) is implemented** — gate in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*; PR-Q9b/Q9c not started. The PR-D0 baseline indicates the completion write (an ≈1.47 MB stored / ≈7.89 MB bytes-per-row `result_payload` per row) is the single-replica constraint, not worker CPU (§2.8.1); decide whether to store a summary and percentiles instead of all paths before finalising the HPA signal (Q4). The status endpoint returns the whole ≈ 3.90 MB result on completion; a separate result endpoint, or a summary in the status response, is an API change for the design owner.
 
 ---
 
