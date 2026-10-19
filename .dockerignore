@@ -14,3 +14,4 @@ k6-*.txt
 .idea
 .vscode
 node_modules
+frontend/
