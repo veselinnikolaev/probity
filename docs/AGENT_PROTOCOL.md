@@ -84,7 +84,11 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
 - Maven green does not prove the frontend: when `frontend/**` changes, run the frontend build and
   test too (and vice versa).
 
-## 7. Definition of done
+## 7. CI / PR discipline
+
+- Throwaway verification PRs are always drafts; never merge them. CI Status in ci_cd.yaml is the aggregated check covering changes, 	est, and rontend-test (skipped jobs are acceptable, ailure/cancelled fails it). After a subtree import, workflows under rontend/.github/ are inert — consolidate into the root workflow gated by the paths filter.
+
+## 8. Definition of done
 
 - A step is done only when the intended change is in `git diff --stat`, the check passed
   (or its failure is quoted), no out-of-scope file changed, and evidence is named.
@@ -92,3 +96,4 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
   updated (or "README: no change"); a technical-report entry; the PR description file;
   `docs/AGENT_LESSONS.md` extended; working tree clean.
 - Then stop and report done / skipped / partial â€” do not start the next phase unprompted.
+

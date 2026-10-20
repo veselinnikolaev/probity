@@ -193,3 +193,7 @@ Append-only. One entry = the failure, then the rule. Read together with
     anyway, revert **additively** (restore the pre-test file content, one new commit); never
     force-push or rewrite pushed history, and re-run the proof cleanly so the evidence comes
     from an untainted tree.
+
+25. **A separate filtered workflow can be invisible to an aggregator.** M2 first moved the frontend workflow to a root-level rontend-ci.yml with workflow-level paths:; if the aggregator lives elsewhere or nothing always-runs, a skipped filtered workflow posts no check run and can hang expectations. The fix was to consolidate both jobs into the single ci_cd.yaml with dorny/paths-filter outputs and make CI Status depend on 
+eeds: [changes, test, frontend-test] with if: always() and an explicit failure on ailure/cancelled. Rule: keep all required-gate jobs in one workflow that always runs for the PR, or ensure an always-reported aggregator evaluates them; do not assume a separate path-filtered workflow will post a check.
+
