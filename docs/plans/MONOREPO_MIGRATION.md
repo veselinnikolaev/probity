@@ -425,3 +425,5 @@ has been executed** on branch `m2-ci-path-filters` (§10c) — awaiting review, 
 still wait for explicit owner approval; the drift list (§2) and the frontend install baseline
 (now fixed in frontend PR #16) remain recorded findings. Frontend PR #17 (types alignment) was
 closed unmerged; that work moves to the monorepo later.
+
+<!-- tw4c docs only -->
