@@ -170,3 +170,26 @@ Append-only. One entry = the failure, then the rule. Read together with
     for the (type, address, user) the test used; a test that lands on `trust` must be
     reported as "auth not exercised", and the check repeated over a line that demands the
     real mechanism (`scram-sha-256`). A check that cannot fail is not a check.
+
+23. **Assumed the workflow imported under `frontend/.github/` would run.** The M1 subtree
+    import brought `frontend/.github/workflows/ci.yml` into the repo intact, and M1's
+    verification only recorded it as "inert"; nothing ran it, and its job name (`Build & Test`)
+    collided with the root backend job's name. GitHub discovers workflows at the repository
+    root only — a `.github/` directory inside a subdirectory is never read, for any repo,
+    however the files got there.
+    Rule: after importing or vendoring a subtree that contains `.github/`, move its workflows
+    to the root `.github/workflows/` (fix `working-directory:`, `node-version-file` and the npm
+    cache path) and give it a distinct job name; delete the subdirectory copy. Verify by
+    opening a PR and reading `gh pr checks` — a workflow that is not at the root produces no
+    check run at all, which looks the same as "still starting".
+
+24. **Treated a throwaway verification PR as safe to leave open near a merge button.** The
+    three M2 path-filter PRs (#25/#26/#27) were created to observe check runs, then the owner
+    merged them into the M2 branch before they could be closed; the throwaway comment lines
+    then sat inside the branch under test.
+    Rule: before opening a PR that must not be merged, make that explicit in the title
+    (`TEST (throwaway)`) **and** keep the test branches and their base branch distinct from
+    anything mergeable — or run the proof on a scratch repo/branch you own. If it is merged
+    anyway, revert **additively** (restore the pre-test file content, one new commit); never
+    force-push or rewrite pushed history, and re-run the proof cleanly so the evidence comes
+    from an untainted tree.

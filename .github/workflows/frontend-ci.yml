@@ -1,0 +1,51 @@
+name: Frontend CI
+
+# Moved here from frontend/.github/workflows/ci.yml (M2): GitHub only reads
+# workflows at the repository root, so the copy under frontend/ never ran.
+# Triggered only for changes that can affect the frontend, keeping the backend
+# Maven run out of frontend-only PRs and vice versa.
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+  push:
+    branches-ignore:
+      - master
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+# Keep a single aggregated, always-reported check so branch protection never
+# hangs on a path-filtered (therefore absent) workflow run.
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: 'frontend/.nvmrc'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test

@@ -1,9 +1,11 @@
 # Monorepo migration plan — `probity-backend` + `probity-frontend` → `probity`
 
-**Status:** M1 (import) **executed** on branch `m1-import-frontend` — awaiting PR review, not
-merged. M2–M4 not started. Originally a proposal only; §10's stage numbering assumed M1=docs and
-M2=import — the owner redefined **M1 as the history-preserving import**, which is what was run
-(see §10a). No repository has been renamed or archived.
+**Status:** M1 (import) **merged** to `master` as `38e6c6c` (PR #24, merge commit). M2 (CI path
+filters) **executed** on branch `m2-ci-path-filters` — awaiting PR review, not merged
+(see §10c). M3–M4 not started. Originally a proposal only; §10's stage numbering assumed M1=docs
+and M2=import — the owner redefined **M1 as the history-preserving import**, which is what was
+run (see §10a), and **M2 as "make CI correct for the combined repo"** (§10c). No repository has
+been renamed or archived.
 
 Scope of this document: (1) a read-only audit of the frontend repository, (2) the
 frontend↔backend drift list, (3) the Q9 frontend check, (4) the target layout and import
@@ -298,7 +300,7 @@ superseded for the import step. Branch `m1-import-frontend`, base `master` @ `21
 | API image | `docker build -f Dockerfile -t … .` | exit 0; `/app` = `app.jar` only (no frontend files) |
 | Worker image | `docker build -f Dockerfile.worker -t … .` | exit 0 |
 
-CI surfaces that now see `frontend/` (nothing changed here — M2 work):
+CI surfaces that now see `frontend/` (resolved in M2 — §10c):
 - `.github/workflows/ci_cd.yaml` (root): no `paths`/`paths-ignore`, so a PR touching
   `frontend/` triggers `mvn verify` on the backend (harmless — the reactor ignores `frontend/`
   — but slow); and the `build-and-push` job runs only on push to `master`.
@@ -306,6 +308,71 @@ CI surfaces that now see `frontend/` (nothing changed here — M2 work):
 - `.gitguardian.yaml`: `ignored_paths: ["**/src/test/**"]` — **not path-scoped to the repo
   root**, so it also covers `frontend/src/test/**` if such paths ever appear; GitGuardian still
   scans all other `frontend/**` files (including `FRONTEND_BUILD_NOTES.md`).
+
+## 10c. M2 executed — CI path filters for the combined repo (2026-10-20)
+
+Branch `m2-ci-path-filters`, base `master` @ `38e6c6c` (the PR #24 merge). **Not merged; no repo
+renamed or archived; M3/M4 not started.** Scope: workflows and docs only — no application code.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `.github/workflows/frontend-ci.yml` | **new** — the frontend workflow, moved to the repo root (GitHub only reads `/.github/workflows/`) |
+| `.github/workflows/ci_cd.yaml` | `changes` job (`dorny/paths-filter@v3`) + gated `test` job + new aggregated `ci-status` job; `pull_request` base-branch restriction dropped |
+| `frontend/.github/workflows/ci.yml` | **deleted** — the inert imported copy (the whole `frontend/.github/` tree held nothing else) |
+
+### Approach, and why
+
+- **Workflow-level `paths:` for the frontend, step-level `paths-filter` for the backend.**
+  A workflow that is filtered out at the workflow level posts **no check run at all**, which is
+  cheap but invisible. So the frontend (a self-contained job) uses workflow-level `paths:`
+  (`frontend/**`, the workflow file); the backend needs a *single stable, always-reported* check,
+  so `ci_cd.yaml` keeps **no** top-level path filter and instead decides inside a `changes` job
+  using `dorny/paths-filter@v3`.
+- **Aggregated required check.** `CI Status` (`if: always()`, `needs: [changes, test]`) reports on
+  every PR and passes when `test` was **skipped** (docs-only / frontend-only) or green, and fails
+  only on `failure`/`cancelled`. This is the name branch protection should require — a
+  path-filtered workflow that is skipped would otherwise leave a required check "expected" forever.
+- **Existing job names kept.** `Build & Test` and `Build & Push Docker Image` are unchanged.
+  `build-and-push` keeps its `push && refs/heads/master` guard — untouched.
+- **`pull_request: branches: [ master ]` → unrestricted.** Found while testing: a PR whose base is
+  any other branch (a stacked PR) triggered **no** backend CI at all (only GitGuardian ran).
+  `push` stays limited to `master`/`develop`.
+- **Required status checks:** `gh api repos/…/branches/master/protection` → **404 "Branch not
+  protected"**; `/rulesets` → `[]`; `/rules/branches/master` → `[]`. **No required check names
+  exist today**, so nothing had to be preserved; `CI Status` is the name to configure if protection
+  is added later.
+
+### Verification — three throwaway PRs (all closed unmerged)
+
+Each branch off `m2-ci-path-filters`, one comment line changed, checks read with `gh pr checks`:
+
+| PR | Change | `Detect changes` | `Build & Test` | `Frontend Build & Test` | `CI Status` |
+| --- | --- | --- | --- | --- | --- |
+| #28 | docs only (`docs/plans/MONOREPO_MIGRATION.md`) | pass | skipping | — (not run) | **pass** |
+| #29 | frontend only (`frontend/src/services/api.ts`) | pass | skipping | pass | **pass** |
+| #30 | backend only (`probity-api/.../ProbityApplication.java`) | pass | pass (Maven) | — (not run) | **pass** |
+
+The aggregated `CI Status` reported on all three; no check hung in "expected".
+
+> A first round of throwaway PRs (#25/#26/#27) was created before the trigger fix and was merged
+> into this branch instead of closed; the throwaway edits were reverted additively (commit
+> `085133e`, no history rewrite — see `docs/AGENT_LESSONS.md`). Only their comment lines were
+> removed; the CI evidence above is from the clean re-run.
+
+### CI surfaces after M2
+
+- A **docs-only** PR runs `Detect changes` + `CI Status` only (+ GitGuardian); Maven and Node skip.
+- A **frontend-only** PR runs `Frontend CI`; the Maven `test` job skips.
+- A **backend-only** PR runs the Maven `test` job; `Frontend CI` does not trigger.
+- `.gitguardian.yaml` is unchanged (M1 note still applies).
+
+### Rollback
+
+Revert the M2 commits on the branch (or `git revert` them after merge); the workflows return to
+the single unfiltered `ci_cd.yaml`. Nothing outside `.github/workflows/` and `frontend/.github/`
+is affected.
 
 ## 10. Staged PR sequence
 
@@ -320,16 +387,19 @@ CI surfaces that now see `frontend/` (nothing changed here — M2 work):
 - **Verify:** `git diff --stat` shows docs only; no `src`, pom, test, migration, compose or
   workflow file touched; `mvnw -o clean verify` untouched (docs-only, not re-run).
 
-### M2 — import `frontend/`  (**note:** largely done in §10a, but **without** `--squash` and without the CI/README parts)
+### M2 — import `frontend/`  (**note:** largely done in §10a, but **without** `--squash`; the CI parts were done as §10c)
 - **Done in §10a (M1-as-import):** `git subtree add --prefix=frontend frontend-origin master`
   (**no `--squash`**; the plan recommended `--squash` — owner chose full history);
   `.dockerignore` += `frontend/`.
-- **Still open (deferred to M2):** CI `paths-ignore: ['frontend/**']` on the Maven jobs;
-  `frontend/README.md` header note with the original repo URL; root README quickstart section.
-- **Verify (as run, §10a/§10b):** `git log --oneline -3` shows the import merge `329f3a6`;
+- **Done in §10c (M2):** CI path filters — root `frontend-ci.yml` (frontend-scoped triggers),
+  `ci_cd.yaml` `changes`/`ci-status` jobs, inert `frontend/.github/` deleted, PR base-branch
+  restriction dropped.
+- **Still open (deferred to M3+):** `frontend/README.md` header note with the original repo URL;
+  root README quickstart section (M3).
+- **Verify (as run, §10a/§10b/§10c):** `git log --oneline -3` shows the import merge `329f3a6`;
   `frontend/package.json` present; `mvnw.cmd -o clean verify -B` exit 0 (reactor untouched,
   378/1); both `docker build`s succeed; frontend tree hash = `46dae992…` (audited
-  `3b4506c^{tree}`); CI green on the PR.
+  `3b4506c^{tree}`); CI green on the PR; three throwaway PRs confirm the path filters.
 
 ### M3 — rename + archive
 - **Changes:** archive `probity-frontend` (GitHub UI, no local change); rename
@@ -350,6 +420,8 @@ CI surfaces that now see `frontend/` (nothing changed here — M2 work):
 
 ## 11. Recommendation
 
-**M1 (import) has been executed** on branch `m1-import-frontend` (§10a) — awaiting review, not
-merged. M2/M3/M4 still wait for explicit owner approval; the drift list (§2) and the frontend
-install baseline (now fixed in frontend PR #16) remain recorded findings.
+**M1 (import) has been merged** to `master` as `38e6c6c` (PR #24, §10a). **M2 (CI path filters)
+has been executed** on branch `m2-ci-path-filters` (§10c) — awaiting review, not merged. M3/M4
+still wait for explicit owner approval; the drift list (§2) and the frontend install baseline
+(now fixed in frontend PR #16) remain recorded findings. Frontend PR #17 (types alignment) was
+closed unmerged; that work moves to the monorepo later.
