@@ -1,6 +1,5 @@
 package me.veselin.probity;
 
-// m2 path-filter test: backend-only change (throwaway PR, do not merge)
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
