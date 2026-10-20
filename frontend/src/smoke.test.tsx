@@ -19,4 +19,8 @@ describe('smoke', () => {
 
     expect(screen.getByRole('heading', { name: 'Probity' })).toBeTruthy();
   });
+
+  it('tw4 intentional failure', () => {
+    expect(true).toBe(false);
+  });
 });
