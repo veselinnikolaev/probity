@@ -1,10 +1,10 @@
-# Probity Backend
+# Probity
 
 Probity is a low-latency fintech portfolio risk management platform with concurrent Monte Carlo simulations. The backend provides secure portfolio CRUD, market data ingestion, risk metric computation, and high-performance simulation APIs. Built with Java 21 virtual threads and hexagonal architecture, it delivers sub-second simulation results for 10,000+ path Monte Carlo runs while maintaining clean domain boundaries.
 
 ## Full-Stack Project
 
-This is the backend half of Probity. The React/TypeScript frontend lives at [probity-frontend](https://github.com/veselinnikolaev/probity-frontend).
+Probity is a low-latency fintech portfolio risk management platform. This repository is the **monorepo** combining the Java/Spring Boot backend and the React/Vite frontend.
 
 For a detailed technical deep-dive, see the [Technical System Report](./docs/TECHNICAL_REPORT.md).
 
@@ -676,3 +676,62 @@ All API errors follow a consistent JSON format:
 ---
 
 Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
+
+## Monorepo Layout
+
+| Directory | Purpose |
+|---|---|
+| probity-api/ | Spring Boot API |
+| probity-shared/ | Shared domain types |
+| probity-worker/ | Kafka worker (separate process) |
+| rontend/ | React/Vite frontend (M1 import) |
+| k8s/ | Kubernetes manifests |
+| loadtest/ | Load tests |
+| docs/ | Documentation
+
+## Prerequisites
+
+| Component | Version |
+|---|---|
+| Java | 21 (Temurin) |
+| Node.js | from rontend/.nvmrc (20.20.1) |
+| Docker | for compose/Testcontainers |
+| Maven | wrapper ./mvnw
+
+## Quickstart
+
+### Backend
+1. cp .env.example .env
+2. docker compose up -d
+3. API: ./mvnw -pl probity-api spring-boot:run; Worker runs as separate process (role probity_worker out of band).
+4. Swagger UI at http://localhost:8080/swagger-ui.html
+
+### Frontend
+1. cd frontend && npm ci
+2. rontend/.env.local with VITE_API_BASE_URL=http://localhost:8080
+3. 
+pm run dev; build 
+pm run build; test 
+pm test
+
+## Tests
+
+| Target | Command |
+|---|---|
+| All | ./mvnw -o clean verify -B (378 run / 1 skipped) |
+| API | ./mvnw -pl probity-api -o test |
+| Worker | ./mvnw -pl probity-worker -o test |
+| Frontend | cd frontend && npm ci && npm run build && npm test |
+
+## CI
+
+- CI Status aggregates changes, 	est, rontend-test (required when protected).
+- Backend runs on backend-path changes; frontend on frontend-path changes.
+- Docker push only on push to master.
+
+## Documentation
+
+- [Technical System Report](./docs/TECHNICAL_REPORT.md)
+- [Agent Protocol](./docs/AGENT_PROTOCOL.md)
+- [Agent Lessons](./docs/AGENT_LESSONS.md)
+- [Monorepo Migration Plan](./docs/plans/MONOREPO_MIGRATION.md)
