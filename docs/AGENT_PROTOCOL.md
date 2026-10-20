@@ -67,7 +67,24 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
   from `Get-NetTCPConnection -LocalPort`, or from the command line), not the wrapper.
 - Use `cmd /c "mvnw.cmd ..."` for the Maven wrapper; redirect to files when output is large.
 
-## 6. Definition of done
+## 6. Frontend rules (monorepo, since M2)
+
+- The frontend lives in `frontend/`; run its commands **from `frontend/`**, never the repo root.
+  Build: `npm run build`. Test: `npm test`. Install: `npm ci` (never `--legacy-peer-deps`).
+- Node version is pinned by `frontend/.nvmrc` (currently `20.20.1`); `package.json` requires
+  `node >=20.19.0`. CI reads `frontend/.nvmrc` and caches npm on `frontend/package-lock.json`.
+- CI: `.github/workflows/frontend-ci.yml` runs only for `frontend/**` (or that workflow file);
+  `.github/workflows/ci_cd.yaml` runs the Maven build only for backend paths and always posts the
+  aggregated `CI Status` check. Workflows under `frontend/.github/` are **never** read by GitHub —
+  a subtree import must move them to the root `.github/workflows/`.
+- Windows: `Add-Content` adds a trailing newline only if missing and can glue onto the last line
+  of a file with no final newline; prefer the editor tool for source edits. Inline `python -c` and
+  inline `--jq` are mangled by PowerShell — write the script to a file and run it (`docker run …
+  python:3.12-alpine …` works when no local Python has PyYAML).
+- Maven green does not prove the frontend: when `frontend/**` changes, run the frontend build and
+  test too (and vice versa).
+
+## 7. Definition of done
 
 - A step is done only when the intended change is in `git diff --stat`, the check passed
   (or its failure is quoted), no out-of-scope file changed, and evidence is named.
