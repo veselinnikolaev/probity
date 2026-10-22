@@ -66,6 +66,7 @@ public final class ApiRoutes {
         public static final String RUN_ASYNC = SIMULATIONS + "/run-async";
         public static final String SIMULATION = SIMULATIONS + "/{id}";
         public static final String STATUS = SIMULATIONS + "/{id}/status";
+        public static final String PATHS = SIMULATIONS + "/{id}/paths";
     }
 
     public static final class Assistant {

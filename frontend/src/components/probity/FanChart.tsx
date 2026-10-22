@@ -2,18 +2,57 @@ import React, { useRef, useEffect, useState } from 'react';
 import { SimulatedPath, PercentileSeries } from '@/types/simulation';
 
 interface FanChartProps {
-  allPaths: SimulatedPath[];
+  /** Sampled paths from GET /{id}/paths (Q9b). May be empty while they are still loading. */
+  paths: SimulatedPath[];
   percentileSeries: PercentileSeries[];
   currentValue: number;
   timeHorizonDays: number;
+  /** True while the sampled paths are still being fetched; drawn as a caption only. */
+  pathsLoading?: boolean;
   height?: number;
 }
 
+/**
+ * The y-range the fan is drawn in: the union of the percentile series values, the sampled
+ * paths, and the current value.
+ *
+ * <p>Q9b: the series and the paths are both used — never the paths alone. The series gives a
+ * stable range the moment a result arrives (they are always present and never sampled),
+ * and the sampled paths contribute their extremes: the backend guarantees the global
+ * minimum and maximum paths are always in the sample, so the union is the full-data range
+ * and no path is clipped. Unioning with the current value keeps the day-0 baseline in view.
+ */
+export function computeFanChartRange(
+  paths: SimulatedPath[],
+  percentileSeries: PercentileSeries[],
+  currentValue: number,
+): { min: number; max: number } {
+  let min = currentValue;
+  let max = currentValue;
+
+  for (const series of percentileSeries) {
+    for (const point of series.values) {
+      min = Math.min(min, point.value);
+      max = Math.max(max, point.value);
+    }
+  }
+
+  for (const path of paths) {
+    for (const point of path.values) {
+      min = Math.min(min, point.value);
+      max = Math.max(max, point.value);
+    }
+  }
+
+  return { min, max };
+}
+
 export function FanChart({
-  allPaths,
+  paths,
   percentileSeries,
   currentValue,
   timeHorizonDays,
+  pathsLoading = false,
   height = 400,
 }: FanChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,15 +79,10 @@ export function FanChart({
     const chartWidth = width - padding.left - padding.right;
     const chartAreaHeight = chartHeight - padding.top - padding.bottom;
 
-    // Find min/max values for scaling
-    let minValue = currentValue;
-    let maxValue = currentValue;
-    for (const path of allPaths) {
-      for (const point of path.values) {
-        minValue = Math.min(minValue, point.value);
-        maxValue = Math.max(maxValue, point.value);
-      }
-    }
+    // Find min/max values for scaling. Union of percentiles + sampled paths + current
+    // value — see computeFanChartRange. Paths may be empty while loading; the percentile
+    // series alone already yield a valid, unclipped range in that window.
+    const { min: minValue, max: maxValue } = computeFanChartRange(paths, percentileSeries, currentValue);
 
     const valueRange = maxValue - minValue || 1;
     const valueBuffer = valueRange * 0.1;
@@ -92,7 +126,7 @@ export function FanChart({
     ctx.lineWidth = 0.3;
     ctx.globalAlpha = 0.08;
 
-    for (const path of allPaths) {
+    for (const path of paths) {
       ctx.beginPath();
       for (let i = 0; i < path.values.length; i++) {
         const x = xScale(path.values[i].dayIndex);
@@ -111,9 +145,10 @@ export function FanChart({
     const p50 = percentileSeries.find((s) => s.percentile === 50);
     const p90 = percentileSeries.find((s) => s.percentile === 90);
 
-    // 10th percentile (red)
-    if (p10 && allPaths.length > 0) {
-      const pathLength = allPaths[0].values.length;
+    // 10th percentile (red). Bands draw even while the sampled paths are still loading —
+    // they come entirely from the series, never from the paths.
+    if (p10 && p10.values.length > 1) {
+      const pathLength = p10.values.length;
       ctx.strokeStyle = '#EF4444';
       ctx.beginPath();
       for (let i = 0; i < pathLength; i++) {
@@ -128,8 +163,8 @@ export function FanChart({
     }
 
     // 50th percentile (blue)
-    if (p50 && allPaths.length > 0) {
-      const pathLength = allPaths[0].values.length;
+    if (p50 && p50.values.length > 1) {
+      const pathLength = p50.values.length;
       ctx.strokeStyle = '#3B82F6';
       ctx.beginPath();
       for (let i = 0; i < pathLength; i++) {
@@ -144,8 +179,8 @@ export function FanChart({
     }
 
     // 90th percentile (green)
-    if (p90 && allPaths.length > 0) {
-      const pathLength = allPaths[0].values.length;
+    if (p90 && p90.values.length > 1) {
+      const pathLength = p90.values.length;
       ctx.strokeStyle = '#10B981';
       ctx.beginPath();
       for (let i = 0; i < pathLength; i++) {
@@ -201,12 +236,17 @@ export function FanChart({
       ctx.fillText(`${day}d`, x, chartHeight - padding.bottom + 15);
     }
 
-    // Draw title
+    // Draw title. While the sampled paths are still in flight the caption says so, so the
+    // first paint (summary + bands) is legibly incomplete rather than silently thin.
     ctx.fillStyle = 'var(--pb-text-primary)';
     ctx.font = 'bold 14px var(--font-body)';
     ctx.textAlign = 'left';
-    ctx.fillText('Simulated Portfolio Paths', padding.left, 5);
-  }, [allPaths, percentileSeries, currentValue, timeHorizonDays, height]);
+    ctx.fillText(
+      pathsLoading ? 'Simulated Portfolio Paths — loading sample…' : 'Simulated Portfolio Paths',
+      padding.left,
+      5,
+    );
+  }, [paths, percentileSeries, currentValue, timeHorizonDays, height, pathsLoading]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;

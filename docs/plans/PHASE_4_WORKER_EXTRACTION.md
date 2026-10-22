@@ -1,7 +1,7 @@
 # Phase 4 — Extracting the async simulation worker into a separately deployable unit
 
 **Status:** design note for review. Prose and signatures only — no implementation code, no code changes.
-**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9 is decided — Option A, owner-signed-off 2026-10-19 — and PR-Q9a (the storage split, API contract unchanged) is implemented** (gate in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*); **PR-Q9b/PR-Q9c are not started**. The §2.8.1 re-check still confirms the payload-write cost and keeps the Q4 CPU-signal caution.
+**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9 is decided — Option A, owner-signed-off 2026-10-19 — and PR-Q9a (the storage split, API contract unchanged) and PR-Q9b (the API split + sampled `/paths` endpoint) are implemented** (gates in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification* and *Q9b verification*); **PR-Q9c is not started**. The §2.8.1 re-check still confirms the payload-write cost and keeps the Q4 CPU-signal caution.
 **Location:** `docs/plans/` did not exist; this note creates it. Existing phase notes live flat in `docs/` (`PHASE_2_IMPLEMENTATION_NOTES.md`, `TECHNICAL_REPORT.md`); move this file if you prefer a flat layout.
 
 ---
@@ -16,7 +16,7 @@ Recorded, no longer open:
 - **Q4 — HPA:** **CPU-based HPA now**; KEDA is a later option.
 - **Q6 — invariant:** confirmed — **lease 12m > max.poll.interval.ms 10m ≥ slowest legitimate run**.
 
-Still open (see §2.10): **Q5, Q7, Q8**. (Q9 was decided 2026-10-19 — Option A — and PR-Q9a is implemented; not started: Q9b, Q9c.)
+Still open (see §2.10): **Q5, Q7, Q8**. (Q9 was decided 2026-10-19 — Option A — and PR-Q9a and PR-Q9b are implemented; not started: Q9c.)
 
 ---
 
@@ -202,6 +202,17 @@ replicas, PR-D5 protocol, one session) measured throughput **1.767 → 2.670 sim
 3,901,535 B** (contract kept) — full numbers in `docs/PHASE_4_MEASUREMENTS.md` →
 *Q9a verification*.
 
+**Q9b (2026-10-21):** PR-Q9b (API split) is implemented on branch
+`pr-q9b-paths-endpoint`: `GET /{id}`, `GET /simulations`, `POST /run` and
+`GET /{id}/status` drop `allPaths` (summary + percentiles + distribution + statistics
+remain) and a **new** `GET /api/v1/simulations/{id}/paths?n=N` serves ≤ N sampled paths
+(default 100, max 1000, deterministic evenly-spaced + global min/max, same auth and
+ownership as `GET /{id}`, 400 on bad `n`, 200-empty on zero stored paths). `allPaths` is
+removed from the API `SimulationResponse`, worker `SimulationData` and
+`SimulationStatusResponse`; `N = 100` is an **unmeasured first guess**. **PR-Q9c
+(backfill/async) is still not started.** Gate in `docs/PHASE_4_MEASUREMENTS.md` →
+*Q9b verification*.
+
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
 **PR-D0 — prerequisites (FIRST).** *(merged)* Partitions → 6; `max.poll.interval.ms` → 10m; `claim-lease` → 12m; replace `nack()` with per-partition pause/seek/resume; add `ErrorHandlingDeserializer`; add the k6 harness and 1-replica baseline.
@@ -246,7 +257,7 @@ Recorded decisions (resolved — see **Decisions**): Q1, Q2, Q3, Q4, Q6. Still o
 6. **Q6 — lease vs poll interval:** RESOLVED — invariant confirmed: `lease 12m > max.poll.interval.ms 10m ≥ slowest run`.
 7. **Q7 — worker DB role:** OPEN (single mechanism proposed). The role (SELECT+UPDATE on `simulations`, SELECT on the four tables + `flyway_schema_history`) is **created out of band by ops/DBA, with its password held in a secret — never in the migration**. The api-owned `V<next>__worker_role_grants.sql` **only grants privileges, skipping the grants when the role is absent**, and is idempotent. Confirm this mechanism and that ops will create the role before the grant migration.
 8. **Q8 — Redis:** OPEN. Confirmed not needed by the worker execution path; flag if a future `@Cacheable` is added to the portfolio read.
-9. **Q9 — payload storage:** **DECIDED — Option A (owner sign-off 2026-10-19)**; **PR-Q9a (storage split, API contract unchanged) is implemented** — gate in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*; PR-Q9b/Q9c not started. The PR-D0 baseline indicates the completion write (an ≈1.47 MB stored / ≈7.89 MB bytes-per-row `result_payload` per row) is the single-replica constraint, not worker CPU (§2.8.1); decide whether to store a summary and percentiles instead of all paths before finalising the HPA signal (Q4). The status endpoint returns the whole ≈ 3.90 MB result on completion; a separate result endpoint, or a summary in the status response, is an API change for the design owner.
+9. **Q9 — payload storage:** **DECIDED — Option A (owner sign-off 2026-10-19)**; **PR-Q9a (storage split, API contract unchanged) and PR-Q9b (API split + sampled `/paths` endpoint) are implemented** — gates in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification* and *Q9b verification*; PR-Q9c (backfill/async) not started. The PR-D0 baseline indicates the completion write (an ≈1.47 MB stored / ≈7.89 MB bytes-per-row `result_payload` per row) is the single-replica constraint, not worker CPU (§2.8.1); decide whether to store a summary and percentiles instead of all paths before finalising the HPA signal (Q4). The status endpoint returns the whole ≈ 3.90 MB result on completion; a separate result endpoint, or a summary in the status response, is an API change for the design owner.
 
 ---
 

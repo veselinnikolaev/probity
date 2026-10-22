@@ -53,8 +53,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
                 .andExpect(jsonPath("$.outcomes.probabilityOf20PercentLoss").isNumber())
                 .andExpect(jsonPath("$.outcomes.valueAtRisk95").isNumber())
                 .andExpect(jsonPath("$.outcomes.conditionalValueAtRisk95").isNumber())
-                .andExpect(jsonPath("$.allPaths").isArray())
-                .andExpect(jsonPath("$.allPaths", hasSize(200)))
+                .andExpect(jsonPath("$.allPaths").doesNotExist())
                 .andExpect(jsonPath("$.percentileSeries").isArray())
                 .andExpect(jsonPath("$.percentileSeries", hasSize(7)))
                 .andExpect(jsonPath("$.distribution").isArray())
@@ -65,7 +64,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
     void run_withExplicitOverrides_usesCallerSuppliedReturnAndVol() throws Exception {
         AuthResult auth = login();
 
-        mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
+        String response = mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
                         .header("Idempotency-Key", "test-key-sim-2")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -81,37 +80,47 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
                                 """.formatted(portfolioId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isString())
-                .andExpect(jsonPath("$.allPaths", hasSize(100)));
+                .andExpect(jsonPath("$.allPaths").doesNotExist())
+                .andExpect(jsonPath("$.percentileSeries", hasSize(7)))
+                .andReturn().getResponse().getContentAsString();
+
+        // The 100 stored paths are now reachable only through the sampled endpoint.
+        String id = objectMapper.readTree(response).get("id").asText();
+        mockMvc.perform(get(ApiRoutes.Simulations.PATHS, id)
+                        .param("n", "100")
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPaths").value(100))
+                .andExpect(jsonPath("$.paths", hasSize(100)));
     }
 
     @Test
     void run_eachPath_containsExpectedNumberOfDayPoints() throws Exception {
         AuthResult auth = login();
+        String id = runSimulationAndGetId(auth, 100, 10);
 
-        mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
-                        .header("Idempotency-Key", "test-key-sim-3")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(runRequestBody(portfolioId, 100, 10, 0.95))))
-                .andExpect(status().isCreated())
+        // Paths no longer travel with the run body; day shape is asserted on the sample.
+        mockMvc.perform(get(ApiRoutes.Simulations.PATHS, id)
+                        .param("n", "1")
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
+                .andExpect(status().isOk())
                 // Day 0 through day 10 inclusive = 11 points per path
-                .andExpect(jsonPath("$.allPaths[0].values", hasSize(11)))
-                .andExpect(jsonPath("$.allPaths[0].values[0].dayIndex").value(0))
-                .andExpect(jsonPath("$.allPaths[0].values[10].dayIndex").value(10));
+                .andExpect(jsonPath("$.paths[0].values", hasSize(11)))
+                .andExpect(jsonPath("$.paths[0].values[0].dayIndex").value(0))
+                .andExpect(jsonPath("$.paths[0].values[10].dayIndex").value(10));
     }
 
     @Test
     void run_dayZeroValue_equalsCurrentPortfolioValue() throws Exception {
         AuthResult auth = login();
+        String id = runSimulationAndGetId(auth, 100, 5);
 
-        mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
-                        .header("Idempotency-Key", "test-key-sim-4")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(runRequestBody(portfolioId, 100, 5, 0.95))))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.allPaths[0].values[0].value").value(closeTo(2160.0, 1.0)))
-                .andExpect(jsonPath("$.allPaths[1].values[0].value").value(closeTo(2160.0, 1.0)));
+        mockMvc.perform(get(ApiRoutes.Simulations.PATHS, id)
+                        .param("n", "2")
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths[0].values[0].value").value(closeTo(2160.0, 1.0)))
+                .andExpect(jsonPath("$.paths[1].values[0].value").value(closeTo(2160.0, 1.0)));
     }
 
     @Test
@@ -286,7 +295,8 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
                 .andExpect(jsonPath("$.id").value(simulationId))
                 .andExpect(jsonPath("$.portfolioId").value(portfolioId))
                 .andExpect(jsonPath("$.statistics.expectedFinalValue").isNumber())
-                .andExpect(jsonPath("$.allPaths", hasSize(100)));
+                .andExpect(jsonPath("$.allPaths").doesNotExist())
+                .andExpect(jsonPath("$.percentileSeries", hasSize(7)));
     }
 
     @Test
@@ -436,14 +446,21 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         var runJson = objectMapper.readTree(runResponse);
         String id = runJson.get("id").asText();
         double expectedValue = runJson.get("statistics").get("expectedFinalValue").asDouble();
-        int pathCount = runJson.get("allPaths").size();
 
         mockMvc.perform(get(ApiRoutes.Simulations.SIMULATION, id)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.statistics.expectedFinalValue").value(closeTo(expectedValue, 0.01)))
-                .andExpect(jsonPath("$.allPaths", hasSize(pathCount)));
+                .andExpect(jsonPath("$.allPaths").doesNotExist());
+
+        // The persisted paths round-trip through the sampled endpoint, not the result body.
+        mockMvc.perform(get(ApiRoutes.Simulations.PATHS, id)
+                        .param("n", "100")
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPaths").value(100))
+                .andExpect(jsonPath("$.paths", hasSize(100)));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

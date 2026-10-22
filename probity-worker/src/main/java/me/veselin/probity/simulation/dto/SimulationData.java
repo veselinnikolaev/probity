@@ -7,6 +7,11 @@ import java.util.List;
 
 /**
  * Domain DTO for simulation data transferred between simulation module and BFF.
+ *
+ * <p>Q9b API split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10): this carries no paths.
+ * It is the transport for the status/list/result bodies, which now return summary +
+ * percentile bands + distribution only; the sampled paths are served by the dedicated
+ * paths port method backed by the Q9a dual-source read.
  */
 public record SimulationData(
         String id,
@@ -14,7 +19,6 @@ public record SimulationData(
         String createdAt,
         Parameters parameters,
         BigDecimal currentPortfolioValue,
-        List<SimulationPayload.SimulatedPath> allPaths,
         List<SimulationPayload.PercentileSeries> percentileSeries,
         Statistics statistics,
         Outcomes outcomes,

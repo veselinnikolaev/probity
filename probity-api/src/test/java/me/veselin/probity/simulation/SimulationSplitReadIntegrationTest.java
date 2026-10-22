@@ -21,6 +21,7 @@ import java.util.stream.IntStream;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,14 +29,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Q9a storage split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10): the HTTP surface must
- * not know about the split. A row written before it (full payload inline) and a row
- * written by the split completion (paths in {@code simulation_paths}) both come back with
- * every field the recorded pre-Q9a contract has — the reassembled body is served by the
- * same {@code mapToResponse}/{@code mapToResult} code either way.
- *
- * <p>Sampling is off by default, so these assertions double as §10's status-body-bytes
- * gate: at the shipped configuration the bodies are the pre-Q9a bodies.
+ * Q9a storage split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10) as the HTTP surface sees
+ * it after Q9b. A row written before the split (full payload inline) and a row written by
+ * the split completion (paths in {@code simulation_paths}) are indistinguishable on the
+ * result/status/list bodies — neither carries paths any more — and both serve the same
+ * paths through the dedicated sampled endpoint, which reads whichever half holds them.
  */
 class SimulationSplitReadIntegrationTest extends BaseSimulationIntegrationTest {
 
@@ -47,8 +45,8 @@ class SimulationSplitReadIntegrationTest extends BaseSimulationIntegrationTest {
     // ── GET /simulations (list) ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("Q9a: the list serves split rows reassembled and old full-payload rows inline")
-    void list_servesReassembledSplitRowsAndInlineOldRows() throws Exception {
+    @DisplayName("Q9b: the list carries no paths for either storage shape, only the summary fields")
+    void list_servesSummaryForBothStorageShapes() throws Exception {
         AuthResult auth = login();
         UUID userId = seededAdminId();
 
@@ -65,13 +63,9 @@ class SimulationSplitReadIntegrationTest extends BaseSimulationIntegrationTest {
         JsonNode oldItem = itemById(objectMapper.readTree(body), oldId);
         JsonNode splitItem = itemById(objectMapper.readTree(body), splitId);
 
-        assertEquals(OLD_STYLE_PATHS, oldItem.get("allPaths").size(),
-                "an old full-payload row must be served unchanged (paths still inline)");
-        assertEquals(SPLIT_PATHS, splitItem.get("allPaths").size(),
-                "a split row's allPaths must be reassembled from simulation_paths");
-
-        // Everything around allPaths is part of the recorded contract for both shapes.
+        // Q9b contract-change: paths no longer travel with the result, whatever the storage shape.
         for (JsonNode item : List.of(oldItem, splitItem)) {
+            assertFalse(item.has("allPaths"), "the list item must not carry paths since Q9b");
             assertEquals(SERIES_BANDS, item.get("percentileSeries").size(),
                     "the seven bands are served in full regardless of storage shape");
             assertEquals(DISTRIBUTION_BUCKETS, item.get("distribution").size());
@@ -84,7 +78,7 @@ class SimulationSplitReadIntegrationTest extends BaseSimulationIntegrationTest {
     // ── GET /simulations/{id}/status ─────────────────────────────────────────
 
     @Test
-    @DisplayName("Q9a: the status contract survives the split — statistics/outcomes non-null, bands and paths present")
+    @DisplayName("Q9b: status carries no paths, and the sample is unaffected by storage shape")
     void getStatus_splitRow_keepsTheRecordedContract() throws Exception {
         AuthResult auth = login();
         UUID splitId = seedSplitRow(seededAdminId(), payloadWithPaths(SPLIT_PATHS));
@@ -93,7 +87,7 @@ class SimulationSplitReadIntegrationTest extends BaseSimulationIntegrationTest {
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.result.allPaths", hasSize(SPLIT_PATHS)))
+                .andExpect(jsonPath("$.result.allPaths").doesNotExist())
                 .andExpect(jsonPath("$.result.percentileSeries", hasSize(SERIES_BANDS)))
                 .andExpect(jsonPath("$.result.distribution", hasSize(DISTRIBUTION_BUCKETS)))
                 .andExpect(jsonPath("$.result.statistics.expectedFinalValue").isNumber())
@@ -104,19 +98,31 @@ class SimulationSplitReadIntegrationTest extends BaseSimulationIntegrationTest {
     // ── GET /simulations/{id} ────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Q9a: the full-payload endpoint serves a split row with paths reassembled")
-    void getSimulation_splitRow_reassemblesPaths() throws Exception {
+    @DisplayName("Q9b: the detail body carries no paths; the sample comes from the paths endpoint")
+    void getSimulation_splitRow_servesSummaryAndSample() throws Exception {
         AuthResult auth = login();
         UUID splitId = seedSplitRow(seededAdminId(), payloadWithPaths(SPLIT_PATHS));
+        Cookie cookie = new Cookie(Token.ACCESS.getCookieName(), auth.accessToken());
 
-        mockMvc.perform(get(ApiRoutes.Simulations.SIMULATION, splitId)
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
+        mockMvc.perform(get(ApiRoutes.Simulations.SIMULATION, splitId).cookie(cookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(splitId.toString()))
-                .andExpect(jsonPath("$.allPaths", hasSize(SPLIT_PATHS)))
+                .andExpect(jsonPath("$.allPaths").doesNotExist())
                 .andExpect(jsonPath("$.percentileSeries", hasSize(SERIES_BANDS)))
                 .andExpect(jsonPath("$.distribution", hasSize(DISTRIBUTION_BUCKETS)))
                 .andExpect(jsonPath("$.statistics.expectedFinalValue").isNumber());
+
+        // Both shapes must serve the same sample through the dedicated endpoint: the split
+        // row's paths are reassembled from simulation_paths before sampling.
+        UUID oldId = simulationRepository.save(completedRow(seededAdminId(), payloadWithPaths(OLD_STYLE_PATHS))).getId();
+        mockMvc.perform(get(ApiRoutes.Simulations.PATHS, oldId).cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPaths").value(OLD_STYLE_PATHS))
+                .andExpect(jsonPath("$.paths", hasSize(OLD_STYLE_PATHS)));
+        mockMvc.perform(get(ApiRoutes.Simulations.PATHS, splitId).cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPaths").value(SPLIT_PATHS))
+                .andExpect(jsonPath("$.paths", hasSize(SPLIT_PATHS)));
     }
 
     // ── fixtures ─────────────────────────────────────────────────────────────

@@ -34,6 +34,8 @@ export interface DistributionBucket {
 }
 
 // ── Simulation Result ───────────────────────────────────────────────────────
+// Q9b: the result body no longer carries the per-path array. It is summary +
+// percentile bands + distribution; the paths come from the sampled endpoint.
 export interface SimulationResult {
   id: string;
   portfolioId: string;
@@ -44,7 +46,6 @@ export interface SimulationResult {
     confidenceLevel: number;
   };
   currentPortfolioValue: number;
-  allPaths: SimulatedPath[];
   percentileSeries: PercentileSeries[];
   statistics: {
     expectedFinalValue: number;
@@ -60,6 +61,18 @@ export interface SimulationResult {
     conditionalValueAtRisk95: number;
   };
   distribution: DistributionBucket[];
+}
+
+// ── Sampled Paths ───────────────────────────────────────────────────────────
+// Response of GET /api/v1/simulations/{id}/paths?n=N (Q9b).
+export interface SampledPaths {
+  id: string;
+  /** Number of paths the simulation stored, before sampling. */
+  totalPaths: number;
+  /** Number of paths in `paths` — the actual sample size. */
+  sampleSize: number;
+  /** Deterministic sample that always includes the global min/max paths. */
+  paths: SimulatedPath[];
 }
 
 // ── API Responses ───────────────────────────────────────────────────────────

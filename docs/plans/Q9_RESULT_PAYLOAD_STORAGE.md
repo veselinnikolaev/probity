@@ -4,7 +4,7 @@ Status: **decided — Option A, owner-signed-off (2026-10-19)**; §9 records the
 and §10 the PR sequence. **PR-Q9a is implemented** — the storage split (`allPaths`
 moves out of `result_payload` into the `simulation_paths` table; responses reassembled
 so the HTTP contract is unchanged); see §10 and the "Q9a verification" block in
-`docs/PHASE_4_MEASUREMENTS.md` for the measured gate. **PR-Q9b and PR-Q9c are not
+`docs/PHASE_4_MEASUREMENTS.md` for the measured gate. **PR-Q9c is not
 started.** The facts below are unchanged since the frontend answer (2026-10-18): who
 consumes the payload, how big each field is, how the result is returned today, the
 options with what each changes and breaks, and the recorded P0/P1/P2 protocol the gate
@@ -283,12 +283,15 @@ decision is in §9 below (**signed off — Option A, 2026-10-19**).
 
 ## 9. Decision (signed off 2026-10-19 — Option A)
 
-**Status: SIGNED OFF — Option A (2026-10-19) and implemented by PR-Q9a.** The
-storage split ships on branch `pr-q9a-storage-split`: `V19__simulation_paths.sql`,
+**Status: SIGNED OFF — Option A (2026-10-19), implemented by PR-Q9a and PR-Q9b.** The
+storage split shipped on branch `pr-q9a-storage-split`: `V19__simulation_paths.sql`,
 the split completion write and the dual-source read, with the HTTP contract
-unchanged. Q9a is `DONE` in `PHASE_4_WORKER_EXTRACTION.md`; **PR-Q9b and PR-Q9c are
-not started.** The measured gate is recorded in §10 (PR-Q9a → gate result) and in
-`docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification*.
+unchanged. **PR-Q9b (API split) then shipped on branch `pr-q9b-paths-endpoint`:** the
+status/detail/list/run responses drop `allPaths` and a new sampled
+`GET /api/v1/simulations/{id}/paths?n=N` endpoint serves ≤ N paths. Q9a and Q9b are
+`DONE` in `PHASE_4_WORKER_EXTRACTION.md`; **PR-Q9c (backfill/async) is not started.**
+The measured gates are recorded in §10 (PR-Q9a → gate result; PR-Q9b → gate result) and
+in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification* and *Q9b verification*.
 
 **Frontend answer (recorded 2026-10-18, product owner):** *"The UI draws at most ~N sample
 paths and the percentile bands; no calculation needs all 1000."*
@@ -314,7 +317,8 @@ sample. Why, in the measured numbers only:
 **Open parameter for implementation (not decided here):** the exact sample size *N* the
 UI requests, and whether the paths endpoint serves a random/systematic sample server-side
 or the client picks from a full download. The owner's answer bounds it (*at most N*);
-choosing *N* belongs to PR-Q9b.
+*N* was chosen in PR-Q9b (**default 100**, overridable per request up to **1000**) —
+an **unmeasured first guess**, not a measured optimum (see §10 PR-Q9b).
 
 ### What Option A changes for each consumer line (§2 table)
 
@@ -335,7 +339,7 @@ rows' paths into `simulation_paths`) is listed as PR-Q9c and can be skipped.
 
 ---
 
-## 10. Implementation plan — small PR sequence (PR-Q9a implemented; PR-Q9b/PR-Q9c not started)
+## 10. Implementation plan — small PR sequence (PR-Q9a and PR-Q9b implemented; PR-Q9c not started)
 
 Each PR is independently shippable and revertible, in the style of PR-D0…D5. Tests are
 named per PR; **the list endpoint (`GET /simulations`) is explicitly covered in every PR
@@ -415,6 +419,23 @@ paths row), api/worker CPU; a difference inside the run spread is "not distingui
   bytes fell to tens of KB while throughput stays inside/above the P0 spread. If
   throughput *drops*, the reassembly/read regression is suspect — the list endpoint test
   and per-row body measurement are the first checks.
+- **Shipped contract (2026-10-21, branch `pr-q9b-paths-endpoint`):** `GET /{id}`,
+  `GET /simulations`, `POST /run` and `GET /{id}/status` return summary + `percentileSeries`
+  + `distribution` + `statistics` and **no `allPaths`**. The paths move to **new**
+  `GET /api/v1/simulations/{id}/paths?n=N` → `{ id, totalPaths, sampleSize, paths[] }`:
+  - `n` optional, **default 100** (`simulation.response.paths-sample-size`, env
+    `SIMULATION_RESPONSE_PATHS_SAMPLE_SIZE`), **max 1000**
+    (`simulation.response.paths-max-sample-size`, env `SIMULATION_RESPONSE_PATHS_MAX_SAMPLE_SIZE`).
+  - `n < 1`, `n > max`, or an **explicit** `n > totalPaths` → **400**; an **omitted** `n`
+    is the configured default and is served **capped to the stored count** (a 2-path row
+    answers 200 with 2 paths). Zero stored paths → **200** empty sample (not 404); unknown
+    id / wrong owner → 404; no auth → 401; `Cache-Control: private, no-store`, no ETag.
+  - Sampling is **deterministic** (evenly spaced over stored order, no seed) **plus the
+    global-min and global-max paths**, so the fan is never clipped; percentiles/statistics
+    stay full-population. `N = 100` is an **unmeasured first guess**.
+  - Reply key keeps `totalPaths`; the frontend draws ≤ `sampleSize` paths over the bands.
+- **Gate result (2026-10-21, measured):** see `docs/PHASE_4_MEASUREMENTS.md` →
+  *Q9b verification* for throughput, WAL, stored bytes and status/body sizes vs P0.
 
 **PR-Q9c — optional follow-ups (each skippable, owner-gated).**
 - (a) backfill: move existing rows' inline `allPaths` into `simulation_paths` in batches
@@ -446,4 +467,5 @@ never as a gain.
 - The 2026-10-17/18 versions of this note shipped **no** `src`, test, `pom.xml`,
   migration, `compose.yaml`, `README.md` or HPA change and **changed no decision**
   (Q9 was open then; Q4 (CPU-based HPA) is untouched). The first code change is PR-Q9a
-  (2026-10-19, §10) under the §9 sign-off; Q4 remains untouched.
+  (2026-10-19, §10) under the §9 sign-off; PR-Q9b (2026-10-21) is the first **breaking**
+  change (the response contract in §10); Q4 remains untouched.

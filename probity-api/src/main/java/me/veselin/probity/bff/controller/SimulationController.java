@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
+import me.veselin.probity.bff.dto.simulation.SimulationPathsResponse;
 import me.veselin.probity.bff.dto.simulation.SimulationResponse;
 import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.util.ConditionalGetSupport;
@@ -18,9 +19,12 @@ import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.marketdata.domain.PriceBar;
+import me.veselin.probity.simulation.config.SimulationProperties;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.dto.SimulationStatusResponse;
+import me.veselin.probity.simulation.exception.InvalidPathsRequestException;
 import me.veselin.probity.simulation.port.SimulationPort;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +51,7 @@ public class SimulationController {
     private final SimulationPort simulationPort;
     private final MarketDataPort marketDataPort;
     private final DomainEventPublisher domainEventPublisher;
+    private final SimulationProperties simulationProperties;
 
     /**
      * POST /simulations/run
@@ -217,6 +222,59 @@ public class SimulationController {
     }
 
     /**
+     * GET /simulations/{id}/paths?n=N
+     * The sampled path array of a completed simulation (Q9b API split,
+     * docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10).
+     *
+     * <p>Since Q9b the result/status/list bodies carry no paths; this is the only endpoint
+     * that serves them, and it serves a bounded deterministic sample (global min/max paths
+     * always included) instead of the whole array. {@code n} is optional and defaults to the
+     * configured sample size; an explicit {@code n} must be within [1, max] and not exceed
+     * the stored count, else 400 — an omitted {@code n} is the configured default and is
+     * served capped to what exists. Auth and ownership are exactly those of {@code GET /{id}}:
+     * a row that is not the caller's is a 404.
+     */
+    @Operation(summary = "Get sampled simulation paths")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Sampled paths returned"),
+        @ApiResponse(responseCode = "400", description = "Invalid n (out of bounds or above the stored path count)"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "404", description = "Simulation not found")
+    })
+    @GetMapping(ApiRoutes.Simulations.PATHS)
+    public ResponseEntity<SimulationPathsResponse> getPaths(
+            @PathVariable UUID id,
+            @Parameter(description = "Maximum paths to return (1..max, and not more than the stored count)")
+            @RequestParam(value = "n", required = false) Integer n,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        int requested = n == null ? simulationProperties.getResponsePathsSampleSize() : n;
+        if (requested < 1 || requested > simulationProperties.getResponsePathsMaxSampleSize()) {
+            throw new InvalidPathsRequestException(
+                    "n must be between 1 and %d".formatted(simulationProperties.getResponsePathsMaxSampleSize()));
+        }
+
+        log.debug("Fetching sampled simulation paths: {} n={} for user: {}", id, requested, principal.id());
+        SimulationPort.SampledPaths sampled = simulationPort.getSimulationPaths(id, principal.id(), requested);
+
+        // An explicit n above the stored count is a client error; an omitted n is just the
+        // configured default and is served capped to what exists (so a 2-path row answers
+        // 200 with 2 paths, not 400).
+        if (n != null && requested > sampled.totalPaths() && sampled.totalPaths() > 0) {
+            throw new InvalidPathsRequestException(
+                    "n (%d) exceeds the stored path count (%d)".formatted(requested, sampled.totalPaths()));
+        }
+
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore().cachePrivate())
+                .body(new SimulationPathsResponse(
+                        id.toString(),
+                        sampled.totalPaths(),
+                        sampled.paths().size(),
+                        sampled.paths()));
+    }
+
+    /**
      * GET /simulations?portfolioId={portfolioId}
      * Lists all simulations for a portfolio, most recent first.
      */
@@ -305,7 +363,6 @@ public class SimulationController {
                         data.parameters().confidenceLevel()
                 ),
                 data.currentPortfolioValue(),
-                data.allPaths(),
                 data.percentileSeries(),
                 new SimulationResponse.Statistics(
                         data.statistics().expectedFinalValue(),

@@ -27,7 +27,9 @@ import me.veselin.probity.simulation.exception.InsufficientMarketDataException;
 import me.veselin.probity.simulation.exception.SimulationClaimLostException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
+import me.veselin.probity.simulation.mapper.ResponsePathSampler;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
+import me.veselin.probity.simulation.port.SimulationPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -361,6 +363,27 @@ public class MonteCarloSimulationService {
                 .orElseThrow(() -> new SimulationNotFoundException(
                         "Simulation not found: " + simulationId));
         return simulationMapper.toDto(simulation);
+    }
+
+    @Transactional(readOnly = true)
+    /**
+     * The sampled paths of a simulation owned by the requesting user (Q9b paths endpoint).
+     *
+     * <p>Ownership is the same guard as {@link #get}: a row that is not the caller's is
+     * reported as missing. The stored paths come from the Q9a dual-source read, so a row
+     * written before the split and one written by it serve the same sample. The sample is
+     * deterministic and bounded by {@code n}, always retaining the global min/max paths —
+     * see {@link ResponsePathSampler}.
+     *
+     * @return the stored total and the sample; an empty sample for a row with no paths
+     */
+    public SimulationPort.SampledPaths getPaths(UUID simulationId, UUID userId, int n) {
+        Simulation simulation = simulationRepository.findByIdAndUserId(simulationId, userId)
+                .orElseThrow(() -> new SimulationNotFoundException(
+                        "Simulation not found: " + simulationId));
+        List<SimulatedPath> stored = simulationMapper.storedPaths(simulation);
+        List<SimulatedPath> sample = ResponsePathSampler.sample(stored, n);
+        return new SimulationPort.SampledPaths(stored.size(), sample);
     }
 
     @Transactional(readOnly = true)
