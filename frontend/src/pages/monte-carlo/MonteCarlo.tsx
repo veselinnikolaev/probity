@@ -10,7 +10,8 @@ import { StatCardSkeleton } from '@/components/probity/SkeletonLoader';
 import { FanChart } from '@/components/probity/FanChart';
 import { DistributionHistogram } from '@/components/probity/DistributionHistogram';
 import { PercentileTable } from '@/components/probity/PercentileTable';
-import { SimulationRequest } from '@/types/simulation';
+import { SimulationRequest, SimulatedPath } from '@/types/simulation';
+import { fetchSimulationPaths } from '@/services/simulation';
 import styles from './monte-carlo.module.css';
 import {useSimulation} from "@/hooks/simulation";
 import {useTopbarSlot} from "@/hooks/useTopbarSlot";
@@ -29,6 +30,42 @@ const MonteCarloPage: React.FC = () => {
   const [confidenceLevel, setConfidenceLevel] = useState(95);
 
   const simulationState = useSimulation(selectedPortfolio);
+
+  // ── Sampled paths (Q9b) ──────────────────────────────────────────────────────
+  // The result body no longer carries paths; they are fetched separately so the summary,
+  // bands and histogram can paint as soon as the run finishes, and the fan fills in when
+  // the sample lands. A failed paths fetch only costs the fan its spaghetti — the rest of
+  // the page is already complete — so it is not surfaced as a page error.
+  const [paths, setPaths] = useState<SimulatedPath[]>([]);
+  const [pathsLoading, setPathsLoading] = useState(false);
+
+  const resultId = simulationState.state.status === 'success' ? simulationState.state.data.id : null;
+
+  useEffect(() => {
+    if (!resultId) {
+      setPaths([]);
+      setPathsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPaths([]);
+    setPathsLoading(true);
+    fetchSimulationPaths(resultId)
+      .then((sample) => {
+        if (!cancelled) setPaths(sample.paths);
+      })
+      .catch(() => {
+        if (!cancelled) setPaths([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPathsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resultId]);
 
   // Auto-select first portfolio
   useEffect(() => {
@@ -217,7 +254,8 @@ const MonteCarloPage: React.FC = () => {
                         <div className={styles['chart-container']}>
                           <div className={styles['chart-wrapper']}>
                             <FanChart
-                              allPaths={simulationState.state.data.allPaths}
+                              paths={paths}
+                              pathsLoading={pathsLoading}
                               percentileSeries={simulationState.state.data.percentileSeries}
                               currentValue={simulationState.state.data.currentPortfolioValue}
                               timeHorizonDays={simulationState.state.data.parameters.timeHorizonDays}
