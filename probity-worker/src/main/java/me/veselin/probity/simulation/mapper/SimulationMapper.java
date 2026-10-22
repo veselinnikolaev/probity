@@ -1,7 +1,6 @@
 package me.veselin.probity.simulation.mapper;
 
 import lombok.RequiredArgsConstructor;
-import me.veselin.probity.simulation.config.SimulationProperties;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.dto.SimulationData;
@@ -20,8 +19,13 @@ public class SimulationMapper {
 
     private final SimulationRepository simulationRepository;
 
-    private final SimulationProperties simulationProperties;
-
+    /**
+     * Maps a simulation row to the summary DTO served by the status/list/result bodies.
+     *
+     * <p>Q9b API split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10): the paths are no
+     * longer part of this transport at all. The reader of a paths-free body cannot tell the
+     * two Q9a storage shapes apart, because neither contributes a path here.
+     */
     public SimulationData toDto(Simulation simulation) {
         SimulationPayload p = simulation.getResultPayload();
 
@@ -42,7 +46,6 @@ public class SimulationMapper {
                             simulation.getConfidenceLevel()
                     ),
                     simulation.getCurrentPortfolioValue(),
-                    List.of(),  // empty allPaths
                     List.of(),  // empty percentileSeries
                     new SimulationData.Statistics(
                             0.0, 0.0, 0.0, 0.0, 0.0
@@ -64,7 +67,6 @@ public class SimulationMapper {
                         simulation.getConfidenceLevel()
                 ),
                 simulation.getCurrentPortfolioValue(),
-                resolveAllPaths(simulation.getId(), p.allPaths()),
                 p.percentileSeries(),
                 new SimulationData.Statistics(
                         p.statistics().expectedFinalValue(),
@@ -84,27 +86,36 @@ public class SimulationMapper {
     }
 
     /**
+     * The full stored paths of a simulation, reassembled from whichever half of the Q9a
+     * storage split holds them — the inline payload (every row written before the split,
+     * plus the whole sync {@code POST /run} write) or the {@code simulation_paths} row (a
+     * split-written completion row). Returns the stored list <em>unbounded</em>: the caller
+     * decides the sample (see {@link ResponsePathSampler}) and the response size.
+     *
+     * <p>An empty result means the row genuinely has no paths (a PENDING/FAILED row, or a
+     * row written with none) — the paths endpoint turns that into its response, not a 404,
+     * so a completed-but-empty row and a never-completed row read the same way they do on
+     * the result body.
+     */
+    public List<SimulationPayload.SimulatedPath> storedPaths(Simulation simulation) {
+        SimulationPayload p = simulation.getResultPayload();
+        List<SimulationPayload.SimulatedPath> inlinePaths = p == null ? null : p.allPaths();
+        return resolveAllPaths(simulation.getId(), inlinePaths);
+    }
+
+    /**
      * The dual-source read of the Q9a storage split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md
      * §9 row 5): a row that still carries its paths inline — every row written before the
      * split, plus the sync {@code POST /run} write, which Q9a deliberately leaves whole —
      * serves them straight from the payload; a row written by the split completion has an
      * empty inline array and gets its paths from {@code simulation_paths}. A row with
      * neither (an empty array and no paths row) reads as an empty list, exactly as an
-     * empty inline array does today, so no endpoint can tell the two storage shapes apart
-     * from the response alone — that is the point of the split.
-     *
-     * <p>Sampling, if configured, happens here — after reassembly, on the response side
-     * only. Statistics/percentiles/distribution were computed from every path back in
-     * {@code MonteCarloSimulationService.run} and are never re-derived from a sample; with
-     * the default (0, disabled) this returns the stored list untouched, which is what keeps
-     * every response byte-identical to the recorded pre-Q9a contract.
+     * empty inline array does today.
      */
     private List<SimulationPayload.SimulatedPath> resolveAllPaths(
             UUID simulationId, List<SimulationPayload.SimulatedPath> inlinePaths) {
-        List<SimulationPayload.SimulatedPath> stored =
-                (inlinePaths != null && !inlinePaths.isEmpty())
-                        ? inlinePaths
-                        : simulationRepository.findPaths(simulationId).orElse(List.of());
-        return ResponsePathSampler.sample(stored, simulationProperties.getResponsePathsSampleSize());
+        return (inlinePaths != null && !inlinePaths.isEmpty())
+                ? inlinePaths
+                : simulationRepository.findPaths(simulationId).orElse(List.of());
     }
 }

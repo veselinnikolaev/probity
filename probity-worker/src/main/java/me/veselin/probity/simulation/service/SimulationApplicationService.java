@@ -119,6 +119,17 @@ public class SimulationApplicationService implements SimulationPort {
     }
 
     /**
+     * The sampled paths of a simulation for the Q9b paths endpoint
+     * (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10), backed by the Q9a dual-source read.
+     * The ownership guard is the same one {@link #getSimulation} uses.
+     */
+    public SampledPaths getSimulationPaths(UUID simulationId, UUID userId, int n) {
+        log.debug("Application service: getting simulation paths id={} userId={} n={}", simulationId, userId, n);
+        var result = monteCarloSimulationService.getPaths(simulationId, userId, n);
+        return new SampledPaths(result.totalPaths(), result.paths());
+    }
+
+    /**
      * Lists all simulations for a specific portfolio.
      *
      * @param portfolioId the portfolio ID
@@ -173,19 +184,8 @@ public class SimulationApplicationService implements SimulationPort {
                         .valueAtRisk95(data.outcomes().valueAtRisk95())
                         .conditionalValueAtRisk95(data.outcomes().conditionalValueAtRisk95())
                         .build())
-                .allPaths(data.allPaths().stream().map(this::mapPath).toList())
                 .percentileSeries(data.percentileSeries().stream().map(this::mapPercentile).toList())
                 .distribution(data.distribution().stream().map(this::mapBucket).toList())
-                .build();
-    }
-
-    private SimulationStatusResponse.SimulationResponseAllPath mapPath(SimulationPayload.SimulatedPath path) {
-        return SimulationStatusResponse.SimulationResponseAllPath.builder()
-                .pathId(path.pathId())
-                .values(path.values().stream().map(v -> SimulationStatusResponse.SimulationResponsePathPoint.builder()
-                        .dayIndex(v.dayIndex())
-                        .value(v.value())
-                        .build()).toList())
                 .build();
     }
 

@@ -193,3 +193,30 @@ Append-only. One entry = the failure, then the rule. Read together with
     anyway, revert **additively** (restore the pre-test file content, one new commit); never
     force-push or rewrite pushed history, and re-run the proof cleanly so the evidence comes
     from an untainted tree.
+
+25. **Applied an "explicit argument too large" rule to the argument's default.** The Q9b
+    paths endpoint rejects `GET /{id}/paths?n=5` when only 3 paths are stored (400, by
+    design), but the first implementation threw the same 400 when `n` was **omitted** and
+    the row held fewer than the configured default (100): a 2-path row answered 400 to
+    `GET /{id}/paths` even though the caller never asked for 5 or 100. The failure surfaced
+    only inside `SimulationSplitReadIntegrationTest` (expected 200, got 400) — a test that
+    happened to call the endpoint without `n`.
+    Rule: when validating a request parameter, distinguish "the client sent a value that is
+    out of range" from "the server's own default exceeds what exists"; only the first is a
+    client error. When a default is used, clamp it to the available data, and add a test for
+    the omitted-argument path separately from the explicit-value path — the explicit case
+    passing does not prove the omitted case is handled.
+
+26. **Assumed an out-of-band dev credential would still work.** The `probity_worker` role's
+    password is deliberately provisioned out of band (Phase 4 Q7) and never committed; the
+    PR-D5 copy in `%TEMP%\\opencode\\prd5\\workerdb.txt` failed `scram-sha-256`
+    authentication against the current local Postgres because the dev database had been
+    rebuilt since that run. The value is therefore not available to the agent at the start
+    of a session, and a measurement run must not silently fall back to the `postgres`
+    (superuser) role to get moving.
+    Rule: treat out-of-band credentials as absent until proven present — authenticate with
+    the stored value over the real `scram-sha-256` host path before relying on it, and if it
+    fails, reset the local dev credential (confirming the target is this clone's own local
+    dev container first), keep the new value outside the repo, and report the reset. Never
+    substitute a superuser role for a least-privilege one to unblock a run.
+

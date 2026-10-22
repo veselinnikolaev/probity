@@ -1,6 +1,7 @@
 package me.veselin.probity.simulation.port;
 
 import me.veselin.probity.portfolio.domain.Portfolio;
+import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.dto.SimulationStatusResponse;
 
@@ -39,6 +40,31 @@ public interface SimulationPort {
      * Returns status and result if COMPLETED.
      */
     SimulationStatusResponse getSimulationStatus(UUID simulationId, UUID userId);
+
+    /**
+     * The sampled paths of a completed simulation for
+     * {@code GET /api/v1/simulations/{id}/paths} (Q9b API split,
+     * docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10).
+     *
+     * <p>Same ownership guard as {@link #getSimulation}: a row that is not the caller's is
+     * reported exactly as a missing one. {@code n} was validated by the caller against the
+     * endpoint bounds; this returns the deterministic sample of at most {@code n} paths
+     * (global min/max always included) plus the stored total, so the body the client sees is
+     * bounded by the request.
+     *
+     * @param n maximum paths to sample; the caller has already bounded it
+     */
+    SampledPaths getSimulationPaths(UUID simulationId, UUID userId, int n);
+
+    /**
+     * The sampled paths plus the stored total, so a caller can report how much of the stored
+     * data the sample covers without a second read.
+     *
+     * @param totalPaths number of stored paths before sampling
+     * @param paths      the deterministic sample, in stored order, at most {@code n} long
+     */
+    record SampledPaths(int totalPaths, List<SimulationPayload.SimulatedPath> paths) {
+    }
 
     /**
      * Gets a portfolio with positions for market data snapshot capture.

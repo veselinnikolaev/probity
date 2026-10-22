@@ -13,9 +13,12 @@ import java.util.Set;
  * <p>This runs on the assembled response only — after the dual-source read and after
  * {@code MonteCarloSimulationService} has computed statistics, percentileSeries and
  * distribution from <em>every</em> path — so a sample can never change a number, only how
- * many paths the body carries. {@code sampleSize <= 0} (the shipped default) returns the
- * input untouched, which is what keeps every response byte-identical to the pre-Q9a
- * contract until PR-Q9b picks a real N (§9 parks that choice there).
+ * many paths the body carries. It is now reached only from the Q9b sampled-paths endpoint
+ * ({@code GET /api/v1/simulations/{id}/paths}); the status/list/result bodies carry no paths
+ * at all, so nothing else calls it. {@code sampleSize <= 0} still means "off" (return the
+ * input untouched), and {@code sampleSize >= size} means "you asked for at least
+ * everything", so both short-circuit to the full list rather than reading how large the
+ * stored array is.
  *
  * <p>Two guarantees make a sampled body safe for a client that draws the paths and
  * derives its y-scale from them (the FanChart y-range note recorded with this PR):

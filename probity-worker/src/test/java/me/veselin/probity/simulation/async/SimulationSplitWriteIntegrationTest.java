@@ -1,11 +1,11 @@
 package me.veselin.probity.simulation.async;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import me.veselin.probity.simulation.config.SimulationProperties;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.dto.SimulationData;
+import me.veselin.probity.simulation.mapper.ResponsePathSampler;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,8 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>No Kafka and no listener — the repository's write-back path in isolation, mirroring
  * {@link SimulationFencedCompleteIntegrationTest}. Read assertions run through the real
- * mapper bean with the shipped default (sampling off), which is the "byte-identical at
- * default config" half of §10's gate.
+ * mapper bean: since Q9b the summary transport carries no paths, so the reassembled paths
+ * are asserted on {@link SimulationMapper#storedPaths} and the sample on
+ * {@link ResponsePathSampler} — the same two steps the paths endpoint performs.
  */
 class SimulationSplitWriteIntegrationTest extends BaseAsyncSimulationIntegrationTest {
 
@@ -53,9 +54,6 @@ class SimulationSplitWriteIntegrationTest extends BaseAsyncSimulationIntegration
 
     @Autowired
     private SimulationMapper simulationMapper;
-
-    @Autowired
-    private SimulationProperties simulationProperties;
 
     private final ObjectMapper treeMapper = new ObjectMapper();
 
@@ -99,16 +97,20 @@ class SimulationSplitWriteIntegrationTest extends BaseAsyncSimulationIntegration
         assertEquals(payload.allPaths(), storedPaths,
                 "simulation_paths must store the payload's allPaths verbatim");
 
-        // Re-read through the real mapper: the two halves reassemble into the original
-        // contract — every non-path field identical, all paths back, default sampling off.
-        SimulationData data = simulationMapper.toDto(simulationRepository.findById(id).orElseThrow());
-        assertEquals(payload.allPaths(), data.allPaths());
+        // Re-read through the real mapper: the two halves reassemble, and the summary
+        // transport carries no paths any more (Q9b contract change).
+        Simulation reloaded = simulationRepository.findById(id).orElseThrow();
+        SimulationData data = simulationMapper.toDto(reloaded);
         assertEquals(payload.percentileSeries(), data.percentileSeries());
         assertEquals(payload.distribution(), data.distribution());
         assertEquals(treeMapper.valueToTree(payload.statistics()), treeMapper.valueToTree(data.statistics()),
                 "statistics must survive the split untouched");
         assertEquals(treeMapper.valueToTree(payload.outcomes()), treeMapper.valueToTree(data.outcomes()),
                 "outcomes must survive the split untouched");
+
+        // The dual-source read puts the paths back exactly as they left the payload.
+        assertEquals(payload.allPaths(), simulationMapper.storedPaths(reloaded),
+                "simulation_paths must reassemble into the payload's allPaths verbatim");
 
         assertEquals(SimulationStatus.COMPLETED, returned.getStatus(),
                 "the read-back row must be the completed one");
@@ -135,9 +137,9 @@ class SimulationSplitWriteIntegrationTest extends BaseAsyncSimulationIntegration
                 "an old-style row must not be backfilled by reads or by anything else");
 
         SimulationData data = simulationMapper.toDto(simulationRepository.findById(old.getId()).orElseThrow());
-        assertEquals(payload.allPaths(), data.allPaths(),
-                "a non-empty inline array is served as-is — the storage half never wins");
         assertEquals(payload.percentileSeries(), data.percentileSeries());
+        assertEquals(payload.allPaths(), simulationMapper.storedPaths(simulationRepository.findById(old.getId()).orElseThrow()),
+                "a non-empty inline array is served as-is — the storage half never wins");
     }
 
     // ── the fence ────────────────────────────────────────────────────────────
@@ -162,7 +164,7 @@ class SimulationSplitWriteIntegrationTest extends BaseAsyncSimulationIntegration
                 "the payload half must not be written either");
     }
 
-    // ── sampling (dormant by default, exercised here with N > 0) ─────────────
+    // ── sampling (Q9b: applied at the paths endpoint, exercised directly here) ─
 
     @Test
     @DisplayName("FanChart: sampling bounds the response but keeps the global extremes and the full percentile series")
@@ -177,24 +179,24 @@ class SimulationSplitWriteIntegrationTest extends BaseAsyncSimulationIntegration
         assertEquals(MIN_VALUE, fullMin, 1e-9, "fixture sanity: global min lives in path 7");
         assertEquals(MAX_VALUE, fullMax, 1e-9, "fixture sanity: global max lives in path 3");
 
-        simulationProperties.setResponsePathsSampleSize(4);
-        try {
-            SimulationData data = simulationMapper.toDto(simulationRepository.findById(id).orElseThrow());
+        Simulation reloaded = simulationRepository.findById(id).orElseThrow();
+        List<SimulationPayload.SimulatedPath> stored = simulationMapper.storedPaths(reloaded);
+        List<SimulationPayload.SimulatedPath> sample = ResponsePathSampler.sample(stored, 4);
 
-            assertEquals(4, data.allPaths().size(), "the configured sample size must bound the response");
-            assertEquals(fullMin, global(data.allPaths(), true), 1e-9,
-                    "y-range floor computed from the sampled paths must equal the full-data floor");
-            assertEquals(fullMax, global(data.allPaths(), false), 1e-9,
-                    "y-range ceiling computed from the sampled paths must equal the full-data ceiling");
-            assertEquals(payload.percentileSeries(), data.percentileSeries(),
-                    "the percentile bands are part of the contract and are never sampled");
-            assertEquals(payload.distribution(), data.distribution(),
-                    "the distribution is part of the contract and is never sampled");
-            assertEquals(treeMapper.valueToTree(payload.statistics()), treeMapper.valueToTree(data.statistics()),
-                    "statistics are computed from all paths at run time and never re-derived from a sample");
-        } finally {
-            simulationProperties.setResponsePathsSampleSize(0); // restore the shipped default
-        }
+        assertEquals(4, sample.size(), "the requested sample size must bound the returned paths");
+        assertEquals(fullMin, global(sample, true), 1e-9,
+                "y-range floor computed from the sampled paths must equal the full-data floor");
+        assertEquals(fullMax, global(sample, false), 1e-9,
+                "y-range ceiling computed from the sampled paths must equal the full-data ceiling");
+
+        // The summary transport never carries paths, and aggregates are never sampled.
+        SimulationData data = simulationMapper.toDto(reloaded);
+        assertEquals(payload.percentileSeries(), data.percentileSeries(),
+                "the percentile bands are part of the contract and are never sampled");
+        assertEquals(payload.distribution(), data.distribution(),
+                "the distribution is part of the contract and is never sampled");
+        assertEquals(treeMapper.valueToTree(payload.statistics()), treeMapper.valueToTree(data.statistics()),
+                "statistics are computed from all paths at run time and never re-derived from a sample");
     }
 
     // ── fixtures ─────────────────────────────────────────────────────────────

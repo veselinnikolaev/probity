@@ -39,7 +39,6 @@ public class SimulationStatusResponse {
         private SimulationResponseParameters parameters;
         private SimulationResponseStatistics statistics;
         private SimulationResponseOutcomes outcomes;
-        private java.util.List<SimulationResponseAllPath> allPaths;
         private java.util.List<SimulationResponsePercentileSeries> percentileSeries;
         private java.util.List<SimulationResponseDistributionBucket> distribution;
     }
@@ -75,15 +74,6 @@ public class SimulationStatusResponse {
         private double probabilityOf20PercentLoss;
         private double valueAtRisk95;
         private double conditionalValueAtRisk95;
-    }
-
-    @Getter
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SimulationResponseAllPath {
-        private int pathId;
-        private java.util.List<SimulationResponsePathPoint> values;
     }
 
     @Getter

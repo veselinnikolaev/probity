@@ -1158,6 +1158,142 @@ Per run (A1-A3; wall = run wall seconds; the warm-up is discarded):
   reach the WSL2 network namespace), and the member pre-check moved behind a 120 s
   join-poll (consumers assign ~25 s after start).
 
+## Q9b verification
+
+> Status: **complete** — runtime check done and the 4-block measurement gate recorded below
+> (one session, P0 = master `f030b91` vs Q9b = branch `pr-q9b-paths-endpoint`).
+
+### What was verified
+
+- **Contract change (breaking, by design):** `GET /{id}`, `GET /simulations`,
+  `POST /run`, the async status body and the worker's internal status/DTOs no longer
+  carry `allPaths`; they return summary, percentiles, distribution and statistics only.
+  New `GET /{id}/paths?n=N` returns `{ id, totalPaths, sampleSize, paths[] }`.
+- **Sampling:** evenly spaced indices over the stored path order (no seed) **plus** the
+  path holding the global min and the path holding the global max across all time steps;
+  percentiles/statistics stay computed from **all** paths. Default `n = 100`
+  (`responsePathsSampleSize`), max `n = 1000` (`responsePathsMaxSampleSize`).
+- **Validation:** explicit `n` outside 1..1000 **or** above the stored count → 400
+  (`InvalidPathsRequestException`); **omitted** `n` is the server default and is served
+  **capped** to the stored count (a 2-path row → 200 with 2 paths). Same auth + same
+  ownership check as `GET /{id}`; `Cache-Control: private, no-store`; no ETag; zero
+  stored paths → empty sample (200).
+- **Frontend:** `FanChart` y-range = union of the percentile series and the sampled paths
+  (min/max included); the band renders first, paths when they arrive (loading caption);
+  `MonteCarlo` requests `/paths?n=100` after completion.
+
+### Runtime check (not the gate)
+
+Topology: API as host `java -jar` (branch build), **one** worker
+`probity-worker:q9b-new` as a `--network host` container connecting as
+`probity_worker` (never `postgres`), compose Postgres/Kafka/Redis; 1 consumer member /
+6 partitions / lag 0 before the run. Request: `numberOfSimulations=1000`,
+`timeHorizonDays=90`, `confidenceLevel=0.95`.
+
+| check | measured |
+|---|---|
+| `POST /run-async` | 202, accept **395 ms** |
+| poll → `COMPLETED` | **2,050 ms**, 5 polls |
+| stored `result_payload` | **11,684 B** |
+| stored `simulation_paths` | **1,459,904 B** |
+| `GET /{id}/status` | **30,913 B** (was 3,901,906 B → ≈ **126x** smaller) |
+| `GET /{id}` (detail) | **30,677 B** (was 3,901,056 B) |
+| `GET /simulations` (list, 1 row) | **30,679 B** |
+| `GET /{id}/paths?n=100` | **387,006 B**, `sampleSize=100` / `totalPaths=1000`, 100 distinct pathIds |
+| `allPaths` absent from detail / status | **true** |
+| reproducible sample | two identical calls **byte-identical** |
+| global min/max (DB, all 1000 paths) | (143.085988884062, 8005.17174204478) |
+| sample min/max | (143.085988884062, 8005.17174204478) — **included** |
+| `n=0` / `n=1001` / `n=2000` | **400** (`n must be between 1 and 1000`) |
+| `n` omitted | **200** (default 100) |
+| unknown id / no auth | **404 / 401** |
+| headers | `Cache-Control: no-store, private`; no ETag |
+
+**Credential note.** The `probity_worker` role's password is provisioned out of band and
+the recorded copy no longer matched the local dev role, so the local dev role's password
+was reset for this run (value kept **outside** the repo: `%USERPROFILE%\.probity-dev-secrets\probity_worker.txt`
+and the PR-D5 scratch file). Grants were then verified over the real `scram-sha-256`
+host path: `SELECT` on `assets`, `flyway_schema_history`, `portfolio_positions`,
+`portfolios`, `price_bars`, `simulations`; `UPDATE` on `simulations`; `INSERT,SELECT` on
+`simulation_paths` (Q9a addition present). Negative tests: `INSERT`/`DELETE` on
+`simulations` denied, `SELECT` on `users` denied — least privilege intact. See
+`docs/AGENT_LESSONS.md` lesson 26.
+
+### Method
+
+- **Protocol:** the recorded PR-D5 / Q9a driver — `loadtest/run-baseline.ps1` Scenario A
+  (`loadtest/k6/baseline.js`, VUS=6 ITERATIONS=60), `TRUNCATE TABLE simulations` before the
+  warm-up and before each measured run, observability containers stopped, **1 discarded
+  warm-up + 3 measured runs per condition**; medians with min–max over the three runs.
+  All four blocks ran in one session through one harness, so no condition crosses a
+  session boundary.
+- **Builds:** P0 = master `f030b91` — API jar built from a clean worktree of that commit
+  and worker image `probity-worker:q9b-p0`. Q9b = branch `pr-q9b-paths-endpoint` — API jar
+  from the main repo `target/` and worker image `probity-worker:q9b-new`.
+- **Topology:** API as host `java -jar` (port 8080); worker as **1 or 3** `--network host`
+  containers running the matching image, connecting as `probity_worker` (never `postgres`);
+  compose Postgres/Kafka/Redis; observability (grafana/prometheus/loki) stopped for the
+  whole session.
+- **Block order:** P0@1 → Q9b@1 → P0@3 → Q9b@3 (not counterbalanced — same caveat as the
+  earlier sections).
+- **Units:** throughput = k6 `http_reqs` rate (sims/s, iterations/s); latency = k6 Trend
+  values in **ms**; WAL = bytes written between the block's start and end LSN, per
+  simulation; stored bytes = `pg_column_size` of `result_payload` + `simulation_paths`
+  per row; body bytes = UTF-8 bytes of the response body.
+
+### Numbers
+
+| condition | throughput (sims/s, median [min–max]) | e2e p95 / p99 (ms) | status body (B) | WAL / sim (MB) | stored bytes / row (B) |
+|---|---|---|---|---|---|
+| P0 @ 1 replica | 2.212 [2.134–2.232] | 3,653.8 / 4,239.7 | 3,901,679 | 1.528 [1.528–1.563] | 11,642 + 1,460,539 |
+| Q9b @ 1 replica | **3.135** [3.130–3.172] | 2,486.1 / 2,934.3 | **30,948** | 1.551 [1.528–1.551] | 11,639 + 1,460,517 |
+| P0 @ 3 replicas | 4.754 [4.725–4.880] | 1,994.4 / 2,319.6 | 3,901,379 | 1.530 [1.529–1.553] | 11,649 + 1,460,472 |
+| Q9b @ 3 replicas | **6.410** [6.380–6.533] | 1,460.0 / 1,744.2 | **30,978** | 1.559 [1.529–1.648] | 11,644 + 1,460,517 |
+
+Other measured columns:
+
+| condition | accept p95 / p99 (ms) | server p95 / p99 (ms) | api CPU (s) | worker CPU (s) | ck_req | kafka lag |
+|---|---|---|---|---|---|---|
+| P0 @ 1 | 45.1 / 56.2 | 2,727.1 / 3,363.2 | 11.14 [11.08–14.01] | 18.42 [17.42–19.31] | 0/0/0 | 0 |
+| Q9b @ 1 | 21.0 / 22.8 | 2,217.6 / 2,619.3 | 3.19 [2.86–4.16] | 9.81 [9.57–10.18] | 0/0/0 | 0 |
+| P0 @ 3 | 25.0 / 27.4 | 1,223.4 / 1,445.6 | 8.94 [8.30–9.95] | 21.59 [21.57–22.11] | 1/0/0 | 0 |
+| Q9b @ 3 | 22.0 / 23.0 | 1,073.2 / 1,342.8 | 2.84 [2.58–3.05] | 11.17 [10.95–11.63] | 0/0/1 | 0 |
+
+### Result
+
+- **Throughput is higher, and distinguishable at both replica counts.** Medians
+  **2.212 → 3.135 sims/s** (1 replica, +42 %) and **4.754 → 6.410** (3 replicas, +35 %),
+  with **non-overlapping min–max ranges** in both pairs (P0 max 2.232 < Q9b min 3.130 at
+  1 rep; P0 max 4.880 < Q9b min 6.380 at 3 rep), so this is a measured difference, not run
+  spread. It is reported as a **measurement**, not a promise.
+- **The response body is the point.** `GET /{id}/status` **3,901,679 → 30,948 B** (1 rep)
+  and **3,901,379 → 30,978 B** (3 rep) — ≈ **126x** smaller — with the detail body in the
+  same band (3,901,443 → 30,712 B / 3,901,143 → 30,742 B). The portfolio list drops
+  **234,087,457 → 1,841,051 B** (1 rep) and **234,093,098 → 1,841,289 B** (3 rep) for the
+  same ≈ 60 rows left in the block. The on-demand sample `/paths?n=100` is **387,300 B**
+  (1 rep) / **386,919 B** (3 rep), `sampleSize=100` of `totalPaths=1000`,
+  `minMaxInSample=true` in every block.
+- **Latency falls with the body** (shorter queueing and less serialization): e2e p95
+  **3,653.8 → 2,486.1 ms** (1 rep), **1,994.4 → 1,460.0 ms** (3 rep); accept p95
+  **45.1 → 21.0 ms** (1 rep), **25.0 → 22.0 ms** (3 rep).
+- **WAL per simulation is flat — not distinguishable.** 1.528 → 1.551 MB/sim (1 rep),
+  1.530 → 1.559 (3 rep); the ranges overlap, and no block requested a checkpoint pattern
+  that distinguishes them. This is expected: Q9b changes only the **read/DTO** side, not
+  the completion write (Q9a's split write is present in both builds), so WAL is unchanged.
+  Stored bytes per simulation are likewise flat (≈ 11.6 KB `result_payload` + ≈ 1.46 MB
+  `simulation_paths` in every block) — the storage layout is identical, only the response
+  shape changed.
+- **CPU:** api CPU per 60-sim run **fell** at both counts (11.14 → 3.19 s at 1 rep,
+  8.94 → 2.84 s at 3) and worker CPU **fell as well** (18.42 → 9.81 s at 1 rep,
+  21.59 → 11.17 s at 3). Runs were also shorter (wall ≈ 29 → 20 s at 1 rep, 13.5 → 10.1 s
+  at 3). The api drop is consistent with serializing ~3.9 MB instead of ~30 KB per poll
+  (the k6 loop polls status to completion); *why the worker CPU also falls* was **not
+  investigated** — it is likely a downstream effect of the faster accept/poll loop, but
+  that cause is not measured here.
+- **Correctness under load:** `kafka lag after` was **0** in all four blocks, every block
+  returned `minMaxInSample=true`, and every Q9b block served exactly `100/1000` paths — so
+  the sampled endpoint stayed correct across both replica counts.
+
 ## Caveats
 
 - **k6 and the JVM share one laptop**, along with Postgres, Kafka and Redis. The load

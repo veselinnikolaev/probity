@@ -23,12 +23,16 @@ probity:
     # the same record is redelivered. Replaces the previous whole-consumer nack: only the
     # owning partition is paused, so sibling partitions keep flowing.
     unclaimable-backoff: ${SIMULATION_UNCLAIMABLE_BACKOFF:1s}
-    # Q9a (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10): max paths a response may carry.
-    # 0 (default) = disabled — every stored path is returned, keeping bodies byte-identical
-    # to the recorded pre-Q9a contract; >0 = deterministic evenly-spaced sample that always
-    # includes the global min/max paths (y-range-safe). Aggregates are computed from ALL
-    # paths at run time, never from a sample. PR-Q9b picks the real N.
-    response-paths-sample-size: ${SIMULATION_RESPONSE_PATHS_SAMPLE_SIZE:0}
+    # Q9b (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10): default number of paths the sampled
+    # endpoint GET /api/v1/simulations/{id}/paths serves when the caller passes no n. 100 is
+    # an unmeasured first guess (owner-bounded "at most N"), cutting the paths body from
+    # ~3.90 MB to ~390 KB. Deterministic evenly-spaced sample that always includes the global
+    # min/max paths (y-range-safe); 0 disables sampling. Aggregates are computed from ALL
+    # paths at run time, never from a sample. Max n the endpoint accepts is bounded separately.
+    response-paths-sample-size: ${SIMULATION_RESPONSE_PATHS_SAMPLE_SIZE:100}
+    # Q9b: upper bound the paths endpoint accepts for n; a larger n (or one above the stored
+    # path count) is rejected with 400 rather than clamped.
+    response-paths-max-sample-size: ${SIMULATION_RESPONSE_PATHS_MAX_SAMPLE_SIZE:1000}
     # The worker group id. A property rather than an annotation constant so a second worker
     # deployment (canary, region) can join deliberately instead of by accident, and so the
     # test slice can give each class its own group.

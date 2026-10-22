@@ -44,24 +44,37 @@ public class SimulationProperties {
     private Duration unclaimableBackoff = Duration.ofSeconds(1);
 
     /**
-     * Maximum number of {@code allPaths} entries a response may carry (Q9a storage split,
-     * docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10).
+     * Maximum number of {@code allPaths} entries the sampled-paths endpoint
+     * ({@code GET /api/v1/simulations/{id}/paths}) serves when the caller does not pass an
+     * explicit {@code n} (Q9b API split, docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10).
      *
-     * <p><strong>Default {@code 0} = disabled: every stored path is returned.</strong>
-     * That default is what keeps status/list/201 bodies byte-identical to the recorded
-     * pre-Q9a contract — §10's verification gate measures exactly that — and it keeps the
-     * choice of the real sample size N where §9 parked it, in PR-Q9b.
+     * <p><strong>Default {@code 100} — an unmeasured first guess, not a measured optimum.</strong>
+     * The owner's recorded answer bounds the sample at "at most N" and picks N here; 100 is
+     * chosen as the smallest value that still draws a readable fan while cutting the paths
+     * body from ≈ 3.90 MB to ≈ 390 KB, and it is deliberately a round, cheap-to-change
+     * number. Changing it changes only the endpoint's default; storage and every computed
+     * number are unaffected.
      *
-     * <p>Values {@code > 0} return at most that many paths: a deterministic evenly-spaced
-     * sample that always includes the paths holding the global minimum and maximum values,
-     * so a y-range computed from the returned paths equals the full-data range (FanChart's
-     * scale derives from path values). The sample bounds responses only — statistics,
-     * percentileSeries and distribution are always computed from every path at run time and
-     * are never re-derived from a sample.
+     * <p>Sampling is deterministic: at most N evenly-spaced indices over the stored order,
+     * always including the paths holding the global minimum and maximum values, so a
+     * y-range computed from the returned paths equals the full-data range (FanChart's scale
+     * derives from path values). {@code 0} or a negative value disables sampling and returns
+     * every stored path.
+     *
+     * <p>Sampling bounds the response only — statistics, percentileSeries and distribution
+     * are always computed from every path at run time and are never re-derived from a
+     * sample. The status/list/result bodies carry no paths at all since Q9b.
      *
      * <p>Set per process ({@code probity.simulation.response-paths-sample-size}, env
-     * {@code SIMULATION_RESPONSE_PATHS_SAMPLE_SIZE}) wherever responses are served: the
-     * worker for the run-async DTO, the API for HTTP reads.
+     * {@code SIMULATION_RESPONSE_PATHS_SAMPLE_SIZE}) wherever the paths endpoint is served.
      */
-    private int responsePathsSampleSize = 0;
+    private int responsePathsSampleSize = 100;
+
+    /**
+     * Upper bound the paths endpoint accepts for its {@code n} query parameter. A request
+     * above this bound — or above the number of stored paths — is rejected with 400 rather
+     * than silently clamped, so a client cannot ask for a body larger than this ceiling.
+     * Kept here (not in the controller) so the bounds move with the sampling configuration.
+     */
+    private int responsePathsMaxSampleSize = 1000;
 }

@@ -106,7 +106,7 @@ Near-linear scalability with CPU cores and zero GC pauses due to primitive `doub
 | Portfolio Valuation | 92% | 3ms | 80ms |
 | Risk Calculations | 78% | 1ms | 45ms |
 
-**Test suite**: 378 run, 1 skipped (`./mvnw -o clean verify`; 353 api + 25 worker), including end-to-end coverage of the async Kafka simulation pipeline. The skip is the `@Disabled` concurrency placeholder (§2.7).
+**Test suite**: 388 run, 1 skipped (`./mvnw -o clean verify`; 363 api + 25 worker), including end-to-end coverage of the async Kafka simulation pipeline. The skip is the `@Disabled` concurrency placeholder (§2.7).
 
 ## Mathematical Foundations
 
@@ -401,6 +401,8 @@ bytes intact and the row marked `FAILED`.
 |---|---|---|
 | `/simulations/run-async` | POST | Initiate async simulation, returns 202 + Location |
 | `/simulations/{id}/status` | GET | Poll status (PENDING/PROCESSING/COMPLETED/FAILED) |
+| `/simulations/{id}` | GET | Fetch a completed simulation (summary + percentile series + distribution; no paths) |
+| `/simulations/{id}/paths?n=N` | GET | Sampled paths for a simulation (`n` default 100, max 1000; deterministic evenly-spaced + global min/max) |
 | `/simulations?portfolioId=` | GET | List completed simulations for portfolio |
 
 ---
@@ -417,7 +419,7 @@ bytes intact and the row marked `FAILED`.
 - **NUMERIC(19,4) for money-like values**
   - Used for position quantities and price snapshots to avoid floating-point rounding drift in financial computations.
 - **JSONB payload for simulations**
-  - Monte Carlo results are stored as one JSONB payload per run to optimize read-back and keep relational schema stable.
+  - Monte Carlo results are stored as one JSONB payload per run to optimize read-back and keep relational schema stable. Since Q9 the summary, percentile series and distribution stay in `result_payload` while the full `allPaths` array lives in the `simulation_paths` table, so a status/detail/list response is tens of KB instead of ≈ 3.9 MB; the UI fetches a bounded sample from `GET /simulations/{id}/paths`.
 - **Primitive arrays for simulation paths**
   - Uses `double[][]` instead of `List<List<Double>>` to minimize GC overhead and memory footprint for large simulation runs.
 - **Idempotency for POST operations**
@@ -718,7 +720,7 @@ pm test
 
 | Target | Command |
 |---|---|
-| All | ./mvnw -o clean verify -B (378 run / 1 skipped) |
+| All | ./mvnw -o clean verify -B (388 run / 1 skipped) |
 | API | ./mvnw -pl probity-api -o test |
 | Worker | ./mvnw -pl probity-worker -o test |
 | Frontend | cd frontend && npm ci && npm run build && npm test |
