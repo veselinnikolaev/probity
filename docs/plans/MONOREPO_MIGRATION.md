@@ -425,3 +425,18 @@ has been executed** on branch `m2-ci-path-filters` (§10c) — awaiting review, 
 still wait for explicit owner approval; the drift list (§2) and the frontend install baseline
 (now fixed in frontend PR #16) remain recorded findings. Frontend PR #17 (types alignment) was
 closed unmerged; that work moves to the monorepo later.
+
+## M4 drift (re-verified, 2026-10-22, post Q9a/Q9b)
+
+Re-checked against the merged Q9b tree; line numbers are current.
+
+- (a) async flow — drift, M4a. Backend: `SimulationController.runAsync` @123-161 (202 accepted + `Location`) and `getStatus` @175-205. Frontend: `useSimulation.run` @15-26 calls `runSimulation` (sync `POST /simulations/run`) @14-25 of `services/simulation/index.ts`; `MonteCarlo.handleRunSimulation` @78-86. No polling exists today.
+- (b) assistant CSRF — drift, M4b. Frontend: `AiAssistant.tsx` @69-74 uses raw `fetch` with only `Content-Type` and no `X-XSRF-TOKEN`. Backend: `AssistantController` POST `/assistant/chat` (line 49) is CSRF-protected by the global filter, so the call only works because of the cookie; the raw fetch does not rotate/reuse the token like the axios client.
+- (c) simulation-count range — drift, M4b. Frontend: `MonteCarlo.tsx` @165-167 allows `1..100000`; backend `RunSimulationRequest` @21-22 validates `100..10000`.
+- (d) check-email — drift, needs owner decision, M4c. Frontend: `auth/index.ts` @22-26 and `Register.tsx` @72-97 call `GET /auth/check-email`; backend `AuthController` has no such route (routes list @11-30 of `ApiRoutes.Auth`).
+- (e) dead code — drift, M4d. Frontend: `fetchSimulation` @27-36 and `listSimulations` @38-45 in `services/simulation/index.ts` are unused; `SimulationResponse` envelope @78-86 unused. Backend: `GET /portfolios/{id}` exists (`PortfolioQueryController` @80-84) but no frontend caller was found; keep unless an owner wants it removed.
+- (f) Q9b new drift — none. `MonteCarlo.tsx` already calls `fetchSimulationPaths` @54 after the result lands; result/status/list bodies are paths-less and the `/paths?n=100` usage is wired. No further frontend change needed for Q9b.
+
+Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-email (owner decision required); M4d dead code + `@types/react` alignment.
+
+Owner decision needed for (d): (1) add a backend `GET /auth/check-email` route, or (2) remove the frontend call. Option 1 changes the security posture: an unauthenticated email-existence check enables account enumeration, so it must be rate-limited and must not distinguish "no such user" from other failures in a way that leaks accounts; option 2 removes the live availability hint and leaves validation to submit-time (409). No implementation of M4c until the owner chooses.
