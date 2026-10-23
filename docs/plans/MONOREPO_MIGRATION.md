@@ -426,9 +426,11 @@ still wait for explicit owner approval; the drift list (§2) and the frontend in
 (now fixed in frontend PR #16) remain recorded findings. Frontend PR #17 (types alignment) was
 closed unmerged; that work moves to the monorepo later.
 
-## M4 drift (re-verified, 2026-10-22, post Q9a/Q9b)
+## M4 drift (re-verified, 2026-10-22 and 2026-10-23, post Q9a/Q9b)
 
-Re-checked against the merged Q9b tree; line numbers are current.
+Re-checked against the merged Q9b tree (master `2b33a25`); line numbers are current.
+The 2026-10-23 pass independently re-ran every item on branch `m4a-async-flow` and
+reproduced all of (a)–(f) exactly; no drift changed and none was added.
 
 - (a) async flow — drift, M4a. Backend: `SimulationController.runAsync` @123-161 (202 accepted + `Location`) and `getStatus` @175-205. Frontend: `useSimulation.run` @15-26 calls `runSimulation` (sync `POST /simulations/run`) @14-25 of `services/simulation/index.ts`; `MonteCarlo.handleRunSimulation` @78-86. No polling exists today.
 - (b) assistant CSRF — drift, M4b. Frontend: `AiAssistant.tsx` @69-74 uses raw `fetch` with only `Content-Type` and no `X-XSRF-TOKEN`. Backend: `AssistantController` POST `/assistant/chat` (line 49) is CSRF-protected by the global filter, so the call only works because of the cookie; the raw fetch does not rotate/reuse the token like the axios client.
@@ -440,3 +442,10 @@ Re-checked against the merged Q9b tree; line numbers are current.
 Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-email (owner decision required); M4d dead code + `@types/react` alignment.
 
 Owner decision needed for (d): (1) add a backend `GET /auth/check-email` route, or (2) remove the frontend call. Option 1 changes the security posture: an unauthenticated email-existence check enables account enumeration, so it must be rate-limited and must not distinguish "no such user" from other failures in a way that leaks accounts; option 2 removes the live availability hint and leaves validation to submit-time (409). No implementation of M4c until the owner chooses.
+
+**Decision (2026-10-23): option 2 — remove the frontend call.** The owner chose to
+delete the `GET /auth/check-email` call rather than add a backend route. Rationale: an
+unauthenticated email-existence check enables account enumeration, and the frontend
+already learns about duplicates at submit time (`409`), so the live hint is not worth
+the new security surface. No backend route to be added. Recorded here only; M4c is a
+separate PR and is not being implemented yet.
