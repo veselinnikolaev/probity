@@ -1,18 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageCircle, X, Sparkles } from 'lucide-react';
+import { useAiAssistant } from '@/hooks/useAiAssistant';
 import styles from './ai-assistant.module.css';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
-interface ErrorBanner {
-  type: 'warning' | 'error';
-  message: string;
-}
 
 const SUGGESTION_CHIPS = [
   "What's my portfolio VaR?",
@@ -22,12 +11,11 @@ const SUGGESTION_CHIPS = [
 
 const AiAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorBanner, setErrorBanner] = useState<ErrorBanner | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { messages, setMessages, isLoading, errorBanner, sendMessage, clearError } = useAiAssistant();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,71 +31,6 @@ const AiAssistant: React.FC = () => {
       textarea.style.height = 'auto';
       const newHeight = Math.min(textarea.scrollHeight, 72);
       textarea.style.height = `${newHeight}px`;
-    }
-  }, []);
-
-  const sendMessage = useCallback(async (messageText: string) => {
-    if (!messageText.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: messageText,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
-    setIsLoading(true);
-    setErrorBanner(null);
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '40px';
-    }
-
-    try {
-      const response = await fetch('/api/v1/assistant/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ message: messageText }),
-      });
-
-      if (response.status === 429) {
-        setErrorBanner({
-          type: 'warning',
-          message: "You've reached the message limit. Try again in a moment.",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      if (!response.ok) {
-        setErrorBanner({
-          type: 'error',
-          message: 'Failed to get response. Please try again.',
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      const data = await response.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.message || data.response,
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      setErrorBanner({
-        type: 'error',
-        message: 'Failed to connect. Please try again.',
-      });
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -234,6 +157,9 @@ const AiAssistant: React.FC = () => {
               }`}
             >
               {errorBanner.message}
+              <button className={styles.errorClose} onClick={clearError} aria-label="Dismiss">
+                ×
+              </button>
             </div>
           )}
 

@@ -451,3 +451,8 @@ The live GET /auth/check-email call is removed from the register form. Instead, 
 4. Tests: add/extend Register.test.tsx to assert that a 409 from egister() renders "This e-mail is already registered" (no live check fired). Remove any test that mocked checkEmailAvailability.
 
 **Behaviour after M4c:** user fills register form, submits; if e-mail exists, backend returns 409 with error body; frontend shows the error inline on the e-mail field — no separate live check, no extra round-trip, no enumeration vector.
+
+### M4b status (2026-10-24) — implemented
+- (b) assistant CSRF — **done**. Raw `fetch` in `AiAssistant.tsx` replaced with the authenticated axios client (`services/api.ts`) via a new `useAiAssistant` hook (`hooks/useAiAssistant.ts`). The axios interceptor attaches `X-XSRF-TOKEN` and `Idempotency-Key` automatically. Test added: `AiAssistant.test.tsx` verifies the POST goes to `/assistant/chat` through the authenticated client.
+- (c) simulation-count range — **done**. UI input in `MonteCarlo.tsx` now enforces `min=100`, `max=10000` (matching `RunSimulationRequest.java:21-22`), with a validation hint. Constants `SIMULATION_COUNT_MIN=100`, `SIMULATION_COUNT_MAX=10000` added to `constants/simulation.ts`. Default remains 10000 (within bounds).
+- (new) API base URL — **done**. `services/api.ts` now reads `import.meta.env.VITE_API_BASE_URL` with default `http://localhost:8080/api/v1`. Added `frontend/.env.example` with the variable. Updated README to reflect that the variable is now read and used.

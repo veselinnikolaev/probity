@@ -686,7 +686,7 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 | probity-api/ | Spring Boot API |
 | probity-shared/ | Shared domain types |
 | probity-worker/ | Kafka worker (separate process) |
-| rontend/ | React/Vite frontend (M1 import) |
+| `rontend/ | React/Vite frontend (M1 import) |
 | k8s/ | Kubernetes manifests |
 | loadtest/ | Load tests |
 | docs/ | Documentation
@@ -696,7 +696,7 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 | Component | Version |
 |---|---|
 | Java | 21 (Temurin) |
-| Node.js | from rontend/.nvmrc (20.20.1) |
+| Node.js | from `rontend/.nvmrc (20.20.1) |
 | Docker | for compose/Testcontainers |
 | Maven | wrapper ./mvnw
 
@@ -710,11 +710,8 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 
 ### Frontend
 1. cd frontend && npm ci
-2. rontend/.env.local with VITE_API_BASE_URL=http://localhost:8080
-3. 
-pm run dev; build 
-pm run build; test 
-pm test
+2. Create `frontend/.env.local` with `VITE_API_BASE_URL=http://localhost:8080/api/v1` (read by `services/api.ts`; defaults to this value if omitted)
+3. `npm run dev` for dev server, `npm run build; npm test` for build/test
 
 ## Tests
 
@@ -727,7 +724,7 @@ pm test
 
 ## CI
 
-- CI Status aggregates changes, 	est, rontend-test (required when protected).
+- CI Status aggregates changes, test, frontend-test (required when protected).
 - Backend runs on backend-path changes; frontend on frontend-path changes.
 - Docker push only on push to master.
 

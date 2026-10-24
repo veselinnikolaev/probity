@@ -1,8 +1,13 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
+// Read API base URL from Vite environment variable; default to current local dev value.
+// This allows the frontend to be pointed at different API hosts (staging, prod, etc.)
+// without code changes. See frontend/.env.example for the variable name.
+const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+
 const api: AxiosInstance = axios.create({
-    baseURL: 'http://localhost:8080/api/v1',
+    baseURL,
     withCredentials: true,
 });
 
