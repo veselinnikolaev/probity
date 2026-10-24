@@ -220,3 +220,6 @@ Append-only. One entry = the failure, then the rule. Read together with
     dev container first), keep the new value outside the repo, and report the reset. Never
     substitute a superuser role for a least-privilege one to unblock a run.
 
+
+### Problem
+#2 Changing seeded credentials to bypass auth: Do not change credentials of shared or seeded accounts to get past a 401. Check how the existing harness logs in (loadtest/k6/baseline.js), ask first, or use a throwaway user. If you must temporarily change a seed account for local debugging, save the original hash before changing it and restore it immediately.
