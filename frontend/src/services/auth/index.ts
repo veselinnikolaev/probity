@@ -19,13 +19,6 @@ export const authService = {
     await api.post(`/auth/resend-verification?email=${encodeURIComponent(email)}`, null);
   },
 
-  async checkEmailAvailability(email: string): Promise<{ available: boolean }> {
-    const { data } = await api.get<{ available: boolean }>(
-        `/auth/check-email?email=${encodeURIComponent(email)}`
-    );
-    return data;
-  },
-
   async refresh(): Promise<User> {
     const { data } = await api.post<User>('/auth/refresh');
     return data;
