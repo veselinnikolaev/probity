@@ -443,9 +443,10 @@ Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-e
 
 Owner decision needed for (d): (1) add a backend `GET /auth/check-email` route, or (2) remove the frontend call. Option 1 changes the security posture: an unauthenticated email-existence check enables account enumeration, so it must be rate-limited and must not distinguish "no such user" from other failures in a way that leaks accounts; option 2 removes the live availability hint and leaves validation to submit-time (409). No implementation of M4c until the owner chooses.
 
-**Decision (2026-10-23): option 2 — remove the frontend call.** The owner chose to
-delete the `GET /auth/check-email` call rather than add a backend route. Rationale: an
-unauthenticated email-existence check enables account enumeration, and the frontend
-already learns about duplicates at submit time (`409`), so the live hint is not worth
-the new security surface. No backend route to be added. Recorded here only; M4c is a
-separate PR and is not being implemented yet.
+**Status of (d): owner has not decided; default proposal is to remove the frontend
+call.** The agent's default recommendation is option 2 — delete the `GET /auth/check-email`
+call and let duplicate detection happen at submit time (`409`) — because an
+unauthenticated email-existence check enables account enumeration and would need rate
+limiting plus a response that does not distinguish "no such user" from other outcomes.
+This is a proposal only: no backend route is to be added and no frontend code is to be
+removed until the owner decides. M4c is a separate PR and is not being implemented.
