@@ -16,7 +16,7 @@ import styles from './monte-carlo.module.css';
 import {useSimulation} from "@/hooks/simulation";
 import {useTopbarSlot} from "@/hooks/useTopbarSlot";
 import {ROUTES} from "@/constants/routes";
-import { CONFIDENCE_LEVELS, TIME_HORIZON_OPTIONS, DEFAULT_SIMULATION_COUNT } from '@/constants/simulation';
+import { CONFIDENCE_LEVELS, TIME_HORIZON_OPTIONS, DEFAULT_SIMULATION_COUNT, SIMULATION_COUNT_MIN, SIMULATION_COUNT_MAX } from '@/constants/simulation';
 
 // ── Main Component ───────────────────────────────────────────────────────────
 const MonteCarloPage: React.FC = () => {
@@ -162,11 +162,17 @@ const MonteCarloPage: React.FC = () => {
                       type="number"
                       className={styles['control-input']}
                       value={numberOfSims}
-                      onChange={(e) => setNumberOfSims(Math.max(1, parseInt(e.target.value) || 1))}
-                      min="1"
-                      max="100000"
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || SIMULATION_COUNT_MIN;
+                        setNumberOfSims(Math.max(SIMULATION_COUNT_MIN, Math.min(SIMULATION_COUNT_MAX, val)));
+                      }}
+                      min={SIMULATION_COUNT_MIN}
+                      max={SIMULATION_COUNT_MAX}
                       disabled={isLoading}
                     />
+                    <span className={styles['validation-hint']}>
+                      {SIMULATION_COUNT_MIN}–{SIMULATION_COUNT_MAX} simulations
+                    </span>
                   </div>
 
                   <div className={styles['control-group']}>

@@ -8,3 +8,7 @@ export const TIME_HORIZON_OPTIONS = [
 ] as const;
 
 export const DEFAULT_SIMULATION_COUNT = 10000;
+
+// Backend bounds from probity-api RunSimulationRequest: @Min(100) @Max(10_000)
+export const SIMULATION_COUNT_MIN = 100;
+export const SIMULATION_COUNT_MAX = 10000;

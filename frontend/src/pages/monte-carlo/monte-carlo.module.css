@@ -43,6 +43,12 @@
     flex: 0 1 auto;
 }
 
+.validation-hint {
+    font-size: 10px;
+    color: var(--pb-text-secondary);
+    margin-top: 2px;
+}
+
 .control-label {
     font-size: 12px;
     font-weight: 500;
