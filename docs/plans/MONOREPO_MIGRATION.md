@@ -450,4 +450,7 @@ The live GET /auth/check-email call is removed from the register form. Instead, 
 3. rontend/src/pages/auth/Register.tsx UI state: remove the "Checking availability..." inline message and the green/red check icon next to the e-mail field.
 4. Tests: add/extend Register.test.tsx to assert that a 409 from egister() renders "This e-mail is already registered" (no live check fired). Remove any test that mocked checkEmailAvailability.
 
-**Behaviour after M4c:** user fills register form, submits; if e-mail exists, backend returns 409 with error body; frontend shows the error inline on the e-mail field — no separate live check, no extra round-trip, no enumeration vector.
+**Behaviour after M4c:** user fills register form, submits; if e-mail exists, backend returns 409 with error body `{"status":409,"error":"Email already registered"}`; if username exists, backend returns 409 with `{"status":409,"error":"Username already taken"}` (verified: `UserCommandService.java:78-83` throws `ConflictException` for each; `AuthController.java:64` documents 409). Frontend shows the error inline on the e-mail/username field — no separate live check, no extra round-trip, no enumeration vector.
+
+### M4b drift addition — frontend hardcodes API base URL
+**New drift item:** frontend hardcodes the API base URL (`http://localhost:8080/api/v1`) in `frontend/src/services/api.ts:5`; `VITE_API_BASE_URL` is declared in `frontend/src/types/vite-env.d.ts:4` but never read. To be fixed in M4b: read `import.meta.env.VITE_API_BASE_URL` with the current value as default, add `.env.example` with the variable name, update README to document it.

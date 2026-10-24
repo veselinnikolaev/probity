@@ -710,11 +710,9 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 
 ### Frontend
 1. cd frontend && npm ci
-2. rontend/.env.local with VITE_API_BASE_URL=http://localhost:8080
-3. 
-pm run dev; build 
-pm run build; test 
-pm test
+2. Create `frontend/.env.local` with `VITE_API_BASE_URL=http://localhost:8080` (declared in `vite-env.d.ts` but **not yet read by the frontend**; the code currently hardcodes `http://localhost:8080/api/v1` in `services/api.ts:5` -- this will be fixed in M4b)
+3. `npm run dev` for dev server, `npm run build; npm test` for build/test
+
 
 ## Tests
 
