@@ -1140,3 +1140,4 @@ When adding new features, update this document with any new patterns, edge cases
 - Split worker DB credential to WORKER_DB_PASSWORD (compose/env/README); role probity_worker remains out of band (no grants/migrations changed).
 - Added Prometheus scrape target probity-worker for simulation-worker:8081/actuator/prometheus (host-run noted).
 - Verified compose config valid; runtime verification blocked by local DB schema state in this clone.
+- Consolidated frontend build/test into ci_cd.yaml with the existing frontend path gate and preserved M4c on m4c-remove-check-email; ops branch cleanup used additive commits only.

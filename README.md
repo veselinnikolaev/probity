@@ -725,8 +725,8 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 ## CI
 
 - CI Status aggregates changes, test, frontend-test (required when protected).
-- Backend runs on backend-path changes; frontend on frontend-path changes.
-- Docker push only on push to master.
+- `ci_cd.yaml` runs the backend and frontend jobs from one workflow; each job is gated by its monorepo path filter.
+- `CI Status` aggregates both build/test jobs; Docker push remains limited to pushes on `master`.
 
 ## Documentation
 

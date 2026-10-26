@@ -47,7 +47,7 @@ jobs:
               - '.github/workflows/ci_cd.yaml'
             frontend:
               - 'frontend/**'
-              - '.github/workflows/frontend-ci.yml'
+              - '.github/workflows/ci_cd.yaml'
 
   test:
     name: Build & Test
@@ -80,6 +80,35 @@ jobs:
           name: test-results
           path: probity-api/target/surefire-reports/
 
+  frontend_test:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.frontend == 'true')
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
   build-and-push:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
@@ -109,14 +138,15 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [changes, test]
+    needs: [changes, test, frontend_test]
     if: always() && github.event_name == 'pull_request'
     steps:
       - name: Evaluate required jobs
         run: |
-          echo "test result: ${{ needs.test.result }}"
-          if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.test.result }}" = "cancelled" ]; then
-            echo "Backend build/test failed."
+          echo "backend result: ${{ needs.test.result }}"
+          echo "frontend result: ${{ needs.frontend_test.result }}"
+          if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.test.result }}" = "cancelled" ] || [ "${{ needs.frontend_test.result }}" = "failure" ] || [ "${{ needs.frontend_test.result }}" = "cancelled" ]; then
+            echo "Backend or frontend build/test failed."
             exit 1
           fi
           echo "Required checks OK (skipped or successful)."
