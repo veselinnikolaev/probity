@@ -4,6 +4,7 @@ import { InputField } from '../probity/InputField';
 import { ProbityButton } from '../probity/ProbityButton';
 import { ROUTES } from '@/constants/routes';
 import { authService } from '@/services/auth';
+import { Check } from 'lucide-react';
 import styles from '@/pages/auth/auth.module.css';
 
 interface RegisterProps {
