@@ -1117,6 +1117,16 @@ The system is ready for production deployment with confidence in its reliability
 - **Why:** (1) UI allowed 1..100000, backend rejected outside 100..10000 — alignment removes 400 surprises. (2) The assistant was the only endpoint bypassing the CSRF/idempotency interceptor; now it uses the same client as every other call. (4) The frontend hardcoded the API host; reading from an env var enables staging/prod deployments without code changes.
 - **Verified:** `cd frontend && npm ci` exit 0 (389 packages), `npm run build` exit 0 (1774 modules, 2.0s), `npm test` exit 0 (5 test files, 18 tests including new `AiAssistant.test.tsx` 3 tests). Backend files unchanged (`git diff --stat master...HEAD` shows frontend/, README and docs only).
 - **Left out:** M4c (check-email removal, owner decision recorded, 409 on duplicate email/username confirmed), M4d (dead code + `@types/react` alignment).
+
+### M4c — remove check-email, show 409 on submit (2026-10-24)
+
+- **Changed:** three frontend commits:
+  1. **Removed `checkEmailAvailability`** (`services/auth/index.ts:22-26`): deleted the function that called `GET /auth/check-email`.
+  2. **Removed live check from Register form** (`components/auth/Register.tsx`): removed the debounced `useEffect` that called `checkEmailAvailability` on email change; removed `emailChecking` and `emailAvailable` state; removed the Check/X icon suffix from the email field.
+  3. **Added tests** (`components/auth/Register.test.tsx`): tests for duplicate email 409 ("Email already registered"), duplicate username 409 ("Username already taken"), successful registration, and assertion that no `check-email` requests are made.
+- **Why:** The live `GET /auth/check-email` call hit a non-existent backend endpoint (404) and would have enabled account enumeration if implemented. Per owner decision, the call is removed entirely; duplicate detection now happens at submit time via the existing `POST /auth/register` 409 responses ("Email already registered" / "Username already taken" from `UserCommandService.java:78-82`).
+- **Verified:** `cd frontend && npm ci` exit 0, `npm run build` exit 0, `npm test` exit 0 (6 test files, 21 tests including new `Register.test.tsx` 4 tests). Backend files unchanged.
+- **Left out:** M4d (dead code + `@types/react` alignment).
 ---
 
 ## Questions & Updates
@@ -1125,3 +1135,8 @@ For questions, refer to the implementation components or contact the author.
 
 When adding new features, update this document with any new patterns, edge cases, or exceptions that arise.
 
+
+### Ops: worker DB password variable and worker metrics scrape (PR ops-worker-password-and-metrics)
+- Split worker DB credential to WORKER_DB_PASSWORD (compose/env/README); role probity_worker remains out of band (no grants/migrations changed).
+- Added Prometheus scrape target probity-worker for simulation-worker:8081/actuator/prometheus (host-run noted).
+- Verified compose config valid; runtime verification blocked by local DB schema state in this clone.

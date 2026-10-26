@@ -158,7 +158,7 @@ services:
       # the read schema by V18__worker_role_grants.sql (role itself is provisioned out of
       # band; the migration never creates it or its password).
       - DB_USERNAME=probity_worker
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PASSWORD=${WORKER_DB_PASSWORD}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - SIMULATION_CONSUMER_GROUP=probity-simulation-worker
       # Explicit surface of the lease > max.poll.interval.ms invariant (Phase 4 A2.9).

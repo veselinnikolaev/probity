@@ -10,3 +10,9 @@ scrape_configs:
     # If running with prod profile, replace with:
     # static_configs:
     #   - targets: ['app:8080']
+
+  - job_name: 'probity-worker'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['simulation-worker:8081']  # use host.docker.internal:8081 if running worker on host
+    # If running with worker profile under compose, Prometheus and worker share the compose network.
