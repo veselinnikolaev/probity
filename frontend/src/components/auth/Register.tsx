@@ -5,6 +5,7 @@ import { ProbityButton } from '../probity/ProbityButton';
 import { ROUTES } from '@/constants/routes';
 import { authService } from '@/services/auth';
 import styles from '@/pages/auth/auth.module.css';
+import { Check, X } from 'lucide-react';
 
 interface RegisterProps {
   onSignInClick?: () => void;
@@ -39,6 +40,8 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: { state: 'error'; message: string } }>({});
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
 
   const navigate = useNavigate();
 
@@ -65,6 +68,40 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
       return () => clearTimeout(timeout);
     }
   }, [resendSuccess]);
+
+  // Debounced email availability check
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (email && basicEmailRegex.test(email)) {
+        setEmailChecking(true);
+        try {
+          const result = await authService.checkEmailAvailability(email);
+          setEmailAvailable(result.available);
+          if (!result.available) {
+            setFieldErrors(prev => ({
+              ...prev,
+              email: { state: 'error', message: 'Email already registered' }
+            }));
+          } else {
+            setFieldErrors(prev => {
+              const newErrors = { ...prev };
+              delete newErrors.email;
+              return newErrors;
+            });
+          }
+        } catch (err) {
+          // If endpoint doesn't exist or fails, don't show error - will be caught on submit
+          setEmailAvailable(null);
+        } finally {
+          setEmailChecking(false);
+        }
+      } else {
+        setEmailAvailable(null);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [email]);
 
   // LocalStorage persistence for registration state
   useEffect(() => {
@@ -285,6 +322,15 @@ export const Register: React.FC<RegisterProps> = ({ onSignInClick }) => {
                 onChange={(e) => setEmail(e.target.value)}
                 inputState={errors['email'] ? 'error' : fieldErrors['email']?.state || 'default'}
                 errorMessage={errors['email'] || fieldErrors['email']?.message}
+                suffix={
+                  email && !emailChecking && emailAvailable !== null && (
+                    emailAvailable ? (
+                      <Check size={14} style={{ color: 'var(--pb-success)' }} />
+                    ) : (
+                      <X size={14} style={{ color: 'var(--pb-danger)' }} />
+                    )
+                  )
+                }
               />
 
               <ProbityButton
