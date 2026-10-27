@@ -70,7 +70,7 @@ simulations `:64-68`, assistant `:72-73`).
 | Frontend call | Defined at | Backend route | Verdict |
 | --- | --- | --- | --- |
 | `POST /auth/login`, `/register`, `/verify`, `/resend-verification`, `/refresh`, `/logout`, `GET /auth/csrf` | `services/auth/index.ts:6-44` | `ApiRoutes.java:16-22`, `AuthController` | match (CSRF-exempt set login/register/verify/resend: `SecurityConfiguration.java:70-75`) |
-| `GET /auth/check-email` | `services/auth/index.ts:22-25` | **owner decision: remove the frontend call to GET /auth/check-email; no backend route is added (an unauthenticated e-mail existence check enables account enumeration)** | **to be removed (M4c planned, not implemented)** |
+| `GET /auth/check-email` | `services/auth/index.ts:22-25` | **owner decision: remove the frontend call to GET /auth/check-email; no backend route is added (an unauthenticated e-mail existence check enables account enumeration)** | **removed (M4c implemented)** |
 | Portfolio list/CRUD + summary/positions/composition/volatility/alerts/risk-metrics/correlation/var | `services/portfolio/index.ts:12-62` | `PortfolioQueryController.java:58-318` | match (VaR `confidenceLevel` sent as fraction `0.95`: `VaRReportPage.tsx:30` vs `@RequestParam defaultValue "0.95"` `PortfolioQueryController.java:318`) |
 | `POST /simulations/run` | `services/simulation/index.ts:16` (only import in `useSimulation.ts:2`) | `SimulationController.java:71` â†’ 201 (`:95`) | match |
 | `GET /simulations/{id}`, `GET /simulations` | `services/simulation/index.ts:24, 38` | `SimulationController.java:200, 228` | defined both sides but **dead frontend code** â€” never imported; no history/list route exists (`src/pages`: auth, dashboard, monte-carlo, portfolio(s), risk-analysis, settings, var-report only) |
@@ -109,10 +109,12 @@ record (`SimulationResponse.java:11-42`); the frontend's `{success, data, error}
 
 ## 2. Drift list (top findings, both sides)
 
-1. **Frontend calls an endpoint that does not exist.** `GET /api/v1/auth/check-email`
+1. **Frontend called an endpoint that does not exist.** `GET /api/v1/auth/check-email`
    (`services/auth/index.ts:23`) vs. no `check-email` mapping anywhere in
    `probity-api` (`ApiRoutes.java:15-22` has no such constant; literal grep: 0 matches).
    Register-form email availability therefore 404s in every environment.
+   **Resolved (M4c):** live check removed; duplicate e-mail now detected at submit via
+   `POST /auth/register` 409 ("Email already registered" / "Username already taken").
 2. **The async simulation flow is invisible to the frontend.** Backend: `POST
    /api/v1/simulations/run-async` â†’ 202 + `Location` (`SimulationController.java:119, 153-154`)
    and `GET /{id}/status` polling with ETag/304 (`SimulationController.java:170, 182`).
@@ -435,20 +437,22 @@ reproduced all of (a)â€“(f) exactly; no drift changed and none was added.
 - (a) async flow â€” drift, M4a. Backend: `SimulationController.runAsync` @123-161 (202 accepted + `Location`) and `getStatus` @175-205. Frontend: `useSimulation.run` @15-26 calls `runSimulation` (sync `POST /simulations/run`) @14-25 of `services/simulation/index.ts`; `MonteCarlo.handleRunSimulation` @78-86. No polling exists today.
 - (b) assistant CSRF â€” drift, M4b. Frontend: `AiAssistant.tsx` @69-74 uses raw `fetch` with only `Content-Type` and no `X-XSRF-TOKEN`. Backend: `AssistantController` POST `/assistant/chat` (line 49) is CSRF-protected by the global filter, so the call only works because of the cookie; the raw fetch does not rotate/reuse the token like the axios client.
 - (c) simulation-count range â€” drift, M4b. Frontend: `MonteCarlo.tsx` @165-167 allows `1..100000`; backend `RunSimulationRequest` @21-22 validates `100..10000`.
-- (d) check-email — drift, owner decision made, M4c. Frontend: uth/index.ts @22-26 and Register.tsx @72-97 call GET /auth/check-email; backend AuthController has no such route (routes list @11-30 of ApiRoutes.Auth). **Owner decision: remove the frontend call to GET /auth/check-email; no backend route is added (an unauthenticated e-mail existence check enables account enumeration).**
+- (d) check-email — drift, **implemented (M4c)**. Frontend: `auth/index.ts` @22-26 and `Register.tsx` @72-97 called `GET /auth/check-email`; backend `AuthController` has no such route (routes list @11-30 of `ApiRoutes.Auth`). **Owner decision: remove the frontend call to GET /auth/check-email; no backend route is added (an unauthenticated e-mail existence check enables account enumeration).** **Implemented:** `checkEmailAvailability` removed from `auth/index.ts`; live check `useEffect` and `emailChecking`/`emailAvailable` state removed from `Register.tsx`; 409 handling on submit shows "Email already registered" / "Username already taken"; tests added in `Register.test.tsx` asserting 409 messages and no `check-email` calls.
 - (e) dead code — drift, M4d. Frontend: etchSimulation @27-36 and listSimulations @38-45 in services/simulation/index.ts are unused; SimulationResponse envelope @78-86 unused. Backend: GET /portfolios/{id} exists (PortfolioQueryController @80-84) but no frontend caller was found; keep unless an owner wants it removed.
 - (f) Q9b new drift — none. MonteCarlo.tsx already calls etchSimulationPaths @54 after the result lands; result/status/list bodies are paths-less and the /paths?n=100 usage is wired. No further frontend change needed for Q9b.
 
-Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-email (owner decision made: remove frontend call); M4d dead code + @types/react alignment.
+Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-email (owner decision made: remove frontend call, implemented on m4c-remove-check-email; pending PR); M4d dead code + @types/react alignment.
 
 ### M4c plan — replace live e-mail check with sign-up response error
 The live GET /auth/check-email call is removed from the register form. Instead, duplicate e-mail is detected at submit time via the existing POST /auth/register 409 response.
 
 **Files and lines to change (plan only, not implemented here):**
 1. rontend/src/services/auth/index.ts:22-26 — delete checkEmailAvailability function.
-2. rontend/src/pages/auth/Register.tsx:72-97 — remove the useEffect that calls checkEmailAvailability on email blur/change; remove the emailAvailable / checkingEmail state; change the submit handler to rely on egister() promise rejection with 409 → set form error "This e-mail is already registered".
+2. rontend/src/pages/auth/Register.tsx:72-97 — remove the useEffect that calls checkEmailAvailability on email blur/change; remove the emailAvailable / checkingEmail state; change the submit handler to rely on 
+egister() promise rejection with 409 → set form error "This e-mail is already registered".
 3. rontend/src/pages/auth/Register.tsx UI state: remove the "Checking availability..." inline message and the green/red check icon next to the e-mail field.
-4. Tests: add/extend Register.test.tsx to assert that a 409 from egister() renders "This e-mail is already registered" (no live check fired). Remove any test that mocked checkEmailAvailability.
+4. Tests: add/extend Register.test.tsx to assert that a 409 from 
+egister() renders "This e-mail is already registered" (no live check fired). Remove any test that mocked checkEmailAvailability.
 
 **Behaviour after M4c:** user fills register form, submits; if e-mail exists, backend returns 409 with error body; frontend shows the error inline on the e-mail field — no separate live check, no extra round-trip, no enumeration vector.
 

@@ -1129,6 +1129,10 @@ The system is ready for production deployment with confidence in its reliability
 - **Left out:** M4d (dead code + `@types/react` alignment).
 ---
 
+### M4c verification follow-up
+
+- Fixed the malformed Register.test.tsx mock closure and replaced the unavailable 	oBeInTheDocument matcher with a Vitest-compatible assertion. Clean npm ci, build, and test verification passed: 6 test files, 19 tests.
+
 ## Questions & Updates
 
 For questions, refer to the implementation components or contact the author.
@@ -1141,3 +1145,6 @@ When adding new features, update this document with any new patterns, edge cases
 - Added Prometheus scrape target probity-worker for simulation-worker:8081/actuator/prometheus (host-run noted).
 - Verified compose config valid; runtime verification blocked by local DB schema state in this clone.
 - Consolidated frontend build/test into ci_cd.yaml with the existing frontend path gate and preserved M4c on m4c-remove-check-email; ops branch cleanup used additive commits only.
+
+## M4c
+- Frontend: removed GET /auth/check-email call and availability UI; duplicate email/username reported via register 409 response. Branch m4c-remove-check-email, pending PR.
