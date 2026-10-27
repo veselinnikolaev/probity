@@ -257,7 +257,7 @@ simulation; the worker consumes it and drives it to `COMPLETED`.
 4. Start the worker as a separate process:
    ```bash
    export DB_USERNAME="probity_worker"                  # NOT the API's postgres credentials
-   export DB_PASSWORD="<probity_worker role password>"  # provisioned out of band (Q7)
+   export WORKER_DB_PASSWORD="<probity_worker role password>"  # provisioned out of band (Q7)
    export WORKER_PORT="8081"
    java -jar probity-worker/target/probity-worker-0.0.1-SNAPSHOT-exec.jar
    ```
@@ -725,8 +725,8 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 ## CI
 
 - CI Status aggregates changes, test, frontend-test (required when protected).
-- Backend runs on backend-path changes; frontend on frontend-path changes.
-- Docker push only on push to master.
+- `ci_cd.yaml` runs the backend and frontend jobs from one workflow; each job is gated by its monorepo path filter.
+- `CI Status` aggregates both build/test jobs; Docker push remains limited to pushes on `master`.
 
 ## Documentation
 
@@ -734,3 +734,19 @@ Built by [Veselin Nikolaev](https://www.linkedin.com/in/veselin-nikolaev/)
 - [Agent Protocol](./docs/AGENT_PROTOCOL.md)
 - [Agent Lessons](./docs/AGENT_LESSONS.md)
 - [Monorepo Migration Plan](./docs/plans/MONOREPO_MIGRATION.md)
+
+### Out-of-band probity_worker role (local)
+To create/use the least-privilege worker role locally (no migration creates it):
+
+```sql
+CREATE ROLE probity_worker WITH LOGIN PASSWORD '<throwaway-local-password>';
+GRANT CONNECT ON DATABASE probity TO probity_worker;
+GRANT USAGE ON SCHEMA public TO probity_worker;
+GRANT SELECT, UPDATE ON TABLE simulations TO probity_worker;
+GRANT SELECT ON ALL TABLES IN SCHEMA read TO probity_worker;
+-- if read schema evolves, grant SELECT on future tables as needed
+```
+Or alter an existing role:
+```sql
+ALTER ROLE probity_worker WITH PASSWORD '<throwaway-local-password>';
+```
