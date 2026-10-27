@@ -45,8 +45,8 @@ describe('Register form (M4c - no live check-email)', () => {
 
     const { user } = await fillStep1AndContinue();
     await screen.findByPlaceholderText('Create a strong password');
-    await user.type(screen.getByPlaceholderText('Create a strong password'), 'Passw0rd!');
-    await user.type(screen.getByPlaceholderText('Confirm your password'), 'Passw0rd!');
+    await user.type(screen.getByPlaceholderText('Create a strong password'), 'NotARealPassword123!');
+    await user.type(screen.getByPlaceholderText('Confirm your password'), 'NotARealPassword123!');
     await user.click(screen.getByRole('button', { name: /Create Account/i }));
 
     expect(await screen.findByText('Email already registered')).toBeTruthy();
@@ -59,8 +59,8 @@ describe('Register form (M4c - no live check-email)', () => {
 
     const { user } = await fillStep1AndContinue();
     await screen.findByPlaceholderText('Create a strong password');
-    await user.type(screen.getByPlaceholderText('Create a strong password'), 'Passw0rd!');
-    await user.type(screen.getByPlaceholderText('Confirm your password'), 'Passw0rd!');
+    await user.type(screen.getByPlaceholderText('Create a strong password'), 'NotARealPassword123!');
+    await user.type(screen.getByPlaceholderText('Confirm your password'), 'NotARealPassword123!');
     await user.click(screen.getByRole('button', { name: /Create Account/i }));
 
     expect(await screen.findByText('Username already taken')).toBeTruthy();
@@ -73,8 +73,8 @@ describe('Register form (M4c - no live check-email)', () => {
 
     const { user } = await fillStep1AndContinue();
     await screen.findByPlaceholderText('Create a strong password');
-    await user.type(screen.getByPlaceholderText('Create a strong password'), 'Passw0rd!');
-    await user.type(screen.getByPlaceholderText('Confirm your password'), 'Passw0rd!');
+    await user.type(screen.getByPlaceholderText('Create a strong password'), 'NotARealPassword123!');
+    await user.type(screen.getByPlaceholderText('Confirm your password'), 'NotARealPassword123!');
     await user.click(screen.getByRole('button', { name: /Create Account/i }));
 
     expect(await screen.findByText('Registration failed. Please try again.')).toBeTruthy();

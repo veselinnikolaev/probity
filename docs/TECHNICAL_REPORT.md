@@ -1146,5 +1146,8 @@ When adding new features, update this document with any new patterns, edge cases
 - Verified compose config valid; runtime verification blocked by local DB schema state in this clone.
 - Consolidated frontend build/test into ci_cd.yaml with the existing frontend path gate and preserved M4c on m4c-remove-check-email; ops branch cleanup used additive commits only.
 
+### GitGuardian fixture follow-up
+- Replaced the Register test's credential-like password fixture with an obviously fake value; assertions and test coverage are unchanged.
+
 ## M4c
 - Frontend: removed GET /auth/check-email call and availability UI; duplicate email/username reported via register 409 response. Branch m4c-remove-check-email, pending PR.

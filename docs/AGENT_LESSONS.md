@@ -233,3 +233,7 @@ Append-only. One entry = the failure, then the rule. Read together with
 
 29. **Misidentified PR number as M4c.** PR #40 was ops-worker-password-and-metrics (merged), not M4c; M4c remained on branch m4c-remove-check-email. 
    Rule: verify a PR's title/content (gh pr view or merge commit parents) before treating work as merged into master.
+
+30. **Changed a password fixture to a fake value that failed the form's password-strength validation.**
+    Rule: when replacing credential-like test data, preserve the input contract as well as the
+    assertion: use an obviously fake value that still satisfies the component's validation rules.
