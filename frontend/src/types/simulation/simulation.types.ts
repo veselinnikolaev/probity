@@ -118,16 +118,6 @@ export interface SimulationResultStatusPayload {
   distribution: DistributionBucket[];
 }
 
-// ── API Responses ───────────────────────────────────────────────────────────
-export interface SimulationResponse {
-  success: boolean;
-  data?: SimulationResult;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
 // ── Async State ──────────────────────────────────────────────────────────────
 export type SimulationAsyncState =
   | { status: 'idle'; data: null }
