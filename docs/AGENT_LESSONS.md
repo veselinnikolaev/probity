@@ -237,3 +237,7 @@ Append-only. One entry = the failure, then the rule. Read together with
 30. **Changed a password fixture to a fake value that failed the form's password-strength validation.**
     Rule: when replacing credential-like test data, preserve the input contract as well as the
     assertion: use an obviously fake value that still satisfies the component's validation rules.
+
+31. **Used a loose grep pattern that matched active symbols by substring** (`fetchSimulationStatus`
+    and `fetchSimulationPaths`) while checking whether dead APIs were gone. Rule: use `-w` for
+    symbol checks and report the actual command output, not a summary that hides misleading hits.

@@ -1150,4 +1150,8 @@ When adding new features, update this document with any new patterns, edge cases
 - Replaced the Register test's credential-like password fixture with an obviously fake value; assertions and test coverage are unchanged.
 
 ## M4c
-- Frontend: removed GET /auth/check-email call and availability UI; duplicate email/username reported via register 409 response. Branch m4c-remove-check-email, pending PR.
+- Frontend: removed GET /auth/check-email call and availability UI; duplicate email/username reported via register 409 response. Branch m4c-remove-check-email, merged as PR #41.
+
+## M4d
+- Removed the confirmed-unused frontend simulation APIs (`fetchSimulation`, `listSimulations`) and the unused `SimulationResponse` envelope; aligned `@types/react` and `@types/react-dom` to `^18.3.1`.
+- Verified with `npm ci`, `npm run build`, and unfiltered frontend tests: 6 files and 21 tests passed. Strict-TypeScript fixes were deliberately left out because the repository and `ci_cd.yaml` do not run `tsc`.
