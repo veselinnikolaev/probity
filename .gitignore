@@ -42,3 +42,9 @@ build/
 
 ### VS Code ###
 .vscode/
+*.log
+logs/
+.DS_Store
+*.class
+coverage/
+*.tmp
