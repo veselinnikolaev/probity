@@ -1,11 +1,10 @@
 # Monorepo migration plan â€” `probity-backend` + `probity-frontend` â†’ `probity`
 
-**Status:** M1 (import) **merged** to `master` as `38e6c6c` (PR #24, merge commit). M2 (CI path
-filters) **executed** on branch `m2-ci-path-filters` â€” awaiting PR review, not merged
-(see Â§10c). M3â€“M4 not started. Originally a proposal only; Â§10's stage numbering assumed M1=docs
-and M2=import â€” the owner redefined **M1 as the history-preserving import**, which is what was
-run (see Â§10a), and **M2 as "make CI correct for the combined repo"** (Â§10c). No repository has
-been renamed or archived.
+**Status:** M1 import **done** (PR #24); M2 CI path filters **done** (PR #31); M3 rename/archive
+**done externally**; M4a async flow **done** (PR #38); M4b input range, assistant CSRF and API
+base URL **done** (PR #39); M4c check-email removal **done** (PR #41); M4d dead-code removal
+and React type alignment **done**. The repository rename/archive was completed outside this
+branch's commit history; the implementation milestones are recorded against their merged PRs.
 
 Scope of this document: (1) a read-only audit of the frontend repository, (2) the
 frontendâ†”backend drift list, (3) the Q9 frontend check, (4) the target layout and import
@@ -422,11 +421,11 @@ is affected.
 
 ## 11. Recommendation
 
-**M1 (import) has been merged** to `master` as `38e6c6c` (PR #24, Â§10a). **M2 (CI path filters)
-has been executed** on branch `m2-ci-path-filters` (Â§10c) â€” awaiting review, not merged. M3/M4
-still wait for explicit owner approval; the drift list (Â§2) and the frontend install baseline
-(now fixed in frontend PR #16) remain recorded findings. Frontend PR #17 (types alignment) was
-closed unmerged; that work moves to the monorepo later.
+M1-M4d are complete: M1 import (PR #24), M2 CI path filters (PR #31), M3 rename/archive
+externally, M4a async flow (PR #38), M4b input range/assistant CSRF/API base URL (PR #39),
+and M4c check-email removal (PR #41). M4d removes the confirmed-unused simulation APIs and
+aligns the React type packages. The frontend install baseline remains recorded as historical
+context; the closed standalone frontend types PR is superseded by the monorepo change.
 
 ## M4 drift (re-verified, 2026-10-22 and 2026-10-23, post Q9a/Q9b)
 
@@ -441,7 +440,9 @@ reproduced all of (a)â€“(f) exactly; no drift changed and none was added.
 - (e) dead code — drift, M4d. Frontend: etchSimulation @27-36 and listSimulations @38-45 in services/simulation/index.ts are unused; SimulationResponse envelope @78-86 unused. Backend: GET /portfolios/{id} exists (PortfolioQueryController @80-84) but no frontend caller was found; keep unless an owner wants it removed.
 - (f) Q9b new drift — none. MonteCarlo.tsx already calls etchSimulationPaths @54 after the result lands; result/status/list bodies are paths-less and the /paths?n=100 usage is wired. No further frontend change needed for Q9b.
 
-Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-email (owner decision made: remove frontend call, implemented on m4c-remove-check-email; pending PR); M4d dead code + @types/react alignment.
+Proposed PR split: M4a async flow; M4b input range + assistant CSRF; M4c check-email (owner
+decision made: remove frontend call, implemented and merged as PR #41); M4d dead code +
+@types/react alignment (implemented and merged as the current branch's changes).
 
 ### M4c plan — replace live e-mail check with sign-up response error
 The live GET /auth/check-email call is removed from the register form. Instead, duplicate e-mail is detected at submit time via the existing POST /auth/register 409 response.

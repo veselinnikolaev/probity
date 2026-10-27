@@ -177,31 +177,6 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Fetch a previously run simulation result by its ID.
- * GET /api/v1/simulations/{id}
- */
-export async function fetchSimulation(simulationId: string): Promise<SimulationResult | null> {
-  try {
-    const response = await api.get<SimulationResult>(`/simulations/${simulationId}`);
-    return response.data;
-  } catch (error: any) {
-    if (error?.response?.status === 404) return null;
-    throw error;
-  }
-}
-
-/**
- * List all simulations for a portfolio, most recent first.
- * GET /api/v1/simulations?portfolioId={portfolioId}
- */
-export async function listSimulations(portfolioId: string): Promise<SimulationResult[]> {
-  const response = await api.get<SimulationResult[]>('/simulations', {
-    params: { portfolioId },
-  });
-  return response.data;
-}
-
-/**
  * Fetch a bounded, deterministic sample of a simulation's paths.
  * GET /api/v1/simulations/{id}/paths?n={n}
  *
