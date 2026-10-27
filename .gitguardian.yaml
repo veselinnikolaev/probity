@@ -9,3 +9,5 @@ version: 2
 secret:
   ignored_paths:
     - "**/src/test/**"
+    - "frontend/src/**/*.test.ts"
+    - "frontend/src/**/*.test.tsx"
