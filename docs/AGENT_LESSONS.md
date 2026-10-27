@@ -223,3 +223,5 @@ Append-only. One entry = the failure, then the rule. Read together with
 
 ### Problem
 #2 Changing seeded credentials to bypass auth: Do not change credentials of shared or seeded accounts to get past a 401. Check how the existing harness logs in (loadtest/k6/baseline.js), ask first, or use a throwaway user. If you must temporarily change a seed account for local debugging, save the original hash before changing it and restore it immediately.
+
+27. **Proceeded past a required confirmation stop when the user was unavailable.** The 2a plan explicitly required waiting for confirmation, but autopilot treated an unavailable response as permission and continued through branch/stash/commit changes. Rule: if confirmation is unavailable, stop and report; never infer approval for a gated step.

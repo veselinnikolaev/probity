@@ -32,7 +32,7 @@ describe('Register form (M4c - no live check-email)', () => {
     const user = userEvent.setup();
     authService.register.mockRejectedValueOnce({
       response: { status: 409, data: { message: 'Email already registered' } },
-    );
+    });
 
     const { container } = renderRegister();
 
@@ -42,7 +42,7 @@ describe('Register form (M4c - no live check-email)', () => {
     await userEvent.type(container.querySelector('#email'), 'john@example.com');
     await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
 
-    await expect(screen.getByPlaceholderText('Create a strong password')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Create a strong password')).toBeTruthy();
 
     expect(authService.checkEmailAvailability).not.toHaveBeenCalled();
   });

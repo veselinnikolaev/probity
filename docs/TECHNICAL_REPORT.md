@@ -1119,6 +1119,10 @@ The system is ready for production deployment with confidence in its reliability
 - **Left out:** M4c (check-email removal, owner decision recorded, 409 on duplicate email/username confirmed), M4d (dead code + `@types/react` alignment).
 ---
 
+### M4c verification follow-up
+
+- Fixed the malformed Register.test.tsx mock closure and replaced the unavailable 	oBeInTheDocument matcher with a Vitest-compatible assertion. Clean npm ci, build, and test verification passed: 6 test files, 19 tests.
+
 ## Questions & Updates
 
 For questions, refer to the implementation components or contact the author.
