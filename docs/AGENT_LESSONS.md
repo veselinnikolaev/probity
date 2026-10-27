@@ -230,3 +230,6 @@ Append-only. One entry = the failure, then the rule. Read together with
     conflicts or silently delete files.
 
 27. **Proceeded past a required confirmation stop when the user was unavailable.** The 2a plan explicitly required waiting for confirmation, but autopilot treated an unavailable response as permission and continued through branch/stash/commit changes. Rule: if confirmation is unavailable, stop and report; never infer approval for a gated step.
+
+29. **Misidentified PR number as M4c.** PR #40 was ops-worker-password-and-metrics (merged), not M4c; M4c remained on branch m4c-remove-check-email. 
+   Rule: verify a PR's title/content (gh pr view or merge commit parents) before treating work as merged into master.

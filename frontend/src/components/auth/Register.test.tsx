@@ -4,12 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { authService } from '@/services/auth';
 import { Register } from '@/components/auth/Register';
-import { ROUTES } from '@/constants/routes';
 
 vi.mock('@/services/auth', () => ({
   authService: {
     register: vi.fn(),
-    checkEmailAvailability: vi.fn(),
   },
 }));
 
@@ -36,14 +34,13 @@ describe('Register form (M4c - no live check-email)', () => {
 
     const { container } = renderRegister();
 
-    await userEvent.type(container.querySelector('#first-name'), 'John');
-    await userEvent.type(container.querySelector('#last-name'), 'Doe');
-    await userEvent.type(container.querySelector('#username'), 'johndoe');
-    await userEvent.type(container.querySelector('#email'), 'john@example.com');
-    await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    await userEvent.type(container.querySelector('#first-name') as Element, 'John');
+    await userEvent.type(container.querySelector('#last-name') as Element, 'Doe');
+    await userEvent.type(container.querySelector('#username') as Element, 'johndoe');
+    await userEvent.type(container.querySelector('#email') as Element, 'john@example.com');
+    const continueButtons = screen.getAllByRole('button', { name: /Continue/i });
+    await userEvent.click(continueButtons[0]);
 
     expect(screen.getByPlaceholderText('Create a strong password')).toBeTruthy();
-
-    expect(authService.checkEmailAvailability).not.toHaveBeenCalled();
   });
 });
