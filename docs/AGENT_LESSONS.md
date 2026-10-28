@@ -241,3 +241,9 @@ Append-only. One entry = the failure, then the rule. Read together with
 31. **Used a loose grep pattern that matched active symbols by substring** (`fetchSimulationStatus`
     and `fetchSimulationPaths`) while checking whether dead APIs were gone. Rule: use `-w` for
     symbol checks and report the actual command output, not a summary that hides misleading hits.
+
+32. **Started a replica-block measurement with stale JVMs still holding worker ports.**
+    The load generator then left a row `PENDING`, so the control block was not a valid
+    comparison. Rule: before each replica block, identify every Java process by command line
+    and listening port, stop stale workers by real PID, verify the expected consumer-group
+    membership, and only then start the warm-up.

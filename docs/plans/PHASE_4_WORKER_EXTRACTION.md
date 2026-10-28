@@ -212,6 +212,8 @@ removed from the API `SimulationResponse`, worker `SimulationData` and
 `SimulationStatusResponse`; `N = 100` is an **unmeasured first guess**. **PR-Q9c
 (backfill/async) is still not started.** Gate in `docs/PHASE_4_MEASUREMENTS.md` →
 *Q9b verification*.
+Q9c design/measurement note: `docs/plans/Q9C_DECISION.md` (proposed, awaiting
+owner sign-off; no implementation decision recorded).
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 
