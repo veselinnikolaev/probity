@@ -1155,3 +1155,6 @@ When adding new features, update this document with any new patterns, edge cases
 ## M4d
 - Removed the confirmed-unused frontend simulation APIs (`fetchSimulation`, `listSimulations`) and the unused `SimulationResponse` envelope; aligned `@types/react` and `@types/react-dom` to `^18.3.1`.
 - Verified with `npm ci`, `npm run build`, and unfiltered frontend tests: 6 files and 21 tests passed. Strict-TypeScript fixes were deliberately left out because the repository and `ci_cd.yaml` do not run `tsc`.
+
+## Repository cleanup
+- Added approved log, coverage, temporary-file, class-file, and macOS metadata ignore patterns; untracked the four frontend IntelliJ project files while preserving them on disk.
