@@ -55,6 +55,9 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
 - Run `git status --short` and `git diff --stat` before every commit and confirm the change
   set is the intended one.
 - Leave other people's untracked files alone.
+- Branch cleanup verifies each branch is an ancestor of master (`git merge-base --is-ancestor`) or
+  merged via a PR before deleting; "no open PR" is not a merge check; local `-D` deletions are
+  reported with their SHAs.
 
 ## 5. Windows notes
 
@@ -73,10 +76,12 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
   Build: `npm run build`. Test: `npm test`. Install: `npm ci` (never `--legacy-peer-deps`).
 - Node version is pinned by `frontend/.nvmrc` (currently `20.20.1`); `package.json` requires
   `node >=20.19.0`. CI reads `frontend/.nvmrc` and caches npm on `frontend/package-lock.json`.
-- CI: `.github/workflows/frontend-ci.yml` runs only for `frontend/**` (or that workflow file);
-  `.github/workflows/ci_cd.yaml` runs the Maven build only for backend paths and always posts the
-  aggregated `CI Status` check. Workflows under `frontend/.github/` are **never** read by GitHub —
-  a subtree import must move them to the root `.github/workflows/`.
+- CI: one workflow, `.github/workflows/ci_cd.yaml` (no `frontend-ci.yml`) — jobs `changes`, `test`
+  (Maven, backend paths), `frontend_test` (npm, `frontend/**`), `ci-status` = check `CI Status`,
+  the only required one (covers the other jobs; skipped passes, failure/cancelled fails).
+  `build-and-push` runs only on a push to master. Workflows under `frontend/.github/` are **never**
+  read by GitHub — a subtree import must move them to the root `.github/workflows/`.
+- Throwaway verification PRs are always drafts; never merge them.
 - Windows: `Add-Content` adds a trailing newline only if missing and can glue onto the last line
   of a file with no final newline; prefer the editor tool for source edits. Inline `python -c` and
   inline `--jq` are mangled by PowerShell — write the script to a file and run it (`docker run …

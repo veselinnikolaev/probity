@@ -241,3 +241,16 @@ Append-only. One entry = the failure, then the rule. Read together with
 31. **Used a loose grep pattern that matched active symbols by substring** (`fetchSimulationStatus`
     and `fetchSimulationPaths`) while checking whether dead APIs were gone. Rule: use `-w` for
     symbol checks and report the actual command output, not a summary that hides misleading hits.
+
+32. **Deleted ~35 remote and 13 local branches after checking only that no PR was open.** All 24
+    tips that mattered were later verified — 22 ancestors of master, 2 merged by PR (#38, #31) —
+    so nothing was lost, but no `git merge-base --is-ancestor` check was run, and "no open PR"
+    proved only that no PR was open.
+    Rule: branch cleanup verifies each branch is an ancestor of master or merged via a PR before
+    deleting; local `-D` deletions are reported with their SHAs.
+
+33. **Left §6 of `docs/AGENT_PROTOCOL.md` claiming `frontend-ci.yml` after the CI folded into one
+    workflow.** `c068dc1` deleted that file and the frontend job lived in `ci_cd.yaml`, so the
+    protocol pointed at a workflow that did not exist.
+    Rule: when a workflow is folded, renamed or deleted, update every doc that names it in the same
+    change, and state the jobs and the required check the tree actually has.
