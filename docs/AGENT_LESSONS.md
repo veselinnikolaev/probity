@@ -247,3 +247,10 @@ Append-only. One entry = the failure, then the rule. Read together with
     comparison. Rule: before each replica block, identify every Java process by command line
     and listening port, stop stale workers by real PID, verify the expected consumer-group
     membership, and only then start the warm-up.
+
+33. **Parsed a mixed SQL-output file as a runtime identity.** The temporary file contained
+    the PostgreSQL `DO` status line before the actual `username|portfolio` row, and the
+    harness consequently attempted login as `DO`; two 401 proof runs created no data.
+    Rule: write machine-readable identifiers with a query-only output channel or select
+    the row by an explicit delimiter before passing it to a load harness; prove one
+    sample row before starting a measurement block.

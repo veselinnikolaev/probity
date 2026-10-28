@@ -5,11 +5,11 @@
 
 ## Current state
 
-Q9a already moves `allPaths` out of `simulations.result_payload` into
-`simulation_paths`, but the two writes remain synchronous and transactional. Q9b
-serves a deterministic bounded sample from `/api/v1/simulations/{id}/paths?n=N`.
-The current completion path therefore still waits for the full paths write before
-the Kafka listener acknowledges the record.
+Q9a moves `allPaths` out of `simulations.result_payload` into
+`simulation_paths`, but the two writes remain synchronous and transactional.
+Q9b serves a deterministic bounded sample from
+`/api/v1/simulations/{id}/paths?n=N`. The completion path still waits for the
+paths write before the Kafka listener acknowledges the record.
 
 ## Options
 
@@ -18,102 +18,98 @@ the Kafka listener acknowledges the record.
 Persist the summary and percentile data first, then write paths from a background
 writer or completion event. `/paths` should return `202 Accepted` with
 `Retry-After` while the row is `PENDING`, and the frontend should poll until
-`READY`. Add a `paths_status` state (`PENDING`, `READY`, `FAILED`) so a worker
-crash between the two steps is visible rather than silently appearing as a
-successful result; the UI should show “result ready, paths still processing” for
+`READY`. Add `paths_status` with `PENDING`, `READY`, and `FAILED` so a worker
+crash is visible. The UI should show “result ready, paths still processing” for
 `PENDING` and a retryable error for `FAILED`.
 
 The paths write must be idempotent by simulation ID, with bounded exponential
-retry and a terminal `FAILED` state after the retry budget. This moves the path
-write off the consumer thread but does not prove that it reduces WAL: the write
-still happens, only later and under a different transaction boundary. It also
-allows a `COMPLETED` summary to exist without immediately available paths.
+retry and a terminal `FAILED` state after the retry budget. This moves the write
+off the consumer thread but does not prove a WAL reduction: the write still
+happens, only later and under a different transaction boundary.
 
 ### B. Persist only a configurable sample
 
-Persist `N` paths, default `100`, using the existing deterministic sampler rule:
+Persist `N` paths, default `100`, using the existing deterministic sampler:
 global minimum and maximum paths plus evenly spaced indices. Compute statistics
-and percentiles from all generated paths before sampling. `/paths?n=` must reject
-an explicit value above the stored count; the omitted default is capped to the
-stored count. The maximum useful `n` becomes the stored count.
+and percentiles from all generated paths before sampling. The omitted `/paths`
+default is capped to the stored count; an explicit value above the stored count
+is rejected.
 
 Existing rows retain their current 1000-path data and are not backfilled. Tests
-must cover minimum/maximum preservation, deterministic selection, explicit
-oversize `n`, omitted `n` on a short row, and old-row read compatibility.
-Rollback is a code revert; newly written sampled rows cannot provide the omitted
-paths, so a rollback that requires full paths needs a forward backfill or a
+must cover extrema preservation, deterministic selection, explicit oversize `n`,
+omitted `n` on a short row, and old-row compatibility. Rollback is a code revert;
+new sampled rows cannot provide omitted paths without a forward backfill or a
 retention decision.
 
 ### C. Compress the paths representation
 
-Keep the summary inline and store paths as a compact binary or gzip value.
-Reads pay decompression CPU and the mapper must handle the compressed
-representation, while existing rows remain readable through the current
-dual-source path. This reduces storage bytes but keeps a completion-time write
-and does not establish a throughput gain; the write/rewrite cost remains
-unmeasured.
+Keep the summary inline and store paths as compact binary or gzip data. Reads pay
+decompression CPU and the mapper must handle the compressed representation.
+Existing rows remain readable through the current dual-source path. This changes
+storage representation but keeps a completion-time write; its throughput and WAL
+effect are unmeasured.
 
-## Measurement
+## Measurement status
 
-**Method.** Local throwaway build only; no source change was committed. The
-protocol used `loadtest/run-baseline.ps1`, `grafana/k6:latest` because the pinned
-`grafana/k6:v2.3.0` image was unavailable, one warm-up plus three measured runs,
-Scenario A (6 VUs × 60), observability containers stopped, and table reset
-between runs. The worker authenticated as `probity_worker`; the initial attempt
-was blocked by an empty local `price_bars` table, so only local throwaway AAPL and
-GOOGL bars were added and removed afterward.
+The earlier B figures in this note were **not valid evidence for this task**:
+step 2 found no scratch branch, no stash, no experiment notes containing the
+sample code, and the database had zero `simulations` and zero `simulation_paths`
+rows. The stored path count could therefore not be verified.
 
-| condition | replicas | throughput median (min–max), sims/s | e2e p95 median (min–max), ms | e2e p99 median (min–max), ms |
-|---|---:|---:|---:|---:|
-| master control | 1 | 2.598 (2.575–2.689) | 3378 (3173–3399) | 3536 (3288–3698) |
-| B, 100 stored paths | 1 | 3.144 (2.997–3.206) | 2528 (2518–2946) | 2908 (2641–3547) |
-| master control | 3 | 6.172 (6.035–6.413) | 1485 (1477–1700) | 1670 (1493–1869) |
-| B, 100 stored paths | 3 | 5.087 (4.309–6.306) | 1716 (1671–2515) | 2080 (1894–2554) |
+A fresh proof run was started from the current `origin/master` build. The
+`simulation_paths` schema was verified as `paths jsonb NOT NULL`, and the
+approved `loadtest/seed.sql` was used because AAPL/GOOGL `price_bars` were empty.
+The first one-simulation proof failed with HTTP 401. The second failed with the
+same HTTP 401 after the throwaway password was aligned to the local seed
+credential. Server logs show the exact cause: `Login attempt for identifier: DO`;
+the temporary identifier file included the SQL client's leading `DO` output, so
+the harness was not given the throwaway username. No row was created, so
+`jsonb_array_length(paths) = 100` was never demonstrated.
 
-For the valid B sample row, `pg_column_size(result_payload)` was **10,870 B**
-and `pg_column_size(simulation_paths.paths)` was **1,352,254 B**. The comparable
-Q9a/master recorded values are approximately **11,651 B + 1,460,117 B** for
-the split row and **1,471,712 B** for the master payload. This is a measured
-storage reduction of about 7.4% for the paths row, not a 10× reduction.
+Per the repository rule, the experiment stopped after the second failed command.
+The four-condition table, WAL per simulation, stored bytes per row, status body
+bytes, API/worker CPU, and Kafka lag for the corrected B experiment are
+**not investigated**. The earlier approximately **17 simulations/s** no-payload
+ceiling remains historical context only, not a B result.
 
-The final three-replica master control did not complete: the warm-up left a row
-`PENDING` and the harness exited nonzero. Therefore B-vs-master **WAL per
-simulation**, exact status-body bytes from this session, and a clean final
-three-replica control are **not investigated**. Q9b already keeps status bodies
-near 30.9 KB, so B is not expected to change that response shape. The earlier
-diagnostic ceiling of approximately **17 simulations/s** remains context for the
-no-payload condition, not a B result.
+| condition | replicas | throughput | e2e p95/p99 | WAL/simulation | stored bytes | status bytes |
+|---|---:|---|---|---|---|---|
+| master | 1 | not measured | not measured | not measured | not measured | not measured |
+| B, 100 paths | 1 | not measured | not measured | not measured | not measured | not measured |
+| master | 3 | not measured | not measured | not measured | not measured | not measured |
+| B, 100 paths | 3 | not measured | not measured | not measured | not measured | not measured |
 
-At three replicas, the only measured API/worker/Kafka/Postgres limitation in the
-valid B run is **not investigated**: CPU, Kafka lag, and Postgres counters were
-not captured in a clean paired block. The B throughput and latency were within
-the observed run spread relative to the master control, so the performance
-difference is **not distinguishable**.
+The expected B storage comparison would be approximately ten times fewer
+stored path elements (100 of 1000), but that expectation is **not a measured
+result**. The three-replica limiter is also **not investigated**: API CPU,
+worker CPU, Kafka lag, and Postgres were not captured in a valid paired block.
 
 ## Recommendation
 
-**B is not enough to justify a performance change.** It reduces stored path bytes
-by roughly 7.4% in the throwaway row, but the valid three-replica result is not
-better than master and WAL was not measured. The evidence supports keeping the
-existing Q9a/Q9b design rather than adding a sampled-storage semantic change.
+**Inconclusive — B is not pursued from this session.** The required proof that
+the build stored exactly 100 paths was never obtained, and both proof commands
+failed authentication at the harness layer before creating a simulation. The
+next measurement must first create one sample-only row and show
+`jsonb_array_length(paths) = 100` plus `pg_column_size` before any load block.
+Only then should the four conditions be run in one session with process
+assertions before and after each block.
 
-If the owner decides that completion latency matters beyond the current Q9a
-improvement, **A is the next experiment**, not an implementation approval:
-measure a deferred, idempotent paths writer with explicit `paths_status`,
-`202/Retry-After`, and crash/retry tests. C should be considered only for storage
-cost, after measuring decompression CPU and WAL.
+Option A remains an owner-gated follow-up if completion latency still matters:
+measure an idempotent deferred writer with `paths_status`, `202/Retry-After`,
+and crash/retry tests. C should be evaluated only after measuring decompression
+CPU and WAL.
 
 ## Proposed implementation sequence if A is approved
 
-1. Add `paths_status` and an idempotent paths-write command; test state
-   transitions and duplicate delivery.
-2. Move the paths write behind a durable completion event/outbox; test
-   summary completion when the paths writer is delayed or unavailable.
+1. Add `paths_status` and an idempotent paths-write command; test transitions and
+   duplicate delivery.
+2. Move the paths write behind a durable completion event/outbox; test delayed
+   and unavailable writers.
 3. Add `/paths` `202`/`Retry-After` behavior and frontend polling/error states.
 4. Run the full P0/A protocol at one and three replicas, including WAL, stored
    bytes, status bytes, CPU, Kafka lag, and crash/retry recovery.
 5. Roll back by disabling the deferred writer only after deciding how
-   `PENDING`/`FAILED` paths are surfaced; do not silently claim paths are ready.
+   `PENDING`/`FAILED` paths are surfaced.
 
 ## Owner questions
 

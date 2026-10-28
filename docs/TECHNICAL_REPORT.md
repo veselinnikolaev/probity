@@ -1160,8 +1160,9 @@ When adding new features, update this document with any new patterns, edge cases
 - Added approved log, coverage, temporary-file, class-file, and macOS metadata ignore patterns; untracked the four frontend IntelliJ project files while preserving them on disk.
 
 ## Q9c decision note
-- Added the proposed, owner-gated Q9c measurement and decision note. The local B
-  throwaway persisted 100 sampled paths and reduced the measured paths row by about
-  7.4%, but the valid three-replica performance difference was not distinguishable;
-  WAL for B was not investigated after the final master control failed during warm-up.
-  No Q9c source change was retained.
+- Replaced the provisional Q9c result with an evidence-corrected note. The earlier
+  B figures could not be verified: no sample row, stash, scratch branch, or
+  experiment code remained. The fresh proof stopped after two HTTP 401 failures;
+  the harness received `DO` instead of the throwaway username because the temp
+  identifier file included the SQL client's leading `DO` output. No four-condition
+  measurement was claimed, and no Q9c source change was retained.
