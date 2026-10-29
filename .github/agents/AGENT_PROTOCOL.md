@@ -1,8 +1,8 @@
 # Agent Protocol — working rules for AI agents in this repo
 
 Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
-(see `docs/plans/` and `docs/TECHNICAL_REPORT.md` → *Phase 4 progress*); read
-`docs/AGENT_LESSONS.md` alongside.
+(see `.github/agents/` and `docs/decisions/` → *Phase 4 progress*); read
+`.github/agents/AGENT_LESSONS.md` alongside.
 
 ## 1. Scope and safety
 
@@ -95,5 +95,5 @@ Short, enforceable rules. They come from the PR-D0..PR-D2 worker-extraction work
   (or its failure is quoted), no out-of-scope file changed, and evidence is named.
 - Close out with: build counts; Docker built if any Dockerfile/pom/path changed; README
   updated (or "README: no change"); a technical-report entry; the PR description file;
-  `docs/AGENT_LESSONS.md` extended; working tree clean.
+  `.github/agents/AGENT_LESSONS.md` extended; working tree clean.
 - Then stop and report done / skipped / partial — do not start the next phase unprompted.
