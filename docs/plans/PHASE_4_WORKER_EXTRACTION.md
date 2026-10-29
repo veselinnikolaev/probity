@@ -1,7 +1,7 @@
 # Phase 4 — Extracting the async simulation worker into a separately deployable unit
 
 **Status:** design note for review. Prose and signatures only — no implementation code, no code changes.
-**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9 is decided — Option A, owner-signed-off 2026-10-19 — and PR-Q9a (the storage split, API contract unchanged) and PR-Q9b (the API split + sampled `/paths` endpoint) are implemented** (gates in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification* and *Q9b verification*); **PR-Q9c is not started**. The §2.8.1 re-check still confirms the payload-write cost and keeps the Q4 CPU-signal caution.
+**Progress:** PR-D0, PR-D1 and PR-D2 are merged to `master`; so are PR-D3 (PR #13), PR-D4 (PR #14) and the post-D4 compose/`.dockerignore` fix (PR #15). **PR-D5 is this PR (#16, open) and is docs-only** (no `src`, test, `pom`, migration or `compose.yaml` change). Decisions Q1-Q8 below are unchanged; **Q9 is decided — Option A, owner-signed-off 2026-10-19 — and PR-Q9a (the storage split, API contract unchanged) and PR-Q9b (the API split + sampled `/paths` endpoint) are implemented** (gates in `docs/PHASE_4_MEASUREMENTS.md` → *Q9a verification* and *Q9b verification*); **PR-Q9c is not pursued**. The §2.8.1 re-check still confirms the payload-write cost and keeps the Q4 CPU-signal caution.
 **Location:** `docs/plans/` did not exist; this note creates it. Existing phase notes live flat in `docs/` (`PHASE_2_IMPLEMENTATION_NOTES.md`, `TECHNICAL_REPORT.md`); move this file if you prefer a flat layout.
 
 ---
@@ -16,7 +16,7 @@ Recorded, no longer open:
 - **Q4 — HPA:** **CPU-based HPA now**; KEDA is a later option.
 - **Q6 — invariant:** confirmed — **lease 12m > max.poll.interval.ms 10m ≥ slowest legitimate run**.
 
-Still open (see §2.10): **Q5, Q7, Q8**. (Q9 was decided 2026-10-19 — Option A — and PR-Q9a and PR-Q9b are implemented; not started: Q9c.)
+Still open (see §2.10): **Q5, Q7, Q8**. (Q9 was decided 2026-10-19 — Option A — and PR-Q9a and PR-Q9b are implemented; not pursued: Q9c.)
 
 ---
 
@@ -212,8 +212,8 @@ removed from the API `SimulationResponse`, worker `SimulationData` and
 `SimulationStatusResponse`; `N = 100` is an **unmeasured first guess**. **PR-Q9c
 (backfill/async) is still not started.** Gate in `docs/PHASE_4_MEASUREMENTS.md` →
 *Q9b verification*.
-Q9c design/measurement note: `docs/plans/Q9C_DECISION.md` (proposed, awaiting
-owner sign-off; no implementation decision recorded).
+Q9c design/measurement note: `docs/plans/Q9C_DECISION.md` (**closed:
+inconclusive, not pursued**; Q9a and Q9b delivered the large gains).
 
 ### 2.9 PR breakdown and per-PR file list (each independently shippable and reversible)
 

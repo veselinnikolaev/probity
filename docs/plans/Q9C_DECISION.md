@@ -1,6 +1,7 @@
 # Q9c decision note
 
-**Status: proposed, awaiting owner sign-off**  
+**Status: closed — inconclusive, not pursued**
+
 **Scope:** design and measurement only; no Q9c implementation is included.
 
 ## Current state
@@ -72,6 +73,24 @@ bytes, API/worker CPU, and Kafka lag for the corrected B experiment are
 **not investigated**. The earlier approximately **17 simulations/s** no-payload
 ceiling remains historical context only, not a B result.
 
+## Known problems with the experiment
+
+- Earlier sample-only figures are **unverifiable**: the stored paths fell only
+  about **7%** although about **100 of 1000** were meant to be stored.
+- WAL and status-body bytes were **not measured** for B.
+- The final clean three-replica master control **never completed** (stale
+  processes).
+- The re-run **stopped after two 401s** — both were the **admin web login**
+  (the harness logged in as `DO`), not the worker's `probity_worker` DB
+  connection.
+- The 1-replica master control of **2.60 sims/s** is below the **3.14** recorded
+  after Q9b, so the sessions are **not comparable**.
+
+**Old table — not valid evidence.** The earlier sample-only table
+(1-replica master **2.598**, B **3.144**, 3-replica master **6.172**, B
+**5.087** sims/s) is withdrawn; the stored-path counts could not be verified.
+The placeholder table below is also not a result.
+
 | condition | replicas | throughput | e2e p95/p99 | WAL/simulation | stored bytes | status bytes |
 |---|---:|---|---|---|---|---|
 | master | 1 | not measured | not measured | not measured | not measured | not measured |
@@ -86,18 +105,27 @@ worker CPU, Kafka lag, and Postgres were not captured in a valid paired block.
 
 ## Recommendation
 
-**Inconclusive — B is not pursued from this session.** The required proof that
-the build stored exactly 100 paths was never obtained, and both proof commands
-failed authentication at the harness layer before creating a simulation. The
-next measurement must first create one sample-only row and show
-`jsonb_array_length(paths) = 100` plus `pg_column_size` before any load block.
-Only then should the four conditions be run in one session with process
-assertions before and after each block.
+**Inconclusive. Q9c is not pursued now. Q9a and Q9b delivered the large gains.**
+
+The required proof that the build stored exactly 100 paths was never obtained,
+and both proof commands failed authentication at the harness layer before
+creating a simulation. Any retry must first show `jsonb_array_length(paths) = 100`
+plus `pg_column_size` on one sample-only row, then run the four conditions in one
+session with process assertions before and after each block.
 
 Option A remains an owner-gated follow-up if completion latency still matters:
 measure an idempotent deferred writer with `paths_status`, `202/Retry-After`,
 and crash/retry tests. C should be evaluated only after measuring decompression
 CPU and WAL.
+
+## Before anyone retries
+
+1. Reset the `probity_worker` password locally first (out of band; no secret in
+   the repo).
+2. Use the pinned `grafana/k6:v2.3.0` image, not `latest`.
+3. Ensure no stale processes: no leftover Java workers and no `prd*`/`q9*`
+   containers.
+4. Check `jsonb_array_length(paths)` of the stored paths before measuring.
 
 ## Proposed implementation sequence if A is approved
 
