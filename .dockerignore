@@ -9,6 +9,7 @@ loadtest
 k8s
 *.md
 build-*.txt
+compile-*.txt
 app-*.txt
 k6-*.txt
 .idea
