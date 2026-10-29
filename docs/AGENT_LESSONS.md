@@ -254,6 +254,7 @@ Append-only. One entry = the failure, then the rule. Read together with
     protocol pointed at a workflow that did not exist.
     Rule: when a workflow is folded, renamed or deleted, update every doc that names it in the same
     change, and state the jobs and the required check the tree actually has.
+
 34. **Started a replica-block measurement with stale JVMs still holding worker ports.**
     The load generator then left a row `PENDING`, so the control block was not a valid
     comparison. Rule: before each replica block, identify every Java process by command line

@@ -80,9 +80,9 @@ ceiling remains historical context only, not a B result.
 - WAL and status-body bytes were **not measured** for B.
 - The final clean three-replica master control **never completed** (stale
   processes).
-- The re-run **stopped after two 401s** — both were the **admin web login**
-  (the harness logged in as `DO`), not the worker's `probity_worker` DB
-  connection.
+- The re-run **stopped after a web-login 401** caused by a wrong identifier
+  (`DO` instead of `admin`) in the agent's own script, not by a
+  `probity_worker` password problem.
 - The 1-replica master control of **2.60 sims/s** is below the **3.14** recorded
   after Q9b, so the sessions are **not comparable**.
 
