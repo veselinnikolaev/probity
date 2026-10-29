@@ -1158,3 +1158,12 @@ When adding new features, update this document with any new patterns, edge cases
 
 ## Repository cleanup
 - Added approved log, coverage, temporary-file, class-file, and macOS metadata ignore patterns; untracked the four frontend IntelliJ project files while preserving them on disk.
+
+## Q9c decision note
+- Closed as **inconclusive, not pursued**: Q9a and Q9b delivered the large gains.
+  The earlier B figures could not be verified: no sample row, stash, scratch
+  branch, or experiment code remained. The fresh proof stopped after two HTTP 401
+  failures (the admin web login, not the worker's `probity_worker` DB connection);
+  the harness received `DO` instead of the throwaway username because the temp
+  identifier file included the SQL client's leading `DO` output. No four-condition
+  measurement was claimed, and no Q9c source change was retained.

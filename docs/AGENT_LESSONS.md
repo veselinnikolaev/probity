@@ -254,3 +254,16 @@ Append-only. One entry = the failure, then the rule. Read together with
     protocol pointed at a workflow that did not exist.
     Rule: when a workflow is folded, renamed or deleted, update every doc that names it in the same
     change, and state the jobs and the required check the tree actually has.
+
+34. **Started a replica-block measurement with stale JVMs still holding worker ports.**
+    The load generator then left a row `PENDING`, so the control block was not a valid
+    comparison. Rule: before each replica block, identify every Java process by command line
+    and listening port, stop stale workers by real PID, verify the expected consumer-group
+    membership, and only then start the warm-up.
+
+35. **Parsed a mixed SQL-output file as a runtime identity.** The temporary file contained
+    the PostgreSQL `DO` status line before the actual `username|portfolio` row, and the
+    harness consequently attempted login as `DO`; two 401 proof runs created no data.
+    Rule: write machine-readable identifiers with a query-only output channel or select
+    the row by an explicit delimiter before passing it to a load harness; prove one
+    sample row before starting a measurement block.
