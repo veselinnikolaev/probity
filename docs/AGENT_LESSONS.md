@@ -242,13 +242,25 @@ Append-only. One entry = the failure, then the rule. Read together with
     and `fetchSimulationPaths`) while checking whether dead APIs were gone. Rule: use `-w` for
     symbol checks and report the actual command output, not a summary that hides misleading hits.
 
-32. **Started a replica-block measurement with stale JVMs still holding worker ports.**
+32. **Deleted ~35 remote and 13 local branches after checking only that no PR was open.** All 24
+    tips that mattered were later verified — 22 ancestors of master, 2 merged by PR (#38, #31) —
+    so nothing was lost, but no `git merge-base --is-ancestor` check was run, and "no open PR"
+    proved only that no PR was open.
+    Rule: branch cleanup verifies each branch is an ancestor of master or merged via a PR before
+    deleting; local `-D` deletions are reported with their SHAs.
+
+33. **Left §6 of `docs/AGENT_PROTOCOL.md` claiming `frontend-ci.yml` after the CI folded into one
+    workflow.** `c068dc1` deleted that file and the frontend job lived in `ci_cd.yaml`, so the
+    protocol pointed at a workflow that did not exist.
+    Rule: when a workflow is folded, renamed or deleted, update every doc that names it in the same
+    change, and state the jobs and the required check the tree actually has.
+34. **Started a replica-block measurement with stale JVMs still holding worker ports.**
     The load generator then left a row `PENDING`, so the control block was not a valid
     comparison. Rule: before each replica block, identify every Java process by command line
     and listening port, stop stale workers by real PID, verify the expected consumer-group
     membership, and only then start the warm-up.
 
-33. **Parsed a mixed SQL-output file as a runtime identity.** The temporary file contained
+35. **Parsed a mixed SQL-output file as a runtime identity.** The temporary file contained
     the PostgreSQL `DO` status line before the actual `username|portfolio` row, and the
     harness consequently attempted login as `DO`; two 401 proof runs created no data.
     Rule: write machine-readable identifiers with a query-only output channel or select
