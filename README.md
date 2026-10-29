@@ -34,8 +34,6 @@ New documentation layout for an external portfolio-evaluator audience:
 - `docs/operations.md` — run/configure/deploy/observability; verified gaps (no _bucket, no Kafka lag meter, 0 rules, Loki permission denied, no shipper)
 - `.github/agents/CONTRIBUTING.md` — agent protocol, link to agent docs in one line
 
-Superseded files removed: `docs/TECHNICAL_REPORT.md`, `docs/PHASE_4_MEASUREMENTS.md`, `docs/PHASE_2_IMPLEMENTATION_NOTES.md`, `frontend/FRONTEND_BUILD_NOTES.md` (condensed into `frontend/README.md`).
-
 ## Endpoints (selected)
 
 - `POST /api/v1/auth/{login,register,logout,refresh,verify,resend-verification}`
