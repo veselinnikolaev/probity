@@ -6,13 +6,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import me.veselin.probity.simulation.domain.SimulationPayload;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import me.veselin.probity.simulation.domain.SimulationPayload;
 
 /**
  * Spring Data JPA repository for SimulationJpaEntity.
@@ -154,4 +154,121 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
                             @Param("pendingStatus") String pendingStatus,
                             @Param("failedStatus") String failedStatus,
                             @Param("now") Instant now);
+
+    // ── transactional outbox ────────────────────────────────────────────────
+
+    /**
+     * Inserts one outbox row in the caller's transaction.
+     *
+     * <p>{@code CAST(:payloadJson AS JSONB)} is load-bearing: the driver binds a {@code String}
+     * as {@code varchar}, and PostgreSQL will not implicitly cast {@code varchar} to
+     * {@code jsonb} in an {@code INSERT}. Without the cast the production insert fails at
+     * runtime even though the same statement works against an already-jsonb column.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "INSERT INTO simulation_outbox (id, simulation_id, event_type, payload, created_at) " +
+                   "VALUES (:outboxId, :simulationId, :eventType, CAST(:payloadJson AS JSONB), now())",
+          nativeQuery = true)
+    void insertOutboxEvent(@Param("simulationId") UUID simulationId,
+                           @Param("outboxId") UUID outboxId,
+                           @Param("eventType") String eventType,
+                           @Param("payloadJson") String payloadJson);
+
+    /**
+     * Locks the next unpublished, unleased outbox rows for the calling publisher.
+     *
+     * <p>{@code FOR UPDATE SKIP LOCKED} is what makes two concurrent publishers safe: the
+     * second one skips rows the first has locked instead of blocking behind them or claiming
+     * the same work. Rows whose lease has expired are claimable again.
+     *
+     * <p>{@code payload::text} is required: a native query maps {@code jsonb} to
+     * {@code PGobject}, not {@code String}, so the explicit cast is what gives the publisher
+     * something Jackson can read.
+     *
+     * <p>The caller must run this inside a transaction, then commit before doing any Kafka
+     * I/O - the row lock must not be held while waiting for the broker.
+     *
+     * @return rows of {@code [id (UUID), simulation_id (UUID), payload (String)]}
+     */
+    @Query(value = """
+            SELECT s.id, s.simulation_id, s.payload::text
+              FROM simulation_outbox s
+             WHERE s.published_at IS NULL
+               AND (s.claimed_until IS NULL OR s.claimed_until < :now)
+             ORDER BY s.created_at ASC
+             LIMIT :limit
+             FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<Object[]> lockPendingOutboxBatch(@Param("limit") int limit, @Param("now") Instant now);
+
+    /**
+     * Leases the rows returned by {@link #lockPendingOutboxBatch} to one publisher.
+     *
+     * <p>The lease is a durable claim: it survives the transaction that wrote it, so the
+     * publisher can commit the claim, perform the (slow, external) Kafka send, and write the
+     * outcome in a later short transaction without holding row locks across the network call.
+     * A row becomes claimable again when {@code claimed_until} passes.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE simulation_outbox
+               SET claim_token = :token,
+                   claimed_until = :claimedUntil
+             WHERE id IN (:ids)
+            """, nativeQuery = true)
+    int claimOutboxRecords(@Param("ids") List<UUID> ids,
+                           @Param("token") UUID token,
+                           @Param("claimedUntil") Instant claimedUntil);
+
+    /**
+     * Marks a leased row published, fenced on the claim token.
+     *
+     * <p>{@code AND claim_token = :token} is the fencing token check: a publisher whose lease
+     * lapsed and whose row was reclaimed by a newer publisher updates 0 rows instead of
+     * overwriting the newer claim. A 0-row result is therefore a legitimate outcome, not an
+     * error - it means "someone else owns this row now".
+     *
+     * @return number of rows updated (1 if this publisher still held the claim, 0 otherwise)
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE simulation_outbox
+               SET published_at = now(),
+                   error_count = 0,
+                   claim_token = NULL,
+                   claimed_until = NULL
+             WHERE id = :id AND claim_token = :token
+            """, nativeQuery = true)
+    int markOutboxPublished(@Param("id") UUID id, @Param("token") UUID token);
+
+    /**
+     * Records a publication failure and releases the lease for a later retry, fenced on the
+     * claim token.
+     *
+     * <p>The row is never dropped: {@code claimed_until} is pushed forward as exponential
+     * backoff and {@code published_at} stays {@code NULL}, so the publisher will try again.
+     * {@code error_count} is alerting data only - there is no attempt limit that removes work
+     * from the queue.
+     *
+     * @return number of rows updated (1 if this publisher still held the claim, 0 otherwise)
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE simulation_outbox
+               SET error_count = error_count + 1,
+                   claim_token = NULL,
+                   claimed_until = :retryAt
+             WHERE id = :id AND claim_token = :token
+            """, nativeQuery = true)
+    int recordOutboxFailure(@Param("id") UUID id,
+                            @Param("token") UUID token,
+                            @Param("retryAt") Instant retryAt);
+
+    /** The number of consecutive publication failures recorded for a row (alerting only). */
+    @Query(value = "SELECT error_count FROM simulation_outbox WHERE id = :id", nativeQuery = true)
+    Optional<Integer> findOutboxErrorCount(@Param("id") UUID id);
 }

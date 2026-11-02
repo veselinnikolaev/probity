@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
@@ -37,6 +38,11 @@ import java.util.concurrent.ThreadPoolExecutor;
  * {@code org.springframework.security.access.AccessDeniedException} from
  * {@code spring-security-core} to enforce portfolio ownership and exposes no
  * HTTP API beyond the actuator probe.
+ *
+ * <p>{@code @EnableScheduling} is what makes the M1 transactional outbox work:
+ * {@code OutboxPublisher} drains {@code simulation_outbox} on a fixed-delay
+ * schedule. Without it the publisher bean would exist but never run, so
+ * accepted simulations would stay {@code PENDING} forever.
  */
 @SpringBootApplication(
         scanBasePackages = "me.veselin.probity",
@@ -49,6 +55,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 @Import(WorkerEventConfiguration.class)
 @EnableAsync
 @EnableCaching
+@EnableScheduling
 public class WorkerApplication {
 
     public static void main(String[] args) {

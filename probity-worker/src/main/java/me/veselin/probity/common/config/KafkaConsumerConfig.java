@@ -3,6 +3,7 @@ package me.veselin.probity.common.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import me.veselin.probity.common.domain.event.DomainEvent;
+import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.simulation.config.SimulationFailedRecordRecoverer;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -37,13 +38,7 @@ public class KafkaConsumerConfig {
 
     private static final int MAX_RETRIES = 2; // retries after the first attempt; total attempts = MAX_RETRIES + 1
 
-    /**
-     * Source and dead-letter topics for simulation-requested events.
-     *
-     * <p>Read as top-level {@code probity.kafka.*} properties (same source {@link KafkaConfig}
-     * uses for the {@code NewTopic} beans), not {@code spring.kafka.properties.*} — the
-     * recoverer must map the exact topic the listener consumes from and the publisher sends to.
-     */
+    /** Source and dead-letter topics for simulation-requested events. */
     @Value("${probity.kafka.simulation-requested-topic:simulation-requested}")
     private String simulationRequestedTopic;
 
@@ -52,7 +47,7 @@ public class KafkaConsumerConfig {
 
     @Bean
     @Primary
-    public ProducerFactory<String, DomainEvent> domainEventProducerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, SimulationRequestedEvent> simulationKafkaProducerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -66,8 +61,8 @@ public class KafkaConsumerConfig {
 
     @Bean
     @Primary
-    public KafkaTemplate<String, DomainEvent> kafkaTemplate(ProducerFactory<String, DomainEvent> domainEventProducerFactory) {
-        return new KafkaTemplate<>(domainEventProducerFactory);
+    public KafkaTemplate<String, SimulationRequestedEvent> simulationKafkaTemplate(ProducerFactory<String, SimulationRequestedEvent> simulationKafkaProducerFactory) {
+        return new KafkaTemplate<>(simulationKafkaProducerFactory);
     }
 
     @Bean
@@ -92,6 +87,24 @@ public class KafkaConsumerConfig {
     public KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate(ProducerFactory<Object, byte[]> deadLetterProducerFactory) {
         return new KafkaTemplate<>(deadLetterProducerFactory);
     }
+
+    @Bean
+    public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
+            KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate) {
+        Map<String, String> dltTopics = new HashMap<>();
+        dltTopics.put(simulationRequestedTopic, simulationRequestedDltTopic);
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(deadLetterKafkaTemplate, (r, e) -> {
+            String target = dltTopics.get(r.topic());
+            if (target == null) {
+                target = r.topic() + ".DLT";
+            }
+            return new org.apache.kafka.common.TopicPartition(target, r.partition());
+        });
+        recoverer.setFailIfSendResultIsError(true);
+        recoverer.setWaitForSendResultTimeout(Duration.ofSeconds(5));
+        return recoverer;
+    }
+
     @Bean
     public CommonErrorHandler simulationKafkaErrorHandler(
             DeadLetterPublishingRecoverer deadLetterPublishingRecoverer,
@@ -121,23 +134,6 @@ public class KafkaConsumerConfig {
         );
 
         return errorHandler;
-    }
-
-    @Bean
-    public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
-            KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate) {
-        Map<String, String> dltTopics = new HashMap<>();
-        dltTopics.put(simulationRequestedTopic, simulationRequestedDltTopic);
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(deadLetterKafkaTemplate, (r, e) -> {
-            String target = dltTopics.get(r.topic());
-            if (target == null) {
-                target = r.topic() + ".DLT";
-            }
-            return new org.apache.kafka.common.TopicPartition(target, r.partition());
-        });
-        recoverer.setFailIfSendResultIsError(true);
-        recoverer.setWaitForSendResultTimeout(Duration.ofSeconds(5));
-        return recoverer;
     }
 
     @Bean

@@ -2,8 +2,10 @@ package me.veselin.probity.simulation.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
+import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.dto.SimulationData;
@@ -11,6 +13,8 @@ import me.veselin.probity.simulation.dto.SimulationStatusResponse;
 import me.veselin.probity.simulation.port.SimulationPort;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -31,6 +35,7 @@ public class SimulationApplicationService implements SimulationPort {
     private final MonteCarloSimulationService monteCarloSimulationService;
     private final SimulationRepository simulationRepository;
     private final PortfolioQueryPort portfolioQueryPort;
+    private final ObjectMapper objectMapper;
 
     /**
      * Executes a new Monte Carlo simulation for a user-owned portfolio.
@@ -51,14 +56,33 @@ public class SimulationApplicationService implements SimulationPort {
 
     /**
      * Initiates an asynchronous simulation run.
-     * Creates a PENDING simulation record and publishes a Kafka event for processing.
+     * Creates a PENDING simulation record and durably queues its Kafka event for processing.
      * Returns 202 Accepted with status location.
+     *
+     * <p>All database operations (simulation insert + outbox insert) happen in the same
+     * PostgreSQL transaction. If either write fails, the entire transaction rolls back,
+     * ensuring the simulation row and its associated event are always consistent.
+     *
+     * @param portfolioId the portfolio ID
+     * @param numberOfSimulations number of simulation paths
+     * @param timeHorizonDays time horizon in days
+     * @param confidenceLevel confidence level for VaR calculation
+     * @param assumedReturnPercent optional assumed return override
+     * @param assumedVolatilityPercent optional assumed volatility override
+     * @param userId the authenticated user's ID
+     * @param idempotencyKey unique key for idempotent requests
+     * @param marketDataSnapshot market data snapshot at request time for stale-price safety
+     * @return 202 Accepted with status location
      */
-    public SimulationStatusResponse runSimulationAsync(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, String idempotencyKey) {
+    @Transactional
+    public SimulationStatusResponse runSimulationAsync(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, String idempotencyKey, Map<String, BigDecimal> marketDataSnapshot) {
         log.info("Application service: initiating async simulation portfolioId={} userId={}", portfolioId, userId);
 
-        // Create PENDING simulation record first
-        var pendingSimulation = me.veselin.probity.simulation.domain.Simulation.builder()
+        // Create PENDING simulation record first, then insert outbox event in the same transaction.
+        // This guarantees that the simulation row and the event are durably associated:
+        // if the app crashes after the commit, the outbox row survives and can be
+        // re-published by the publisher on restart.
+        var pendingSimulation = Simulation.builder()
                 .portfolioId(portfolioId)
                 .userId(userId)
                 .numberOfSimulations(numberOfSimulations)
@@ -73,8 +97,39 @@ public class SimulationApplicationService implements SimulationPort {
 
         var saved = simulationRepository.save(pendingSimulation);
 
-        // The Kafka event will be published by the controller after this returns
-        // We return the status response immediately with PENDING status
+        // Insert outbox event in the same transaction as the simulation row.
+        // The outbox row links to the simulation and will be picked up by the
+        // OutboxPublisher and published to Kafka after the HTTP response is sent.
+        // If marketDataSnapshot is null/empty, an empty map is used (worker falls back to live prices).
+        Map<String, BigDecimal> snapshot = marketDataSnapshot != null ? marketDataSnapshot : new java.util.HashMap<String, BigDecimal>();
+
+        String jsonPayload;
+        try {
+            jsonPayload = objectMapper.writeValueAsString(new SimulationRequestedEvent(
+                    saved.getId(),
+                    portfolioId,
+                    userId,
+                    numberOfSimulations,
+                    timeHorizonDays,
+                    confidenceLevel,
+                    assumedReturnPercent,
+                    assumedVolatilityPercent,
+                    snapshot,
+                    Instant.now()
+            ));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize simulation event", e);
+        }
+
+        simulationRepository.insertOutboxEvent(
+                saved.getId(),
+                saved.getId(),
+                "SimulationRequestedEvent",
+                jsonPayload
+        );
+
+        // The Kafka event will be published by the OutboxPublisher after this returns.
+        // We return the status response immediately with PENDING status.
         return buildStatusResponse(saved, SimulationStatus.PENDING, null);
     }
 

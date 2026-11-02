@@ -233,4 +233,65 @@ public class SimulationRepository {
                 .map(SimulationMapper::toDomain)
                 .toList();
     }
+
+    /**
+     * Locks a bounded batch of pending outbox records for the calling publisher.
+     *
+     * <p>See {@link SimulationJpaRepository#lockPendingOutboxBatch(int, Instant)} for the
+     * locking and jsonb-casting rules. The caller must commit this transaction before
+     * performing any Kafka I/O; the row lock must not be held during the blocking broker
+     * call.
+     *
+     * @return rows of {@code [id (UUID), simulation_id (UUID), payload (String)]}
+     */
+    public List<Object[]> lockPendingOutboxBatch(int limit, Instant now) {
+        return jpaRepository.lockPendingOutboxBatch(limit, now);
+    }
+
+    /**
+     * Leases the rows returned by {@link #lockPendingOutboxBatch} to one publisher.
+     *
+     * <p>The lease is durable: it survives the transaction that wrote it, so the publisher
+     * can commit the claim, perform the Kafka send, and write the outcome later without
+     * holding row locks across the network call.
+     */
+    public int claimOutboxRecords(List<UUID> ids, UUID token, Instant claimedUntil) {
+        return jpaRepository.claimOutboxRecords(ids, token, claimedUntil);
+    }
+
+    /**
+     * Marks a leased row published, fenced on the claim token.
+     *
+     * @return 1 if this publisher still held the claim, 0 if a newer publisher owns the row
+     */
+    public int markOutboxPublished(UUID id, UUID token) {
+        return jpaRepository.markOutboxPublished(id, token);
+    }
+
+    /**
+     * Records a publication failure and releases the lease for a later retry, fenced on the
+     * claim token.
+     *
+     * @return 1 if this publisher still held the claim, 0 otherwise
+     */
+    public int recordOutboxFailure(UUID id, UUID token, Instant retryAt) {
+        return jpaRepository.recordOutboxFailure(id, token, retryAt);
+    }
+
+    /**
+     * The number of consecutive publication failures recorded for a row (alerting only).
+     */
+    public Optional<Integer> findOutboxErrorCount(UUID id) {
+        return jpaRepository.findOutboxErrorCount(id);
+    }
+
+    /**
+     * Inserts an event into the outbox table in the caller's transaction.
+     *
+     * @param eventId the outbox row id
+     * @param simulationId the simulation the event belongs to
+     */
+    public void insertOutboxEvent(UUID eventId, UUID simulationId, String eventType, String payloadJson) {
+        jpaRepository.insertOutboxEvent(simulationId, eventId, eventType, payloadJson);
+    }
 }
