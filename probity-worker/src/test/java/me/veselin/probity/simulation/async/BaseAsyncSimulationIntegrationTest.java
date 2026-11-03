@@ -12,6 +12,7 @@ import me.veselin.probity.risk.port.RiskPort;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
+import me.veselin.test.config.KafkaTestConfiguration;
 import me.veselin.worker.WorkerApplication;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -23,7 +24,9 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.MessageListenerContainer;
@@ -74,6 +77,7 @@ import static org.mockito.Mockito.when;
  */
 @SpringBootTest(classes = WorkerApplication.class)
 @ActiveProfiles("test")
+@Import(KafkaTestConfiguration.class)
 public abstract class BaseAsyncSimulationIntegrationTest {
 
     // ── fixtures (fixed ids, idempotent across every class sharing the JVM database) ──
@@ -133,6 +137,9 @@ public abstract class BaseAsyncSimulationIntegrationTest {
 
     @Autowired
     protected JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    protected ObjectMapper objectMapper;
 
     @Autowired
     protected KafkaTemplate<String, Object> kafkaTemplate;
@@ -223,8 +230,9 @@ public abstract class BaseAsyncSimulationIntegrationTest {
 
     @AfterEach
     void cleanWorkspace() {
-        // Simulations first (FK to portfolios/users), then positions -> portfolios -> user.
+        // Outbox first (no FK to simulations), then simulations, then positions -> portfolios -> user.
         // Asset rows are V7 seed data and are deliberately not deleted.
+        jdbcTemplate.update("DELETE FROM simulation_outbox");
         simulationRepository.deleteAll();
         jdbcTemplate.update("DELETE FROM portfolio_positions WHERE portfolio_id = ?", PORTFOLIO_UUID);
         jdbcTemplate.update("DELETE FROM portfolios WHERE id = ?", PORTFOLIO_UUID);
@@ -262,7 +270,7 @@ public abstract class BaseAsyncSimulationIntegrationTest {
 
     // ── fixtures ────────────────────────────────────────────────────────────
 
-    /** Creates a PENDING row, exactly as POST /simulations/run-async does. */
+    /** Creates a PENDING row and corresponding outbox record, exactly as POST /simulations/run-async does. */
     protected UUID seedPendingSimulation() {
         UUID pid = UUID.fromString(portfolioId);
 
@@ -277,7 +285,26 @@ public abstract class BaseAsyncSimulationIntegrationTest {
                 .status(SimulationStatus.PENDING)
                 .build();
 
-        return simulationRepository.save(pending).getId();
+        Simulation saved = simulationRepository.save(pending);
+        UUID simulationId = saved.getId();
+
+        // Insert corresponding outbox row in the same transaction as production does
+        SimulationRequestedEvent event = validEventFor(simulationId);
+        String jsonPayload;
+        try {
+            jsonPayload = objectMapper.writeValueAsString(event);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize simulation event", e);
+        }
+
+        simulationRepository.insertOutboxEvent(
+                simulationId,  // eventId
+                simulationId,  // simulationId
+                "SimulationRequestedEvent",
+                jsonPayload
+        );
+
+        return saved.getId();
     }
 
     /** The event the real controller publishes, keyed on the simulation id. */

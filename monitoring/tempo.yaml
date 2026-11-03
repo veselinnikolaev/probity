@@ -1,0 +1,35 @@
+# Minimal single-binary Tempo used by the local compose stack.
+#
+# Traces arrive over OTLP/HTTP (4318) from probity-api and probity-worker and are
+# queried by Grafana from Tempo's HTTP API (3200). Local filesystem storage keeps
+# the stack dependency-free; this is a development setup, not a production trace
+# backend.
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false

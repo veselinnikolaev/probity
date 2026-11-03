@@ -1,0 +1,89 @@
+# Prometheus alert rules for the local Probity stack.
+#
+# Every expression is backed by a metric this repo actually exports:
+#   up{job=...}                                  - Prometheus scrape health
+#   probity_simulation_dlt_publish_failures_total - SimulationFailedRecordRecoverer
+#   http_server_requests_seconds_{count,bucket}   - API Micrometer HTTP timer
+#
+# Deliberately absent: consumer-lag and dead-letter-count alerts. No metric
+# exports either number today (there is no `probity_kafka_consumer_lag` gauge
+# and no dead-lettered counter), so a rule for them would load but never fire.
+# See "Future enhancements" in OBSERVABILITY_AUDIT_REPORT.md.
+#
+# There is no Alertmanager in this stack, so rules evaluate and display in the
+# Prometheus UI (/alerts) but do not notify anyone. Routing is intentionally
+# left to the deployment environment.
+groups:
+  - name: probity-availability
+    rules:
+      - alert: ProbityApiDown
+        expr: sum(up{job="probity"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Probity API target is reachable"
+          description: >-
+            Prometheus has failed to scrape every target in job "probity" for
+            2 minutes. The API is unavailable to users; check the process and
+            the actuator health endpoint.
+
+      - alert: ProbityWorkerDown
+        expr: sum(up{job="probity-worker"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No simulation worker target is reachable"
+          description: >-
+            Prometheus has failed to scrape every target in job
+            "probity-worker" for 2 minutes. Accepted simulations will queue
+            in Kafka until a worker returns.
+
+  - name: probity-simulations
+    rules:
+      - alert: ProbityDltPublishFailure
+        expr: increase(probity_simulation_dlt_publish_failures_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A failed simulation could not be published to the DLT"
+          description: >-
+            Publishing to the DLT failed in the last 10 minutes. The consumer
+            rethrows so the offset is not committed and the record is retried,
+            but the failure is not durably recorded in the DLT yet. Check Kafka
+            producer health and broker reachability.
+
+  - name: probity-http
+    rules:
+      - alert: ProbityHttp5xxRateHigh
+        expr: >-
+          sum(rate(http_server_requests_seconds_count{application="probity",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_seconds_count{application="probity"}[5m])), 1)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 5xx rate is above 5%"
+          description: >-
+            More than 5% of API responses have been 5xx for 10 minutes
+            ({{ $value | humanizePercentage }}). Check the API logs for the
+            failing route and the corresponding trace in Tempo.
+
+      - alert: ProbityHttpLatencyP95High
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{application="probity"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency is above 1 second"
+          description: >-
+            The p95 HTTP response time has been above 1 second for 10 minutes
+            ({{ $value | printf "%.2f" }} s). Use the slow trace in Tempo to
+            identify the downstream call or query responsible.

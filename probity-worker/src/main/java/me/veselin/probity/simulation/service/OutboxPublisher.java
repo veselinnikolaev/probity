@@ -7,6 +7,7 @@ import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeUnit;
  * database transaction open, and the fenced mark/failure is a second short transaction.
  */
 @Service
+@ConditionalOnProperty(name = "probity.simulation.worker.enabled", matchIfMissing = true)
 @RequiredArgsConstructor
 @Log4j2
 public class OutboxPublisher {

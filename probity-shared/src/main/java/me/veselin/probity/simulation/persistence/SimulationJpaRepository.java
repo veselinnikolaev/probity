@@ -168,7 +168,7 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
     @Modifying
     @Transactional
     @Query(value = "INSERT INTO simulation_outbox (id, simulation_id, event_type, payload, created_at) " +
-                   "VALUES (:outboxId, :simulationId, :eventType, CAST(:payloadJson AS JSONB), now())",
+                   "VALUES (:outboxId, :simulationId, :eventType, CAST(:payloadJson AS text)::jsonb, now())",
           nativeQuery = true)
     void insertOutboxEvent(@Param("simulationId") UUID simulationId,
                            @Param("outboxId") UUID outboxId,

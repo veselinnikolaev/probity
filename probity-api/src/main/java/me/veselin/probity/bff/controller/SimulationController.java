@@ -14,8 +14,6 @@ import me.veselin.probity.bff.dto.simulation.SimulationPathsResponse;
 import me.veselin.probity.bff.dto.simulation.SimulationResponse;
 import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.util.ConditionalGetSupport;
-import me.veselin.probity.common.domain.event.DomainEventPublisher;
-import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.marketdata.domain.PriceBar;
@@ -50,7 +48,6 @@ public class SimulationController {
 
     private final SimulationPort simulationPort;
     private final MarketDataPort marketDataPort;
-    private final DomainEventPublisher domainEventPublisher;
     private final SimulationProperties simulationProperties;
 
     /**
@@ -142,13 +139,9 @@ public class SimulationController {
                 request.assumedReturnPercent(),
                 request.assumedVolatilityPercent(),
                 principal.id(),
-                idempotencyKey
+                idempotencyKey,
+                marketDataSnapshot
         );
-
-        // Publish Kafka event with market data snapshot
-        // The event is published by the application service after creating the PENDING record
-        // We need to publish the event with the market data snapshot
-        publishSimulationRequestedEvent(statusResponse.getId(), request, principal.id(), marketDataSnapshot, idempotencyKey);
 
         URI statusLocation = ucb.path(ApiRoutes.Simulations.STATUS)
                 .buildAndExpand(statusResponse.getId())
@@ -326,30 +319,6 @@ public class SimulationController {
             log.warn("Failed to capture market data snapshot for portfolio {}: {}", portfolioId, e.getMessage());
         }
         return Map.of();
-    }
-
-    /**
-     * Publishes the simulation requested event to Kafka with market data snapshot.
-     * This is called after the PENDING record is created by the application service.
-     */
-    private void publishSimulationRequestedEvent(UUID simulationId, RunSimulationRequest request, UUID userId,
-                                                 Map<String, BigDecimal> marketDataSnapshot, String idempotencyKey) {
-        // Publish event with the simulationId (used as Kafka key) and market data snapshot
-        // The simulationId is the same one used for the PENDING record
-        SimulationRequestedEvent event = new SimulationRequestedEvent(
-                simulationId,
-                request.portfolioId(),
-                userId,
-                request.numberOfSimulations(),
-                request.timeHorizonDays(),
-                request.confidenceLevel(),
-                request.assumedReturnPercent(),
-                request.assumedVolatilityPercent(),
-                marketDataSnapshot,
-                Instant.now()
-        );
-        domainEventPublisher.publish(event);
-        log.debug("Published SimulationRequestedEvent to Kafka: simulationId={}", simulationId);
     }
 
     private SimulationResponse mapToResponse(SimulationData data) {

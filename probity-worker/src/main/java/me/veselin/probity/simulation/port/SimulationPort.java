@@ -19,7 +19,7 @@ public interface SimulationPort {
      * Creates a PENDING simulation record and publishes a Kafka event for processing.
      * Returns 202 Accepted with status location.
      */
-    SimulationStatusResponse runSimulationAsync(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, String idempotencyKey);
+    SimulationStatusResponse runSimulationAsync(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, String idempotencyKey, Map<String, BigDecimal> marketDataSnapshot);
 
     /**
      * Executes an asynchronous simulation run for a row the caller has already claimed.

@@ -1,0 +1,40 @@
+# Promtail ships Docker container stdout to Loki via Docker service discovery.
+#
+# Promtail is mounted /var/run/docker.sock read-only; it never writes to Docker.
+# The JSON stage only extracts a low-cardinality `level` label. Trace IDs stay in
+# the log body (JSON field `traceId`) and are turned into a Grafana derived field
+# on the Loki datasource, so they do not become a high-cardinality Loki label.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: stream
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: project
+    pipeline_stages:
+      - docker: {}
+      # ECS structured logs put the level at log.level. A non-JSON line simply
+      # yields no `level` label; the line itself is still shipped.
+      - json:
+          expressions:
+            level: log.level
+      - labels:
+          level:

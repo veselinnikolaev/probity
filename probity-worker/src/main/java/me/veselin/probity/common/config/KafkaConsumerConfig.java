@@ -47,7 +47,7 @@ public class KafkaConsumerConfig {
 
     @Bean
     @Primary
-    public ProducerFactory<String, SimulationRequestedEvent> simulationKafkaProducerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, DomainEvent> domainEventProducerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -61,8 +61,21 @@ public class KafkaConsumerConfig {
 
     @Bean
     @Primary
-    public KafkaTemplate<String, SimulationRequestedEvent> simulationKafkaTemplate(ProducerFactory<String, SimulationRequestedEvent> simulationKafkaProducerFactory) {
-        return new KafkaTemplate<>(simulationKafkaProducerFactory);
+    public KafkaTemplate<String, DomainEvent> kafkaTemplate(ProducerFactory<String, DomainEvent> domainEventProducerFactory) {
+        return new KafkaTemplate<>(domainEventProducerFactory);
+    }
+
+    @Bean("simulationKafkaTemplate")
+    public KafkaTemplate<String, SimulationRequestedEvent> simulationKafkaTemplate(KafkaProperties kafkaProperties) {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+        if (kafkaProperties.getProducer() != null && kafkaProperties.getProducer().getProperties() != null) {
+            configProps.putAll(kafkaProperties.getProducer().getProperties());
+        }
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(configProps));
     }
 
     @Bean
