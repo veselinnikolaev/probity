@@ -294,4 +294,172 @@ public class SimulationRepository {
     public void insertOutboxEvent(UUID eventId, UUID simulationId, String eventType, String payloadJson) {
         jpaRepository.insertOutboxEvent(simulationId, eventId, eventType, payloadJson);
     }
+
+    // ── reconciliation sweeper (M2) ──────────────────────────────────────────
+
+    public record ReconciliationCandidate(
+            UUID simulationId,
+            Instant stateSince,
+            UUID outboxId,
+            Instant publishedAt,
+            Instant claimedUntil
+    ) {}
+
+    public record MissingOutboxAlert(
+            UUID simulationId,
+            Instant stateSince
+    ) {}
+
+    public record OrphanOutboxAlert(
+            UUID outboxId,
+            UUID simulationId,
+            Instant createdAt
+    ) {}
+
+    public record ReconcileLoopAlert(
+            UUID outboxId,
+            UUID simulationId,
+            int reconcileCount
+    ) {}
+
+    public record OutboxReconciliationState(
+            UUID outboxId,
+            Instant publishedAt,
+            Instant claimedUntil,
+            Instant lastReconciledAt,
+            int reconcileCount
+    ) {}
+
+    public List<ReconciliationCandidate> findPendingSimulationsWithoutDelivery(
+            double pendingGraceSeconds,
+            double cooldownSeconds,
+            int batchSize) {
+        return jpaRepository.findPendingSimulationsWithoutDelivery(pendingGraceSeconds, cooldownSeconds, batchSize)
+                .stream()
+                .map(row -> new ReconciliationCandidate(
+                        toUUID(row[0]),
+                        toInstant(row[1]),
+                        toUUID(row[2]),
+                        toInstant(row[3]),
+                        toInstant(row[4])))
+                .toList();
+    }
+
+    public List<ReconciliationCandidate> findStaleProcessingSimulationsWithOutbox(
+            double processingGraceSeconds,
+            double cooldownSeconds,
+            int batchSize) {
+        return jpaRepository.findStaleProcessingSimulationsWithOutbox(processingGraceSeconds, cooldownSeconds, batchSize)
+                .stream()
+                .map(row -> new ReconciliationCandidate(
+                        toUUID(row[0]),
+                        toInstant(row[1]),
+                        toUUID(row[2]),
+                        toInstant(row[3]),
+                        toInstant(row[4])))
+                .toList();
+    }
+
+    public List<MissingOutboxAlert> findPendingSimulationsWithoutOutbox(
+            double pendingGraceSeconds,
+            int batchSize) {
+        return jpaRepository.findPendingSimulationsWithoutOutbox(pendingGraceSeconds, batchSize)
+                .stream()
+                .map(row -> new MissingOutboxAlert(
+                        toUUID(row[0]),
+                        toInstant(row[1])))
+                .toList();
+    }
+
+    public List<OrphanOutboxAlert> findOrphanOutboxRecords(
+            double orphanGraceSeconds,
+            int batchSize) {
+        return jpaRepository.findOrphanOutboxRecords(orphanGraceSeconds, batchSize)
+                .stream()
+                .map(row -> new OrphanOutboxAlert(
+                        toUUID(row[0]),
+                        toUUID(row[1]),
+                        toInstant(row[2])))
+                .toList();
+    }
+
+    public List<ReconcileLoopAlert> findReconcileLoopRecords(
+            int alertThreshold,
+            double recentWindowSeconds,
+            int batchSize) {
+        return jpaRepository.findReconcileLoopRecords(alertThreshold, recentWindowSeconds, batchSize)
+                .stream()
+                .map(row -> new ReconcileLoopAlert(
+                        toUUID(row[0]),
+                        toUUID(row[1]),
+                        toInt(row[2])))
+                .toList();
+    }
+
+    public Optional<OutboxReconciliationState> lockOutboxForReconciliation(UUID simulationId) {
+        List<Object[]> rows = jpaRepository.lockOutboxForReconciliation(simulationId);
+        if (rows.isEmpty()) {
+            return Optional.empty();
+        }
+        Object[] row = rows.get(0);
+        return Optional.of(new OutboxReconciliationState(
+                toUUID(row[0]),
+                toInstant(row[1]),
+                toInstant(row[2]),
+                toInstant(row[3]),
+                toInt(row[4])));
+    }
+
+    public int resetOutboxPublishedStatus(UUID outboxId) {
+        return jpaRepository.resetOutboxPublishedStatus(outboxId);
+    }
+
+    public int resetProcessingSimulationToPending(UUID simulationId, Instant observedStateSince) {
+        return jpaRepository.resetProcessingSimulationToPending(simulationId, observedStateSince);
+    }
+
+    public long countStuckSimulations(SimulationStatus status, double graceSeconds) {
+        return jpaRepository.countStuckSimulations(status.name(), graceSeconds);
+    }
+
+    public long countUnpublishedOutbox() {
+        return jpaRepository.countUnpublishedOutbox();
+    }
+
+    public double getOldestUnpublishedOutboxAgeSeconds() {
+        return jpaRepository.getOldestUnpublishedOutboxAgeSeconds();
+    }
+
+    public int getMaxOutboxErrorCount() {
+        return jpaRepository.getMaxOutboxErrorCount();
+    }
+
+    public double getOldestPublishedOutboxAgeSeconds() {
+        return jpaRepository.getOldestPublishedOutboxAgeSeconds();
+    }
+
+    public int getMaxReconcileCount() {
+        return jpaRepository.getMaxReconcileCount();
+    }
+
+    private static Instant toInstant(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof Instant inst) return inst;
+        if (obj instanceof java.sql.Timestamp ts) return ts.toInstant();
+        if (obj instanceof java.time.OffsetDateTime odt) return odt.toInstant();
+        if (obj instanceof java.time.ZonedDateTime zdt) return zdt.toInstant();
+        return Instant.parse(obj.toString());
+    }
+
+    private static UUID toUUID(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof UUID u) return u;
+        return UUID.fromString(obj.toString());
+    }
+
+    private static int toInt(Object obj) {
+        if (obj == null) return 0;
+        if (obj instanceof Number num) return num.intValue();
+        return Integer.parseInt(obj.toString());
+    }
 }

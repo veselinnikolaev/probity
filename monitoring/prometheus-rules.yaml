@@ -87,3 +87,91 @@ groups:
             The p95 HTTP response time has been above 1 second for 10 minutes
             ({{ $value | printf "%.2f" }} s). Use the slow trace in Tempo to
             identify the downstream call or query responsible.
+
+  - name: probity-reconciliation
+    rules:
+      - alert: ReconciliationSweeperStalled
+        expr: (time() - probity_simulation_reconciliation_last_success_timestamp_seconds) > 300
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Reconciliation sweeper has stalled"
+          description: >-
+            The reconciliation sweeper has not completed a successful cycle in over 5 minutes.
+            Check worker logs and database connectivity.
+
+      - alert: PendingStuck
+        expr: probity_simulation_stuck_rows{status="PENDING"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulations stuck in PENDING status"
+          description: >-
+            Simulations remain in PENDING state beyond the configured grace period.
+            Check Kafka broker availability and OutboxPublisher activity.
+
+      - alert: ProcessingStuck
+        expr: probity_simulation_stuck_rows{status="PROCESSING"} > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulations stuck in PROCESSING status"
+          description: >-
+            Simulations remain in PROCESSING state beyond the processing grace period.
+            Check for consumer crashes or unhandled execution exceptions.
+
+      - alert: OutboxNotDraining
+        expr: probity_simulation_outbox_oldest_unpublished_age_seconds > 600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox unpublished records are not draining"
+          description: >-
+            Unpublished outbox records have existed for over 10 minutes without publication.
+            Check broker connectivity and OutboxPublisher scheduler.
+
+      - alert: OutboxRepeatedFailure
+        expr: probity_simulation_outbox_max_error_count >= 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox records experiencing repeated publish failures"
+          description: >-
+            Outbox records have failed publication 5 or more consecutive times.
+            Inspect broker errors and Kafka producer logs.
+
+      - alert: ReconcileLoop
+        expr: increase(probity_simulation_reconciliation_actions_total{outcome="applied"}[1h]) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of reconciliation actions indicates loop"
+          description: >-
+            More than 20 reconciliation actions were applied in the last hour.
+            Inspect Kafka consumer lag and consumer cluster health.
+
+      - alert: MissingOutbox
+        expr: increase(probity_simulation_reconciliation_alerts_total{reason="missing_outbox"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulations found with missing outbox records"
+          description: >-
+            Simulations were detected without associated outbox records. Operator intervention required.
+
+      - alert: OrphanOutbox
+        expr: increase(probity_simulation_reconciliation_alerts_total{reason="orphan_outbox"}[1h]) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Orphan outbox records detected"
+          description: >-
+            Outbox records exist without corresponding simulation records. Operator inspection recommended.

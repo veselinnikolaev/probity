@@ -53,3 +53,7 @@ probity:
     poll-interval-ms: 3600000
     initial-delay-ms: 3600000
     max-error-count: 5
+  reconciliation:
+    enabled: false
+    sweep-interval-ms: 3600000
+    initial-delay-ms: 3600000

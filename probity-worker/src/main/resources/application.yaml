@@ -52,8 +52,27 @@ probity:
     max-backoff-ms: ${PROBITY_OUTBOX_MAX_BACKOFF_MS:300000}
     poll-interval-ms: ${PROBITY_OUTBOX_POLL_INTERVAL_MS:10000}
     max-error-count: ${PROBITY_OUTBOX_MAX_ERROR_COUNT:5}
+  reconciliation:
+    enabled: ${PROBITY_RECONCILIATION_ENABLED:true}
+    sweep-interval-ms: ${PROBITY_RECONCILIATION_SWEEP_INTERVAL_MS:60000}
+    initial-delay-ms: ${PROBITY_RECONCILIATION_INITIAL_DELAY_MS:60000}
+    pending-grace: ${PROBITY_RECONCILIATION_PENDING_GRACE:15m}
+    processing-grace: ${PROBITY_RECONCILIATION_PROCESSING_GRACE:30m}
+    reconcile-cooldown: ${PROBITY_RECONCILIATION_RECONCILE_COOLDOWN:30m}
+    scan-batch-size: ${PROBITY_RECONCILIATION_SCAN_BATCH_SIZE:50}
+    max-actions-per-cycle: ${PROBITY_RECONCILIATION_MAX_ACTIONS_PER_CYCLE:25}
+    orphan-grace: ${PROBITY_RECONCILIATION_ORPHAN_GRACE:1h}
+    alert-after-reconciles: ${PROBITY_RECONCILIATION_ALERT_AFTER_RECONCILES:3}
+    severe-after-reconciles: ${PROBITY_RECONCILIATION_SEVERE_AFTER_RECONCILES:10}
+    max-cooldown: ${PROBITY_RECONCILIATION_MAX_COOLDOWN:6h}
+    statement-timeout-ms: ${PROBITY_RECONCILIATION_STATEMENT_TIMEOUT_MS:5000}
+    lock-timeout-ms: ${PROBITY_RECONCILIATION_LOCK_TIMEOUT_MS:2000}
 
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
   docker:
     compose:
       enabled: false

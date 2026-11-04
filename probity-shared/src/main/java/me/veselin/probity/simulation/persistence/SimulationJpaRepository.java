@@ -271,4 +271,186 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
     /** The number of consecutive publication failures recorded for a row (alerting only). */
     @Query(value = "SELECT error_count FROM simulation_outbox WHERE id = :id", nativeQuery = true)
     Optional<Integer> findOutboxErrorCount(@Param("id") UUID id);
+
+    // ── reconciliation sweeper (M2) ──────────────────────────────────────────
+
+    /**
+     * Q1: Finds PENDING simulations whose outbox row is marked published but whose workflow
+     * was never picked up by a consumer within the grace period (lost Kafka delivery C4).
+     */
+    @Query(value = """
+            SELECT s.id,
+                   COALESCE(s.updated_at, s.created_at) AS state_since,
+                   o.id                                AS outbox_id,
+                   o.published_at,
+                   o.claimed_until
+              FROM simulations s
+              JOIN simulation_outbox o ON o.simulation_id = s.id
+             WHERE s.deleted = FALSE
+               AND s.status = 'PENDING'
+               AND COALESCE(s.updated_at, s.created_at) < now() - make_interval(secs => :pendingGraceSeconds)
+               AND o.published_at IS NOT NULL
+               AND (o.claimed_until IS NULL OR o.claimed_until < now())
+               AND (o.last_reconciled_at IS NULL
+                    OR o.last_reconciled_at < now() - make_interval(secs => :cooldownSeconds))
+             ORDER BY state_since ASC
+             LIMIT :batchSize
+            """, nativeQuery = true)
+    List<Object[]> findPendingSimulationsWithoutDelivery(
+            @Param("pendingGraceSeconds") double pendingGraceSeconds,
+            @Param("cooldownSeconds") double cooldownSeconds,
+            @Param("batchSize") int batchSize);
+
+    /**
+     * Q2: Finds stale PROCESSING simulations with an outbox row that have exceeded their
+     * processing grace window without completion (abandoned worker C5).
+     */
+    @Query(value = """
+            SELECT s.id,
+                   COALESCE(s.updated_at, s.created_at) AS state_since,
+                   o.id                                AS outbox_id,
+                   o.published_at,
+                   o.claimed_until
+              FROM simulations s
+              JOIN simulation_outbox o ON o.simulation_id = s.id
+             WHERE s.deleted = FALSE
+               AND s.status = 'PROCESSING'
+               AND COALESCE(s.updated_at, s.created_at) < now() - make_interval(secs => :processingGraceSeconds)
+               AND (o.last_reconciled_at IS NULL
+                    OR o.last_reconciled_at < now() - make_interval(secs => :cooldownSeconds))
+             ORDER BY state_since ASC
+             LIMIT :batchSize
+            """, nativeQuery = true)
+    List<Object[]> findStaleProcessingSimulationsWithOutbox(
+            @Param("processingGraceSeconds") double processingGraceSeconds,
+            @Param("cooldownSeconds") double cooldownSeconds,
+            @Param("batchSize") int batchSize);
+
+    /**
+     * Q3: Finds PENDING simulations with no outbox row (alert-only, S9).
+     */
+    @Query(value = """
+            SELECT s.id, COALESCE(s.updated_at, s.created_at) AS state_since
+              FROM simulations s
+              LEFT JOIN simulation_outbox o ON o.simulation_id = s.id
+             WHERE s.deleted = FALSE
+               AND s.status = 'PENDING'
+               AND o.id IS NULL
+               AND COALESCE(s.updated_at, s.created_at) < now() - make_interval(secs => :pendingGraceSeconds)
+             ORDER BY state_since ASC
+             LIMIT :batchSize
+            """, nativeQuery = true)
+    List<Object[]> findPendingSimulationsWithoutOutbox(
+            @Param("pendingGraceSeconds") double pendingGraceSeconds,
+            @Param("batchSize") int batchSize);
+
+    /**
+     * Q4: Finds orphan unpublished outbox rows with no simulation (alert-only, S10).
+     */
+    @Query(value = """
+            SELECT o.id, o.simulation_id, o.created_at
+              FROM simulation_outbox o
+              LEFT JOIN simulations s ON s.id = o.simulation_id
+             WHERE s.id IS NULL
+               AND o.published_at IS NULL
+               AND (o.claimed_until IS NULL OR o.claimed_until < now() - make_interval(secs => :orphanGraceSeconds))
+             ORDER BY o.created_at ASC
+             LIMIT :batchSize
+            """, nativeQuery = true)
+    List<Object[]> findOrphanOutboxRecords(
+            @Param("orphanGraceSeconds") double orphanGraceSeconds,
+            @Param("batchSize") int batchSize);
+
+    /**
+     * Q5: Finds outbox rows undergoing frequent reconciliation loops (alert-only, S16).
+     */
+    @Query(value = """
+            SELECT o.id, o.simulation_id, o.reconcile_count
+              FROM simulation_outbox o
+             WHERE o.reconcile_count >= :alertThreshold
+               AND o.last_reconciled_at > now() - make_interval(secs => :recentWindowSeconds)
+             ORDER BY o.reconcile_count DESC
+             LIMIT :batchSize
+            """, nativeQuery = true)
+    List<Object[]> findReconcileLoopRecords(
+            @Param("alertThreshold") int alertThreshold,
+            @Param("recentWindowSeconds") double recentWindowSeconds,
+            @Param("batchSize") int batchSize);
+
+    /**
+     * Locks the outbox row for reconciliation update using SKIP LOCKED.
+     */
+    @Query(value = """
+            SELECT id, published_at, claimed_until, last_reconciled_at, reconcile_count
+              FROM simulation_outbox
+             WHERE simulation_id = :simulationId
+             FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<Object[]> lockOutboxForReconciliation(@Param("simulationId") UUID simulationId);
+
+    /**
+     * Resets a published outbox row back to unpublished for re-publishing.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE simulation_outbox
+               SET published_at = NULL,
+                   claim_token = NULL,
+                   claimed_until = NULL,
+                   reconcile_count = reconcile_count + 1,
+                   last_reconciled_at = now()
+             WHERE id = :id
+               AND published_at IS NOT NULL
+               AND (claimed_until IS NULL OR claimed_until < now())
+            """, nativeQuery = true)
+    int resetOutboxPublishedStatus(@Param("id") UUID id);
+
+    /**
+     * Atomically resets a PROCESSING simulation to PENDING, fenced on observed state timestamp.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE simulations
+               SET status = 'PENDING',
+                   updated_at = now()
+             WHERE id = :simulationId
+               AND deleted = FALSE
+               AND status = 'PROCESSING'
+               AND COALESCE(updated_at, created_at) = :observedStateSince
+            """, nativeQuery = true)
+    int resetProcessingSimulationToPending(
+            @Param("simulationId") UUID simulationId,
+            @Param("observedStateSince") Instant observedStateSince);
+
+    /** Counts simulations in given status older than grace period. */
+    @Query(value = """
+            SELECT COUNT(*)
+              FROM simulations
+             WHERE deleted = FALSE
+               AND status = :status
+               AND COALESCE(updated_at, created_at) < now() - make_interval(secs => :graceSeconds)
+            """, nativeQuery = true)
+    long countStuckSimulations(@Param("status") String status, @Param("graceSeconds") double graceSeconds);
+
+    /** Counts unpublished outbox records. */
+    @Query(value = "SELECT COUNT(*) FROM simulation_outbox WHERE published_at IS NULL", nativeQuery = true)
+    long countUnpublishedOutbox();
+
+    /** Returns age in seconds of oldest unpublished outbox record (or 0 if none). */
+    @Query(value = "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - MIN(created_at))), 0) FROM simulation_outbox WHERE published_at IS NULL", nativeQuery = true)
+    double getOldestUnpublishedOutboxAgeSeconds();
+
+    /** Returns maximum error count among outbox records. */
+    @Query(value = "SELECT COALESCE(MAX(error_count), 0) FROM simulation_outbox", nativeQuery = true)
+    int getMaxOutboxErrorCount();
+
+    /** Returns age in seconds of oldest published outbox record (or 0 if none). */
+    @Query(value = "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - MIN(published_at))), 0) FROM simulation_outbox WHERE published_at IS NOT NULL", nativeQuery = true)
+    double getOldestPublishedOutboxAgeSeconds();
+
+    /** Returns maximum reconcile count among outbox records. */
+    @Query(value = "SELECT COALESCE(MAX(reconcile_count), 0) FROM simulation_outbox", nativeQuery = true)
+    int getMaxReconcileCount();
 }

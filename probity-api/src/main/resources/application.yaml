@@ -85,6 +85,8 @@ probity:
     # make the api consume; the worker ships the same flag true. See Phase 4 §2.3.
     worker:
       enabled: false
+  reconciliation:
+    enabled: false
   kafka:
     # Partitions for the simulation-requested topic (and its DLT). Fixed at topic creation;
     # it cannot be reduced later. PR-D0 raises the ceiling from 1 to 6 (Phase 4 note §2.9).
