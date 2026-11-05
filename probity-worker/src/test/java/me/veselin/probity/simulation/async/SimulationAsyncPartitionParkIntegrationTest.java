@@ -14,6 +14,7 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>The parked record's offset must also never be committed: an ack would destroy the
  * redelivery the park cycle depends on. That is probed directly on the group.
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class SimulationAsyncPartitionParkIntegrationTest extends BaseAsyncSimulationIntegrationTest {
 
     /**

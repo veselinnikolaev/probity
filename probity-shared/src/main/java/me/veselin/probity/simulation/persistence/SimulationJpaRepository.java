@@ -63,11 +63,12 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
      */
     @Modifying
     @Transactional
-    @Query("UPDATE SimulationJpaEntity s SET s.status = :processingStatus, s.updatedAt = :now " +
+    @Query("UPDATE SimulationJpaEntity s SET s.status = :processingStatus, s.attemptId = :attemptId, s.updatedAt = :now " +
            "WHERE s.id = :id AND s.deleted = false " +
            "AND (s.status = 'PENDING' OR (s.status = 'PROCESSING' AND s.updatedAt < :staleThreshold))")
     int claimForProcessing(@Param("id") UUID id, @Param("processingStatus") String processingStatus,
-                           @Param("staleThreshold") Instant staleThreshold, @Param("now") Instant now);
+                           @Param("staleThreshold") Instant staleThreshold, @Param("now") Instant now,
+                           @Param("attemptId") UUID attemptId);
 
     /**
      * Fenced completion: marks the row COMPLETED and persists its result, but only for the
@@ -154,6 +155,21 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
                             @Param("pendingStatus") String pendingStatus,
                             @Param("failedStatus") String failedStatus,
                             @Param("now") Instant now);
+
+    /**
+     * Marks a pending row failed only when the exact claim attempt still owns the
+     * retained attempt marker.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE SimulationJpaEntity s SET s.status = :failedStatus, s.updatedAt = :now " +
+           "WHERE s.id = :id AND s.deleted = false AND s.status = :pendingStatus " +
+           "AND s.attemptId = :attemptId")
+    int markFailedForAttempt(@Param("id") UUID id,
+                             @Param("pendingStatus") String pendingStatus,
+                             @Param("failedStatus") String failedStatus,
+                             @Param("attemptId") UUID attemptId,
+                             @Param("now") Instant now);
 
     // ── transactional outbox ────────────────────────────────────────────────
 

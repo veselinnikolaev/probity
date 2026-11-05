@@ -1,11 +1,8 @@
 package me.veselin.probity.common.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.MeterRegistry;
 import me.veselin.probity.common.domain.event.DomainEvent;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.simulation.config.SimulationFailedRecordRecoverer;
-import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -21,11 +18,9 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,6 +39,9 @@ public class KafkaConsumerConfig {
 
     @Value("${probity.kafka.simulation-requested-dlt-topic:simulation-requested.DLT}")
     private String simulationRequestedDltTopic;
+
+    @Value("${probity.kafka.send-timeout-secs:5}")
+    private int sendTimeoutSecs;
 
     @Bean
     @Primary
@@ -91,49 +89,25 @@ public class KafkaConsumerConfig {
 
         configProps.putIfAbsent(ProducerConfig.ACKS_CONFIG, "all");
         configProps.putIfAbsent(ProducerConfig.RETRIES_CONFIG, 3);
-        configProps.putIfAbsent(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000L);
+        configProps.putIfAbsent(ProducerConfig.MAX_BLOCK_MS_CONFIG, sendTimeoutSecs * 1000L);
 
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
-    @Bean
+    @Bean("dltKafkaTemplate")
     public KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate(ProducerFactory<Object, byte[]> deadLetterProducerFactory) {
         return new KafkaTemplate<>(deadLetterProducerFactory);
     }
 
     @Bean
-    public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
-            KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate) {
-        Map<String, String> dltTopics = new HashMap<>();
-        dltTopics.put(simulationRequestedTopic, simulationRequestedDltTopic);
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(deadLetterKafkaTemplate, (r, e) -> {
-            String target = dltTopics.get(r.topic());
-            if (target == null) {
-                target = r.topic() + ".DLT";
-            }
-            return new org.apache.kafka.common.TopicPartition(target, r.partition());
-        });
-        recoverer.setFailIfSendResultIsError(true);
-        recoverer.setWaitForSendResultTimeout(Duration.ofSeconds(5));
-        return recoverer;
-    }
-
-    @Bean
     public CommonErrorHandler simulationKafkaErrorHandler(
-            DeadLetterPublishingRecoverer deadLetterPublishingRecoverer,
-            SimulationRepository simulationRepository,
-            ObjectMapper objectMapper,
-            MeterRegistry meterRegistry) {
-        DeadLetterPublishingRecoverer delegate = deadLetterPublishingRecoverer;
-        SimulationFailedRecordRecoverer recoverer = new SimulationFailedRecordRecoverer(delegate,
-                simulationRepository,
-                objectMapper,
-                meterRegistry);
+            SimulationFailedRecordRecoverer recoverer) {
 
         ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(MAX_RETRIES);
         backOff.setInitialInterval(1000);
         backOff.setMultiplier(2.0);
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+        errorHandler.setCommitRecovered(true);
 
         errorHandler.addNotRetryableExceptions(
                 me.veselin.probity.simulation.exception.EmptyPortfolioException.class,

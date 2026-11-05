@@ -86,6 +86,9 @@ public class SimulationJpaEntity extends BaseEntitySoftDelete {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Column(name = "attempt_id")
+    private UUID attemptId;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

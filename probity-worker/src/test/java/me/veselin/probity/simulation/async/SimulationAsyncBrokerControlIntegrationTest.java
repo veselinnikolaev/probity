@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
 import java.util.Set;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * It now asserts the full path through to a {@code COMPLETED} row carrying its result, which
  * is the property that was actually worth protecting.
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class SimulationAsyncBrokerControlIntegrationTest extends BaseAsyncSimulationIntegrationTest {
 
     @DynamicPropertySource

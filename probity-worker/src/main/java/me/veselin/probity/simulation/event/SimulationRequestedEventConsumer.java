@@ -6,6 +6,7 @@ import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.simulation.config.SimulationProperties;
 import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.exception.SimulationClaimLostException;
+import me.veselin.probity.simulation.exception.SimulationAttemptFailedException;
 import me.veselin.probity.simulation.port.SimulationPort;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -91,15 +92,16 @@ public class SimulationRequestedEventConsumer {
         // the Kafka offset and the group identity, so it is the only one that can decide
         // whether this delivery is ours to run. It returns the fence token that every write
         // for this row must then present.
-        Optional<Instant> fenceToken = simulationRepository
-                .claimForProcessing(simulationId, simulationProperties.getClaimLease());
+        Optional<SimulationRepository.Claim> claim = simulationRepository
+                .claimForProcessingWithAttempt(simulationId, simulationProperties.getClaimLease());
 
-        if (fenceToken.isEmpty()) {
+        if (claim.isEmpty()) {
             handleUnclaimable(simulationId, topic, partition, offset, ack, consumer);
             return;
         }
 
-        Instant fence = fenceToken.get();
+        Instant fence = claim.get().fenceToken();
+        UUID attemptId = claim.get().attemptId();
         try {
             // Execute the simulation using the pre-created simulationId and marketDataSnapshot
             simulationPort.executeAsync(
@@ -134,8 +136,8 @@ public class SimulationRequestedEventConsumer {
             // nobody can take; and an unfenced release would hand a peer's live job back to
             // the queue for a second, concurrent execution.
             if (simulationRepository.releaseToPending(simulationId, fence)) {
-                log.info("Released simulation {} back to PENDING for redelivery (fence={})",
-                        simulationId, fence);
+                log.info("Released simulation {} back to PENDING for redelivery (attempt={}, fence={})",
+                        simulationId, attemptId, fence);
             } else {
                 log.warn("Could not release simulation {}: the claim taken at {} is no longer "
                         + "current, so a peer owns the row. Leaving it alone — it will go stale "
@@ -144,7 +146,7 @@ public class SimulationRequestedEventConsumer {
 
             // Rethrow to trigger Kafka retry/DLT. The row is PENDING again, not FAILED:
             // marking it terminal on every throw is what made the retry path inert.
-            throw e;
+            throw new SimulationAttemptFailedException(simulationId, attemptId, e);
         }
     }
 

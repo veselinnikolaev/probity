@@ -128,11 +128,35 @@ public class SimulationRepository {
      * @param lease maximum age of a PROCESSING row to consider stale (e.g., 5 minutes)
      * @return the fence token if the row was claimed, empty if it was not claimable
      */
-    public Optional<Instant> claimForProcessing(UUID id, java.time.Duration lease) {
+    public Optional<Claim> claimForProcessingWithAttempt(UUID id, java.time.Duration lease) {
         Instant now = now();
+        UUID attemptId = UUID.randomUUID();
         int updated = jpaRepository.claimForProcessing(
-                id, SimulationStatus.PROCESSING.name(), now.minus(lease), now);
-        return updated > 0 ? Optional.of(now) : Optional.empty();
+                id, SimulationStatus.PROCESSING.name(), now.minus(lease), now, attemptId);
+        return updated > 0 ? Optional.of(new Claim(now, attemptId)) : Optional.empty();
+    }
+
+    /**
+     * Compatibility view for existing callers that only need the timestamp fence.
+     * New worker code must use {@link #claimForProcessingWithAttempt(UUID, java.time.Duration)}.
+     */
+    public Optional<Instant> claimForProcessing(UUID id, java.time.Duration lease) {
+        return claimForProcessingWithAttempt(id, lease).map(Claim::fenceToken);
+    }
+
+    /**
+     * Marks a pending simulation failed only when the supplied attempt still owns it.
+     */
+    public boolean markFailedForAttempt(UUID id, UUID attemptId) {
+        return jpaRepository.markFailedForAttempt(
+                id,
+                SimulationStatus.PENDING.name(),
+                SimulationStatus.FAILED.name(),
+                attemptId,
+                now()) > 0;
+    }
+
+    public record Claim(Instant fenceToken, UUID attemptId) {
     }
 
     /**

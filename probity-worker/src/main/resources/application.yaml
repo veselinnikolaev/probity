@@ -46,12 +46,20 @@ probity:
     # Partitions for the simulation-requested topic (and its DLT). Fixed at topic creation;
     # it cannot be reduced later. PR-D0 raises the ceiling from 1 to 6 (Phase 4 note §2.9).
     simulation-topic-partitions: ${SIMULATION_TOPIC_PARTITIONS:6}
+    send-timeout-secs: ${PROBITY_KAFKA_SEND_TIMEOUT_SECS:5}
   outbox:
     publish-batch-size: ${PROBITY_OUTBOX_PUBLISH_BATCH_SIZE:10}
     initial-backoff-ms: ${PROBITY_OUTBOX_INITIAL_BACKOFF_MS:5000}
     max-backoff-ms: ${PROBITY_OUTBOX_MAX_BACKOFF_MS:300000}
     poll-interval-ms: ${PROBITY_OUTBOX_POLL_INTERVAL_MS:10000}
     max-error-count: ${PROBITY_OUTBOX_MAX_ERROR_COUNT:5}
+  dlt:
+    publish-batch-size: ${PROBITY_DLT_PUBLISH_BATCH_SIZE:10}
+    initial-backoff-ms: ${PROBITY_DLT_INITIAL_BACKOFF_MS:5000}
+    max-backoff-ms: ${PROBITY_DLT_MAX_BACKOFF_MS:300000}
+    poll-interval-ms: ${PROBITY_DLT_POLL_INTERVAL_MS:1000}
+    initial-delay-ms: ${PROBITY_DLT_INITIAL_DELAY_MS:0}
+    max-error-count: ${PROBITY_DLT_MAX_ERROR_COUNT:5}
   reconciliation:
     enabled: ${PROBITY_RECONCILIATION_ENABLED:true}
     sweep-interval-ms: ${PROBITY_RECONCILIATION_SWEEP_INTERVAL_MS:60000}

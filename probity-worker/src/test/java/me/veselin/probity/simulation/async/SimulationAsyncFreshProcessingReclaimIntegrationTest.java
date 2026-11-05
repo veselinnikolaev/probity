@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -31,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * It is reported in the failure message: on master it advances past the record that must
  * not have been acked.
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class SimulationAsyncFreshProcessingReclaimIntegrationTest extends BaseAsyncSimulationIntegrationTest {
 
     /** Consumed by PR-A. Inert on master, where the lease is hardcoded to five minutes. */

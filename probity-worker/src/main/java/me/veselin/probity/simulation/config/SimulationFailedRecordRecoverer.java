@@ -1,131 +1,160 @@
 package me.veselin.probity.simulation.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.simulation.persistence.SimulationRepository;
+import me.veselin.probity.simulation.dlt.FailureContext;
+import me.veselin.probity.simulation.dlt.SimulationDltEventWriter;
+import me.veselin.probity.simulation.dlt.WriteResult;
+import me.veselin.probity.simulation.exception.SimulationAttemptFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.springframework.core.log.LogAccessor;
 import org.springframework.kafka.listener.ConsumerRecordRecoverer;
-import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.support.serializer.DeserializationException;
+import org.springframework.kafka.support.serializer.SerializationUtils;
+import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.UUID;
 
+import static org.apache.commons.logging.LogFactory.getLog;
+
 @Slf4j
+@Component
 public final class SimulationFailedRecordRecoverer implements ConsumerRecordRecoverer {
 
-    private final DeadLetterPublishingRecoverer delegate;
-    private final SimulationRepository repository;
-    private final ObjectMapper objectMapper;
-    private final Counter dltPublishFailures;
+    private static final LogAccessor DESERIALIZATION_LOG =
+            new LogAccessor(getLog(SimulationFailedRecordRecoverer.class));
 
-    public SimulationFailedRecordRecoverer(DeadLetterPublishingRecoverer delegate,
-                                           SimulationRepository repository,
-                                           ObjectMapper objectMapper,
-                                           MeterRegistry meterRegistry) {
-        this.delegate = delegate;
-        this.repository = repository;
+    private final SimulationDltEventWriter writer;
+    private final ObjectMapper objectMapper;
+
+    public SimulationFailedRecordRecoverer(SimulationDltEventWriter writer,
+                                            ObjectMapper objectMapper) {
+        this.writer = writer;
         this.objectMapper = objectMapper;
-        this.dltPublishFailures = Counter.builder("probity.simulation.dlt.publish.failures")
-                .description("Count of times publishing to the simulation DLT failed")
-                .register(meterRegistry);
     }
 
     @Override
     public void accept(ConsumerRecord<?, ?> record, Exception exception) {
-        UUID simulationId = null;
-        try {
-            String key = record.key() == null ? null : record.key().toString();
-            if (key != null) {
-                simulationId = UUID.fromString(key);
-            }
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to parse simulationId from record key: {}", record.key(), e);
+        boolean deserializationFailure = isDeserializationFailure(record, exception);
+        SimulationAttemptFailedException attemptFailure = findAttemptFailure(exception);
+
+        UUID simulationId = attemptFailure == null
+                ? simulationIdFromRecord(record)
+                : attemptFailure.simulationId();
+        UUID attemptId = attemptFailure == null
+                ? syntheticAttemptId(record)
+                : attemptFailure.attemptId();
+
+        if (!deserializationFailure && attemptFailure == null) {
+            throw new IllegalStateException(
+                    "Simulation listener failure reached recovery without an attempt fence", exception);
         }
 
-        // (1) DB first: mark the row FAILED if it is still PENDING
-        if (simulationId != null) {
-            boolean marked = repository.markFailedIfPending(simulationId);
-            if (!marked) {
-                log.debug("Did not mark simulation {} as FAILED (not PENDING, deleted, or missing)", simulationId);
-            } else {
-                log.info("Marked simulation {} as FAILED before DLT publish", simulationId);
-            }
-        }
-
-        try {
-            // (2) then DLT: coerce value to byte[] and delegate
-            ConsumerRecord<?, byte[]> byteArrayRecord = withByteArrayValue(record);
-            delegate.accept(byteArrayRecord, exception);
-        } catch (Exception e) {
-            dltPublishFailures.increment();
-            if (simulationId != null) {
-                log.error("Failed to publish simulation {} to DLT; rethrowing so offset is not committed: {}", simulationId, e.getMessage(), e);
-            } else {
-                log.error("Failed to publish record to DLT; rethrowing so offset is not committed: {}", e.getMessage(), e);
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * Coerce the consumer record's value to a byte array while preserving key, headers,
-     * topic, partition, offset and timestamp.
-     */
-    private ConsumerRecord<?, byte[]> withByteArrayValue(ConsumerRecord<?, ?> record) {
-        byte[] coercedValue = coerceToBytes(record.value());
-        Headers headers = copyHeaders(record.headers());
-        return new ConsumerRecord<>(
+        FailureContext context = new FailureContext(
+                UUID.randomUUID(),
+                simulationId,
+                attemptId,
                 record.topic(),
                 record.partition(),
                 record.offset(),
-                record.timestamp(),
-                record.timestampType(),
-                record.serializedKeySize(),
-                record.serializedValueSize(),
-                record.key(),
-                coercedValue,
-                headers,
-                record.leaderEpoch()
-        );
+                record.key() == null ? null : record.key().toString(),
+                payloadBytes(record, deserializationFailure),
+                exception.getClass().getName(),
+                safeDescription(exception),
+                Instant.now());
+
+        WriteResult result;
+        if (simulationId == null) {
+            result = writer.recordUnattributableFailure(context);
+        } else if (deserializationFailure) {
+            result = writer.recordUnclaimedFailure(context);
+        } else {
+            result = writer.recordAttemptFailure(context);
+        }
+
+        if (result == WriteResult.NOT_OWNER) {
+            log.debug("Did not record DLT event for source {}-{}@{}; simulation is no longer owned",
+                    record.topic(), record.partition(), record.offset());
+        } else {
+            log.info("Persisted durable DLT event {} for source {}-{}@{}",
+                    context.dltEventId(), record.topic(), record.partition(), record.offset());
+        }
     }
 
-    private byte[] coerceToBytes(Object value) {
-        if (value == null) {
+    private boolean isDeserializationFailure(ConsumerRecord<?, ?> record, Exception exception) {
+        if (exception instanceof org.apache.kafka.common.errors.SerializationException) {
+            return true;
+        }
+        for (Throwable current = exception; current != null; current = current.getCause()) {
+            if (current instanceof DeserializationException) {
+                return true;
+            }
+        }
+        return SerializationUtils.getExceptionFromHeader(
+                record,
+                SerializationUtils.VALUE_DESERIALIZER_EXCEPTION_HEADER,
+                DESERIALIZATION_LOG) != null;
+    }
+
+    private byte[] payloadBytes(ConsumerRecord<?, ?> record, boolean deserializationFailure) {
+        if (deserializationFailure) {
+            DeserializationException deserialization = SerializationUtils.getExceptionFromHeader(
+                    record,
+                    SerializationUtils.VALUE_DESERIALIZER_EXCEPTION_HEADER,
+                    DESERIALIZATION_LOG);
+            if (deserialization != null && deserialization.getData() != null) {
+                return deserialization.getData();
+            }
+        }
+        if (record.value() == null) {
             return null;
         }
-        if (value instanceof byte[]) {
-            return (byte[]) value;
+        if (record.value() instanceof byte[] bytes) {
+            return bytes.clone();
         }
-        if (value instanceof String s) {
-            return s.getBytes(StandardCharsets.UTF_8);
+        if (record.value() instanceof String value) {
+            return value.getBytes(StandardCharsets.UTF_8);
         }
         try {
-            return objectMapper.writeValueAsBytes(value);
-        } catch (Exception e) {
-            log.warn("Failed to serialize value to bytes; falling back to toString()", e);
-            String s = value.toString();
-            return s == null ? null : s.getBytes(StandardCharsets.UTF_8);
+            return objectMapper.writeValueAsBytes(record.value());
+        } catch (Exception serializationFailure) {
+            throw new IllegalStateException("Could not serialize recovered Kafka value", serializationFailure);
         }
     }
 
-    private Headers copyHeaders(Headers source) {
-        if (source == null) {
-            return new RecordHeaders();
+    private UUID simulationIdFromRecord(ConsumerRecord<?, ?> record) {
+        if (record.key() == null) {
+            return null;
         }
-        RecordHeaders target = new RecordHeaders();
-        for (Header h : source) {
-            // Keep the original instances: the ErrorHandlingDeserializer records the failed
-            // payload in a package-private DeserializationExceptionHeader, and the
-            // DeadLetterPublishingRecoverer refuses to read it back if it is rebuilt as a
-            // plain RecordHeader ("Foreign deserialization exception header ... ignored;
-            // possible attack?"), which would publish a null-value DLT record.
-            target.add(h);
+        try {
+            return UUID.fromString(record.key().toString());
+        } catch (IllegalArgumentException ignored) {
+            return null;
         }
-        return target;
+    }
+
+    private UUID syntheticAttemptId(ConsumerRecord<?, ?> record) {
+        return UUID.nameUUIDFromBytes(
+                ("dlt:" + record.topic() + ":" + record.partition() + ":" + record.offset())
+                        .getBytes(StandardCharsets.UTF_8));
+    }
+
+    private SimulationAttemptFailedException findAttemptFailure(Throwable failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (current instanceof SimulationAttemptFailedException attemptFailure) {
+                return attemptFailure;
+            }
+        }
+        return null;
+    }
+
+    private String safeDescription(Throwable failure) {
+        String message = failure.getMessage();
+        if (message == null) {
+            return null;
+        }
+        return message.length() <= 4000 ? message : message.substring(0, 4000);
     }
 }

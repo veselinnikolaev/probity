@@ -33,6 +33,7 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.math.BigDecimal;
@@ -78,6 +79,7 @@ import static org.mockito.Mockito.when;
 @SpringBootTest(classes = WorkerApplication.class)
 @ActiveProfiles("test")
 @Import(KafkaTestConfiguration.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class BaseAsyncSimulationIntegrationTest {
 
     // ── fixtures (fixed ids, idempotent across every class sharing the JVM database) ──
