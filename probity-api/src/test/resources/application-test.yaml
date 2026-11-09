@@ -25,7 +25,7 @@ spring:
 
 probity:
   jwt:
-    secret: J7d3kK29a91Lx8m4P2sQ6tUvWxYzA1B3C5D7E9F0G2H4I6J8K
+    secret: integration-test-jwt-secret-integration-test-jwt-secret
   app:
     base-url: http://localhost:8080
   kafka:
