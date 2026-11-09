@@ -1,5 +1,7 @@
 package me.veselin.probity.common.domain.event;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -15,96 +17,88 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
- * Test that verifies per-listener exception isolation.
- * Registers two listeners for the same event, makes one throw,
- * and asserts that the second listener still ran.
+ * Test that verifies per-listener exception isolation. Registers two listeners for the same event,
+ * makes one throw, and asserts that the second listener still ran.
  */
 @SpringBootTest(classes = ListenerIsolationTest.TestConfig.class)
 @ActiveProfiles("test")
 @Slf4j
 public class ListenerIsolationTest {
 
-    @Autowired
-    private ApplicationEventPublisher applicationEventPublisher;
+  @Autowired private ApplicationEventPublisher applicationEventPublisher;
 
-    @Autowired
-    private ThrowingListener throwingListener;
+  @Autowired private ThrowingListener throwingListener;
 
-    @Autowired
-    private SucceedingListener succeedingListener;
+  @Autowired private SucceedingListener succeedingListener;
 
-    @Test
-    void throwingListenerDoesNotPreventSucceedingListener() {
-        // Act
-        TestEvent event = new TestEvent();
-        applicationEventPublisher.publishEvent(event);
+  @Test
+  void throwingListenerDoesNotPreventSucceedingListener() {
+    // Act
+    TestEvent event = new TestEvent();
+    applicationEventPublisher.publishEvent(event);
 
-        // Assert
-        assertThat(throwingListener.wasCalled()).isTrue();
-        assertThat(succeedingListener.wasCalled()).isTrue();
+    // Assert
+    assertThat(throwingListener.wasCalled()).isTrue();
+    assertThat(succeedingListener.wasCalled()).isTrue();
+  }
+
+  @Configuration
+  static class TestConfig {
+    private static final Logger log = LoggerFactory.getLogger(TestConfig.class);
+
+    @Bean
+    public ThrowingListener throwingListener() {
+      return new ThrowingListener();
     }
 
-    @Configuration
-    static class TestConfig {
-        private static final Logger log = LoggerFactory.getLogger(TestConfig.class);
-
-        @Bean
-        public ThrowingListener throwingListener() {
-            return new ThrowingListener();
-        }
-
-        @Bean
-        public SucceedingListener succeedingListener() {
-            return new SucceedingListener();
-        }
-
-        @Bean(name = "applicationEventMulticaster")
-        public ApplicationEventMulticaster applicationEventMulticaster() {
-            org.springframework.context.event.SimpleApplicationEventMulticaster multicaster =
-                    new org.springframework.context.event.SimpleApplicationEventMulticaster();
-            multicaster.setErrorHandler(throwable -> {
-                log.error("Listener threw exception during event processing", throwable);
-            });
-            return multicaster;
-        }
+    @Bean
+    public SucceedingListener succeedingListener() {
+      return new SucceedingListener();
     }
 
-    record TestEvent() implements DomainEvent {}
+    @Bean(name = "applicationEventMulticaster")
+    public ApplicationEventMulticaster applicationEventMulticaster() {
+      org.springframework.context.event.SimpleApplicationEventMulticaster multicaster =
+          new org.springframework.context.event.SimpleApplicationEventMulticaster();
+      multicaster.setErrorHandler(
+          throwable -> {
+            log.error("Listener threw exception during event processing", throwable);
+          });
+      return multicaster;
+    }
+  }
 
-    @Component
-    @Order(1)
-    static class ThrowingListener {
-        private boolean called = false;
+  record TestEvent() implements DomainEvent {}
 
-        @EventListener
-        public void handle(TestEvent event) {
-            called = true;
-            throw new RuntimeException("Intentional exception for testing isolation");
-        }
+  @Component
+  @Order(1)
+  static class ThrowingListener {
+    private boolean called = false;
 
-        public boolean wasCalled() {
-            return called;
-        }
+    @EventListener
+    public void handle(TestEvent event) {
+      called = true;
+      throw new RuntimeException("Intentional exception for testing isolation");
     }
 
-    @Component
-    @Order(2)
-    static class SucceedingListener {
-        private boolean called = false;
-
-        @EventListener
-        public void handle(TestEvent event) {
-            called = true;
-        }
-
-        public boolean wasCalled() {
-            return called;
-        }
+    public boolean wasCalled() {
+      return called;
     }
+  }
+
+  @Component
+  @Order(2)
+  static class SucceedingListener {
+    private boolean called = false;
+
+    @EventListener
+    public void handle(TestEvent event) {
+      called = true;
+    }
+
+    public boolean wasCalled() {
+      return called;
+    }
+  }
 }

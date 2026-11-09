@@ -6,10 +6,10 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum AssetType {
-    STOCK(35),
-    ETF(25),
-    CRYPTO(60),
-    BOND(10);
+  STOCK(35),
+  ETF(25),
+  CRYPTO(60),
+  BOND(10);
 
-    private final int baseRiskScore;
+  private final int baseRiskScore;
 }

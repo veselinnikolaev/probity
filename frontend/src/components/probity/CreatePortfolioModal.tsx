@@ -20,12 +20,12 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
   const [error, setError] = useState('');
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, name: e.target.value }));
+    setFormData((prev) => ({ ...prev, name: e.target.value }));
     setError('');
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, description: e.target.value }));
+    setFormData((prev) => ({ ...prev, description: e.target.value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,18 +56,10 @@ export const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
 
   const footer = (
     <div className="create-portfolio-modal__footer">
-      <ProbityButton
-        variant="ghost"
-        onClick={handleClose}
-        disabled={loading}
-      >
+      <ProbityButton variant="ghost" onClick={handleClose} disabled={loading}>
         Cancel
       </ProbityButton>
-      <ProbityButton
-        variant="primary"
-        onClick={handleSubmit}
-        loading={loading}
-      >
+      <ProbityButton variant="primary" onClick={handleSubmit} loading={loading}>
         Create Portfolio
       </ProbityButton>
     </div>

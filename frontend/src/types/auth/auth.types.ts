@@ -4,7 +4,7 @@ export interface User {
 }
 
 export interface LoginPayload {
-  identifier: string;  // your backend uses username, not email
+  identifier: string; // your backend uses username, not email
   password: string;
 }
 

@@ -6,9 +6,9 @@ export interface VaRMethodology {
 }
 
 export interface VaRReport {
-  valueAtRisk: number;          // negative, e.g. -4820
-  confidenceLevel: number;      // 0.90 | 0.95 | 0.99
-  timeHorizonDays: number;      // 1 | 5 | 21
+  valueAtRisk: number; // negative, e.g. -4820
+  confidenceLevel: number; // 0.90 | 0.95 | 0.99
+  timeHorizonDays: number; // 1 | 5 | 21
   methodology: VaRMethodology;
   historicalSparkline: number[];
   assetBreakdown: AssetVaR[];

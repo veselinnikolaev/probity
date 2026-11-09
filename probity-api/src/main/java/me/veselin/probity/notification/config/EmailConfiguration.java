@@ -6,16 +6,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-/**
- * SendGrid email service configuration for transactional email delivery.
- */
+/** SendGrid email service configuration for transactional email delivery. */
 public class EmailConfiguration {
 
-    @Value("${sendgrid.api-key}")
-    private String apiKey;
+  @Value("${sendgrid.api-key}")
+  private String apiKey;
 
-    @Bean
-    public SendGrid sendGrid() {
-        return new SendGrid(apiKey);
-    }
+  @Bean
+  public SendGrid sendGrid() {
+    return new SendGrid(apiKey);
+  }
 }

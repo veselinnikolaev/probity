@@ -21,7 +21,7 @@ function renderRegister() {
       <Routes>
         <Route path="/register" element={<Register />} />
       </Routes>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -39,13 +39,16 @@ async function fillStep1AndContinue() {
 
 describe('Register form (M4c - no live check-email)', () => {
   it('shows "Email already registered" on duplicate email 409', async () => {
-    authService.register.mockRejectedValueOnce({
+    vi.mocked(authService.register).mockRejectedValueOnce({
       response: { status: 409, data: { message: 'Email already registered' } },
     });
 
     const { user } = await fillStep1AndContinue();
     await screen.findByPlaceholderText('Create a strong password');
-    await user.type(screen.getByPlaceholderText('Create a strong password'), 'NotARealPassword123!');
+    await user.type(
+      screen.getByPlaceholderText('Create a strong password'),
+      'NotARealPassword123!',
+    );
     await user.type(screen.getByPlaceholderText('Confirm your password'), 'NotARealPassword123!');
     await user.click(screen.getByRole('button', { name: /Create Account/i }));
 
@@ -53,13 +56,16 @@ describe('Register form (M4c - no live check-email)', () => {
   });
 
   it('shows "Username already taken" on duplicate username 409', async () => {
-    authService.register.mockRejectedValueOnce({
+    vi.mocked(authService.register).mockRejectedValueOnce({
       response: { status: 409, data: { message: 'Username already taken' } },
     });
 
     const { user } = await fillStep1AndContinue();
     await screen.findByPlaceholderText('Create a strong password');
-    await user.type(screen.getByPlaceholderText('Create a strong password'), 'NotARealPassword123!');
+    await user.type(
+      screen.getByPlaceholderText('Create a strong password'),
+      'NotARealPassword123!',
+    );
     await user.type(screen.getByPlaceholderText('Confirm your password'), 'NotARealPassword123!');
     await user.click(screen.getByRole('button', { name: /Create Account/i }));
 
@@ -67,13 +73,16 @@ describe('Register form (M4c - no live check-email)', () => {
   });
 
   it('shows general error on other registration error', async () => {
-    authService.register.mockRejectedValueOnce({
+    vi.mocked(authService.register).mockRejectedValueOnce({
       response: { status: 400, data: { message: 'Bad request' } },
     });
 
     const { user } = await fillStep1AndContinue();
     await screen.findByPlaceholderText('Create a strong password');
-    await user.type(screen.getByPlaceholderText('Create a strong password'), 'NotARealPassword123!');
+    await user.type(
+      screen.getByPlaceholderText('Create a strong password'),
+      'NotARealPassword123!',
+    );
     await user.type(screen.getByPlaceholderText('Confirm your password'), 'NotARealPassword123!');
     await user.click(screen.getByRole('button', { name: /Create Account/i }));
 

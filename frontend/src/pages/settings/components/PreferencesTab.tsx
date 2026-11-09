@@ -61,9 +61,7 @@ export function PreferencesTab() {
             label="Default Currency"
             options={CURRENCIES}
             value={preferencesForm.defaultCurrency}
-            onChange={(value) =>
-              setPreferencesForm({ ...preferencesForm, defaultCurrency: value })
-            }
+            onChange={(value) => setPreferencesForm({ ...preferencesForm, defaultCurrency: value })}
           />
           <DropdownSelect
             label="Default Confidence Level for VaR"

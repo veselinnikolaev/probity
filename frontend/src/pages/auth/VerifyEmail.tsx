@@ -65,7 +65,14 @@ export const VerifyEmail: React.FC = () => {
 
         <div className={styles.wordmark}>
           <div className={styles.wordmarkIcon}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              strokeWidth="2.5"
+            >
               <path d="M12 2L2 7l10 5 10-5-10-5z" />
               <path d="M2 17l10 5 10-5" />
               <path d="M2 12l10 5 10-5" />
@@ -79,20 +86,24 @@ export const VerifyEmail: React.FC = () => {
         <div className={styles.stepContent}>
           {state === 'loading' && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{
-                width: '24px',
-                height: '24px',
-                margin: '0 auto 16px',
-                border: '2px solid var(--pb-border)',
-                borderTopColor: 'var(--pb-accent)',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-              }}></div>
-              <p style={{
-                fontFamily: 'DM Sans, sans-serif',
-                fontSize: '14px',
-                color: 'var(--pb-text-secondary)',
-              }}>
+              <div
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  margin: '0 auto 16px',
+                  border: '2px solid var(--pb-border)',
+                  borderTopColor: 'var(--pb-accent)',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }}
+              ></div>
+              <p
+                style={{
+                  fontFamily: 'DM Sans, sans-serif',
+                  fontSize: '14px',
+                  color: 'var(--pb-text-secondary)',
+                }}
+              >
                 Verifying your account…
               </p>
             </div>
@@ -100,8 +111,22 @@ export const VerifyEmail: React.FC = () => {
 
           {state === 'success' && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--pb-success)" strokeWidth="2.5">
+              <div
+                style={{
+                  marginBottom: '24px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--pb-success)"
+                  strokeWidth="2.5"
+                >
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
@@ -111,13 +136,15 @@ export const VerifyEmail: React.FC = () => {
                 Email verified!
               </h2>
 
-              <p style={{
-                fontFamily: 'DM Sans, sans-serif',
-                fontSize: '14px',
-                color: 'var(--pb-text-secondary)',
-                textAlign: 'center',
-                marginBottom: '24px',
-              }}>
+              <p
+                style={{
+                  fontFamily: 'DM Sans, sans-serif',
+                  fontSize: '14px',
+                  color: 'var(--pb-text-secondary)',
+                  textAlign: 'center',
+                  marginBottom: '24px',
+                }}
+              >
                 Your account is ready.
               </p>
 
@@ -137,8 +164,22 @@ export const VerifyEmail: React.FC = () => {
 
           {state === 'error' && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--pb-danger)" strokeWidth="2.5">
+              <div
+                style={{
+                  marginBottom: '24px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--pb-danger)"
+                  strokeWidth="2.5"
+                >
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                   <line x1="12" y1="9" x2="12" y2="13" />
                   <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -149,14 +190,16 @@ export const VerifyEmail: React.FC = () => {
                 Link expired or invalid
               </h2>
 
-              <p style={{
-                fontFamily: 'DM Sans, sans-serif',
-                fontSize: '14px',
-                color: 'var(--pb-text-secondary)',
-                textAlign: 'center',
-                marginBottom: '24px',
-                lineHeight: '1.5',
-              }}>
+              <p
+                style={{
+                  fontFamily: 'DM Sans, sans-serif',
+                  fontSize: '14px',
+                  color: 'var(--pb-text-secondary)',
+                  textAlign: 'center',
+                  marginBottom: '24px',
+                  lineHeight: '1.5',
+                }}
+              >
                 This verification link has already been used or has expired.
               </p>
 

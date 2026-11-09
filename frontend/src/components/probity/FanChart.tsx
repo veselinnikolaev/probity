@@ -82,7 +82,11 @@ export function FanChart({
     // Find min/max values for scaling. Union of percentiles + sampled paths + current
     // value — see computeFanChartRange. Paths may be empty while loading; the percentile
     // series alone already yield a valid, unclipped range in that window.
-    const { min: minValue, max: maxValue } = computeFanChartRange(paths, percentileSeries, currentValue);
+    const { min: minValue, max: maxValue } = computeFanChartRange(
+      paths,
+      percentileSeries,
+      currentValue,
+    );
 
     const valueRange = maxValue - minValue || 1;
     const valueBuffer = valueRange * 0.1;
@@ -92,7 +96,8 @@ export function FanChart({
 
     // Helper functions
     const xScale = (dayIndex: number) => (dayIndex / timeHorizonDays) * chartWidth + padding.left;
-    const yScale = (value: number) => chartHeight - padding.bottom - ((value - scaledMin) / displayRange) * chartAreaHeight;
+    const yScale = (value: number) =>
+      chartHeight - padding.bottom - ((value - scaledMin) / displayRange) * chartAreaHeight;
 
     // Clear canvas
     ctx.fillStyle = 'var(--pb-bg)';
@@ -303,27 +308,27 @@ export function FanChart({
         onMouseLeave={handleMouseLeave}
       />
       {tooltip && (
-          <div
-              style={{
-                position: 'absolute',
-                top: tooltip.y + 12,
-                left: tooltip.x + 12,
-                zIndex: 100,
-                backgroundColor: '#131B2E',
-                border: '1px solid #1E2D45',
-                borderRadius: '6px',
-                padding: '7px 10px',
-                pointerEvents: 'none',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                whiteSpace: 'pre-line',       // preserves the \n line breaks in content
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                color: 'var(--pb-text-primary)',
-                lineHeight: 1.6,
-              }}
-          >
-            {tooltip.content}
-          </div>
+        <div
+          style={{
+            position: 'absolute',
+            top: tooltip.y + 12,
+            left: tooltip.x + 12,
+            zIndex: 100,
+            backgroundColor: '#131B2E',
+            border: '1px solid #1E2D45',
+            borderRadius: '6px',
+            padding: '7px 10px',
+            pointerEvents: 'none',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            whiteSpace: 'pre-line', // preserves the \n line breaks in content
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            color: 'var(--pb-text-primary)',
+            lineHeight: 1.6,
+          }}
+        >
+          {tooltip.content}
+        </div>
       )}
     </div>
   );

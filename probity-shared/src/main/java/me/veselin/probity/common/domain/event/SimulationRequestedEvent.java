@@ -5,9 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Event published when a simulation is requested, before execution begins.
- */
+/** Event published when a simulation is requested, before execution begins. */
 public record SimulationRequestedEvent(
     UUID simulationId,
     UUID portfolioId,
@@ -18,5 +16,5 @@ public record SimulationRequestedEvent(
     Double assumedReturnPercent,
     Double assumedVolatilityPercent,
     Map<String, BigDecimal> marketDataSnapshot,
-    Instant occurredAt
-) implements DomainEvent {}
+    Instant occurredAt)
+    implements DomainEvent {}

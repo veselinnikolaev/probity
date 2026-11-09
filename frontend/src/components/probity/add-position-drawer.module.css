@@ -242,7 +242,7 @@
 
 .summaryCardValueHighlight {
   font-weight: 600;
-  color: #10B981;
+  color: #10b981;
 }
 
 .summaryCardNote {
@@ -257,7 +257,7 @@
   border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: 6px;
   font-size: 13px;
-  color: #EF4444;
+  color: #ef4444;
   font-family: var(--font-body);
 }
 

@@ -34,7 +34,7 @@ const PortfolioDetailPage: React.FC = () => {
 
   const editingPosition = useMemo(() => {
     if (!editingPositionId || !detailState.data) return null;
-    const pos = detailState.data.positions.find(p => p.id === editingPositionId);
+    const pos = detailState.data.positions.find((p) => p.id === editingPositionId);
     if (!pos) return null;
     return {
       ticker: pos.ticker,
@@ -61,125 +61,140 @@ const PortfolioDetailPage: React.FC = () => {
     }
   };
 
+  useTopbarSlot(
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+      <h1 className={styles['portfolio-title']}>{routerState?.name || 'Portfolio'}</h1>
+      <div style={{ marginLeft: 'auto' }}>
+        <ProbityButton
+          variant="primary"
+          size="md"
+          onClick={() => {
+            setEditingPositionId(null);
+            setIsDrawerOpen(true);
+          }}
+        >
+          + Add Position
+        </ProbityButton>
+      </div>
+    </div>,
+    [],
+  );
 
-    useTopbarSlot(
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-            <h1 className={styles['portfolio-title']}>
-                {routerState?.name || 'Portfolio'}
-            </h1>
-            <div style={{ marginLeft: 'auto' }}>
-                <ProbityButton
-                    variant="primary"
-                    size="md"
-                    onClick={() => {
+  return (
+    <>
+      <main className={styles['content-area']}>
+        <div className={styles['content-zones']}>
+          <section className={styles['summary-strip']}>
+            <DataBoundary
+              state={detailState}
+              isEmpty={(data) => !data}
+              loading={
+                <>
+                  {[...Array(5)].map((_, i) => (
+                    <StatCardSkeleton key={i} />
+                  ))}
+                </>
+              }
+              empty={
+                <EmptyState
+                  title="Portfolio Empty"
+                  description="Add positions to see metrics"
+                  size="sm"
+                />
+              }
+              error={(msg) => <ErrorState message={msg} onRetry={detailState.refetch} size="sm" />}
+            >
+              {(detail) =>
+                buildStatCards(detail.summary, detail.positions.length).map((card, idx) => (
+                  <StatCard key={idx} {...card} />
+                ))
+              }
+            </DataBoundary>
+          </section>
+
+          <DataBoundary
+            state={detailState}
+            isEmpty={(data) => data.positions.length === 0}
+            loading={<TableSkeleton rows={3} />}
+            empty={
+              <div className={styles['empty-state-container']}>
+                <EmptyState
+                  icon="📊"
+                  title="No Positions Yet"
+                  description="Add your first position to start tracking your portfolio."
+                  action={
+                    <ProbityButton
+                      variant="primary"
+                      onClick={() => {
                         setEditingPositionId(null);
                         setIsDrawerOpen(true);
-                    }}
-                >
-                    + Add Position
-                </ProbityButton>
-            </div>
-        </div>, []
-    );
-
-    return (
-        <>
-            <main className={styles['content-area']}>
-                <div className={styles['content-zones']}>
-                    <section className={styles['summary-strip']}>
-                        <DataBoundary
-                            state={detailState}
-                            isEmpty={(data) => !data}
-                            loading={<>{[...Array(5)].map((_, i) => <StatCardSkeleton key={i}/>)}</>}
-                            empty={<EmptyState
-                                title="Portfolio Empty"
-                                description="Add positions to see metrics"
-                                size="sm"/>}
-                            error={(msg) => (
-                                <ErrorState message={msg} onRetry={detailState.refetch} size="sm"/>
-                            )}
-                        >
-                            {(detail) => useMemo(() => buildStatCards(detail.summary, detail.positions.length), [detail.summary, detail.positions.length]).map((card, idx) => (
-                                <StatCard key={idx} {...card} />
-                            ))}
-                        </DataBoundary>
-                    </section>
-
-                    <DataBoundary
-                        state={detailState}
-                        isEmpty={(data) => data.positions.length === 0}
-                        loading={<TableSkeleton rows={3}/>}
-                        empty={<div className={styles['empty-state-container']}>
-                            <EmptyState
-                                icon="📊"
-                                title="No Positions Yet"
-                                description="Add your first position to start tracking your portfolio."
-                                action={<ProbityButton
-                                    variant="primary"
-                                    onClick={() => {
-                                        setEditingPositionId(null);
-                                        setIsDrawerOpen(true);
-                                    }}
-                                >
-                                    Add Position
-                                </ProbityButton>}/>
-                        </div>}
-                        error={(msg) => (
-                            <ErrorState message={msg} onRetry={detailState.refetch}/>
-                        )}
+                      }}
                     >
-                        {(detail) => (
-                            <section className={styles['positions-section']}>
-                                <div className={styles['section-header']}>Positions</div>
-                                {deleteError && (
-                                    <div style={{
-                                        padding: '12px',
-                                        backgroundColor: 'rgba(239,68,68,0.08)',
-                                        border: '1px solid rgba(239,68,68,0.25)',
-                                        borderRadius: 6,
-                                        marginBottom: 16,
-                                        fontSize: 13,
-                                        color: '#EF4444',
-                                        fontFamily: 'var(--font-body)',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                    }}>
-                                        <span>{deleteError}</span>
-                                        <button
-                                            onClick={() => setDeleteError(null)}
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                color: '#EF4444',
-                                                cursor: 'pointer',
-                                                fontSize: 18,
-                                                padding: 4,
-                                            }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                )}
-                                <PortfolioDetailTable
-                                    positions={detail.positions}
-                                    onEdit={handleEditPosition}
-                                    onDelete={handleDeletePosition}/>
-                            </section>
-                        )}
-                    </DataBoundary>
-                </div>
-            </main>
-            <AddPositionDrawer
-                open={isDrawerOpen}
-                onClose={() => {
-                    setIsDrawerOpen(false);
-                    setEditingPositionId(null);
-                }}
-                onSuccess={detailState.refetch}
-                portfolioId={portfolioId}
-                editingPositionId={editingPositionId}
-                editingPosition={editingPosition}/></>
+                      Add Position
+                    </ProbityButton>
+                  }
+                />
+              </div>
+            }
+            error={(msg) => <ErrorState message={msg} onRetry={detailState.refetch} />}
+          >
+            {(detail) => (
+              <section className={styles['positions-section']}>
+                <div className={styles['section-header']}>Positions</div>
+                {deleteError && (
+                  <div
+                    style={{
+                      padding: '12px',
+                      backgroundColor: 'rgba(239,68,68,0.08)',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                      borderRadius: 6,
+                      marginBottom: 16,
+                      fontSize: 13,
+                      color: '#EF4444',
+                      fontFamily: 'var(--font-body)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>{deleteError}</span>
+                    <button
+                      onClick={() => setDeleteError(null)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#EF4444',
+                        cursor: 'pointer',
+                        fontSize: 18,
+                        padding: 4,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+                <PortfolioDetailTable
+                  positions={detail.positions}
+                  onEdit={handleEditPosition}
+                  onDelete={handleDeletePosition}
+                />
+              </section>
+            )}
+          </DataBoundary>
+        </div>
+      </main>
+      <AddPositionDrawer
+        open={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setEditingPositionId(null);
+        }}
+        onSuccess={detailState.refetch}
+        portfolioId={portfolioId}
+        editingPositionId={editingPositionId}
+        editingPosition={editingPosition}
+      />
+    </>
   );
 };
 

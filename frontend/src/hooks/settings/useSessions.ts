@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { settingsService } from '@/services/settings';
 import { SessionResponse } from '@/types/settings';
-import { AsyncState, createLoadingState, createSuccessState, createErrorState } from '@/types/shared';
+import {
+  AsyncState,
+  createLoadingState,
+  createSuccessState,
+  createErrorState,
+} from '@/types/shared';
 import { useMutation } from '@/hooks/useMutation';
 
 export interface UseSessionsReturn {
@@ -10,7 +15,8 @@ export interface UseSessionsReturn {
 }
 
 export function useSessions(): UseSessionsReturn {
-  const [sessions, setSessions] = useState<AsyncState<SessionResponse[]>>(createLoadingState<SessionResponse[]>());
+  const [sessions, setSessions] =
+    useState<AsyncState<SessionResponse[]>>(createLoadingState<SessionResponse[]>());
 
   // ─── Initial data fetch ─────────────────────────────────────────────────
   useEffect(() => {

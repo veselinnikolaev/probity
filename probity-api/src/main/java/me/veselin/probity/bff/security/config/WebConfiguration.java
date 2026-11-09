@@ -8,14 +8,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 @RequiredArgsConstructor
-/**
- * Web MVC configuration for rate limiting interceptor registration.
- */
+/** Web MVC configuration for rate limiting interceptor registration. */
 public class WebConfiguration implements WebMvcConfigurer {
-    private final RateLimitInterceptor rateLimitInterceptor;
+  private final RateLimitInterceptor rateLimitInterceptor;
 
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(rateLimitInterceptor);
-    }
+  @Override
+  public void addInterceptors(InterceptorRegistry registry) {
+    registry.addInterceptor(rateLimitInterceptor);
+  }
 }

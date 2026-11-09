@@ -24,12 +24,10 @@ export const EditPortfolioModal: React.FC<EditPortfolioModalProps> = ({
   const [nameError, setNameError] = useState('');
   const [descriptionError, setDescriptionError] = useState('');
 
-  const updateMutation = useMutation(
-    async (data: { name: string; description?: string }) => {
-      if (!portfolio?.id) throw new Error('Portfolio ID is required');
-      return portfolioService.updatePortfolio(portfolio.id, data);
-    }
-  );
+  const updateMutation = useMutation(async (data: { name: string; description?: string }) => {
+    if (!portfolio?.id) throw new Error('Portfolio ID is required');
+    return portfolioService.updatePortfolio(portfolio.id, data);
+  });
 
   useEffect(() => {
     if (portfolio) {
@@ -43,12 +41,12 @@ export const EditPortfolioModal: React.FC<EditPortfolioModalProps> = ({
   }, [portfolio]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, name: e.target.value }));
+    setFormData((prev) => ({ ...prev, name: e.target.value }));
     setNameError('');
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, description: e.target.value }));
+    setFormData((prev) => ({ ...prev, description: e.target.value }));
     setDescriptionError('');
   };
 
@@ -88,18 +86,10 @@ export const EditPortfolioModal: React.FC<EditPortfolioModalProps> = ({
 
   const footer = (
     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-      <ProbityButton
-        variant="ghost"
-        onClick={handleClose}
-        disabled={updateMutation.isPending}
-      >
+      <ProbityButton variant="ghost" onClick={handleClose} disabled={updateMutation.isPending}>
         Cancel
       </ProbityButton>
-      <ProbityButton
-        variant="primary"
-        onClick={handleSubmit}
-        loading={updateMutation.isPending}
-      >
+      <ProbityButton variant="primary" onClick={handleSubmit} loading={updateMutation.isPending}>
         Save Changes
       </ProbityButton>
     </div>

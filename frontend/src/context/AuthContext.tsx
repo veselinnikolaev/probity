@@ -1,12 +1,6 @@
-import React, {
-  createContext,
-  useState,
-  useEffect,
-  useCallback,
-  ReactNode,
-} from 'react';
+import React, { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authService } from '@/services/auth';
-import {User, LoginPayload, RegisterPayload} from '@/types/auth'
+import { User, LoginPayload, RegisterPayload } from '@/types/auth';
 
 // ---------------------------------------------------------------------------
 // Context shape

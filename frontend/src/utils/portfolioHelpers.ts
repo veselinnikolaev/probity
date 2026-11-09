@@ -7,7 +7,7 @@ export interface PortfolioOption {
 }
 
 export function buildPortfolioOptions(portfolios: Portfolio[]): PortfolioOption[] {
-  return portfolios.map(p => ({
+  return portfolios.map((p) => ({
     value: p.id,
     label: p.name,
     description: `$${p.totalValue.toLocaleString()}`,

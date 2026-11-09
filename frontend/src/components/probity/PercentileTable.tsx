@@ -6,10 +6,7 @@ interface PercentileTableProps {
   currentValue: number;
 }
 
-export function PercentileTable({
-  percentileSeries,
-  currentValue,
-}: PercentileTableProps) {
+export function PercentileTable({ percentileSeries, currentValue }: PercentileTableProps) {
   const sorted = [...percentileSeries].sort((a, b) => a.percentile - b.percentile);
 
   return (
@@ -23,7 +20,12 @@ export function PercentileTable({
         }}
       >
         <thead>
-          <tr style={{ borderBottom: '1px solid var(--pb-border)', backgroundColor: 'var(--pb-surface-elevated)' }}>
+          <tr
+            style={{
+              borderBottom: '1px solid var(--pb-border)',
+              backgroundColor: 'var(--pb-surface-elevated)',
+            }}
+          >
             <th
               style={{
                 padding: '12px 16px',

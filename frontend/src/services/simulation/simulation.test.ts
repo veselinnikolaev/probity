@@ -39,7 +39,13 @@ function status(overrides: Partial<SimulationStatus> = {}): SimulationStatus {
 const COMPLETED_RESULT = {
   currentPortfolioValue: 2160,
   parameters: { numberOfSimulations: 1000, timeHorizonDays: 365, confidenceLevel: 0.95 },
-  statistics: { expectedFinalValue: 2300, medianFinalValue: 2250, stdDeviation: 200, minValue: 1400, maxValue: 5000 },
+  statistics: {
+    expectedFinalValue: 2300,
+    medianFinalValue: 2250,
+    stdDeviation: 200,
+    minValue: 1400,
+    maxValue: 5000,
+  },
   outcomes: {
     probabilityOf10PercentLoss: 12.3,
     probabilityOf20PercentLoss: 4.5,
@@ -92,7 +98,9 @@ describe('pollSimulationUntilDone', () => {
   it('rejects when the simulation reports FAILED', async () => {
     get.mockResolvedValue({ data: status({ status: 'FAILED' }) });
 
-    await expect(pollSimulationUntilDone('sim-1', { intervalMs: 0 })).rejects.toThrow('Simulation failed');
+    await expect(pollSimulationUntilDone('sim-1', { intervalMs: 0 })).rejects.toThrow(
+      'Simulation failed',
+    );
   });
 
   it('rejects with a timeout when the deadline passes before a terminal status', async () => {
@@ -120,7 +128,9 @@ describe('pollSimulationUntilDone', () => {
 describe('runSimulationAndWait', () => {
   it('starts the run then polls its id to completion', async () => {
     post.mockResolvedValue({ data: status({ id: 'sim-9' }) });
-    get.mockResolvedValue({ data: status({ id: 'sim-9', status: 'COMPLETED', result: COMPLETED_RESULT }) });
+    get.mockResolvedValue({
+      data: status({ id: 'sim-9', status: 'COMPLETED', result: COMPLETED_RESULT }),
+    });
 
     const result = await runSimulationAndWait(REQUEST, { intervalMs: 0 });
 

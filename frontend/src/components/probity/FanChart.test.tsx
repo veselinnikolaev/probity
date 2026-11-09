@@ -8,7 +8,8 @@ import { PercentileSeries, SimulatedPath } from '@/types/simulation';
 // implemented". Rendering is what these tests assert — the drawing math is covered by
 // computeFanChartRange directly.
 beforeAll(() => {
-  HTMLCanvasElement.prototype.getContext = (() => null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = (() =>
+    null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
 
 // ── y-range union (Q9b) ──────────────────────────────────────────────────────

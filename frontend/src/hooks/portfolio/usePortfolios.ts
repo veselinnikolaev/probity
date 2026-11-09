@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { portfolioService } from '@/services/portfolio';
-import { AsyncState, createLoadingState, createSuccessState, createErrorState } from '@/types/shared';
+import {
+  AsyncState,
+  createLoadingState,
+  createSuccessState,
+  createErrorState,
+} from '@/types/shared';
 import type { Portfolio } from '@/types/portfolio';
 
 /**

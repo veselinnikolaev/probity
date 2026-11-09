@@ -12,49 +12,49 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
-/**
- * Redis connection and template configuration for caching and session storage.
- */
+/** Redis connection and template configuration for caching and session storage. */
 public class RedisConfiguration {
-    @Value( "${spring.data.redis.username}")
-    private String username;
-    @Value( "${spring.data.redis.database}")
-    private int database;
-    @Value( "${spring.data.redis.password}")
-    private String password;
-    @Value( "${spring.data.redis.host}")
-    private String host;
-    @Value( "${spring.data.redis.port}")
-    private int port;
+  @Value("${spring.data.redis.username}")
+  private String username;
 
-    @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
+  @Value("${spring.data.redis.database}")
+  private int database;
 
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer();
+  @Value("${spring.data.redis.password}")
+  private String password;
 
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(serializer);
-        template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(serializer);
+  @Value("${spring.data.redis.host}")
+  private String host;
 
-        template.afterPropertiesSet();
-        return template;
-    }
+  @Value("${spring.data.redis.port}")
+  private int port;
 
-    @Bean
-    LettuceConnectionFactory lettuceConnectionFactory() {
-        RedisStandaloneConfiguration config =
-                new RedisStandaloneConfiguration(host, port);
-        config.setPassword(password);
-        config.setUsername(username);
-        config.setDatabase(database);
-        return new LettuceConnectionFactory(config);
-    }
+  @Bean
+  public RedisTemplate<String, Object> redisTemplate(
+      RedisConnectionFactory connectionFactory, GenericJackson2JsonRedisSerializer serializer) {
+    RedisTemplate<String, Object> template = new RedisTemplate<>();
+    template.setConnectionFactory(connectionFactory);
 
-    @Bean
-    public RedisClient lettuceRedisClient(LettuceConnectionFactory factory) {
-        return (RedisClient) factory.getNativeClient();
-    }
+    template.setKeySerializer(new StringRedisSerializer());
+    template.setValueSerializer(serializer);
+    template.setHashKeySerializer(new StringRedisSerializer());
+    template.setHashValueSerializer(serializer);
+
+    template.afterPropertiesSet();
+    return template;
+  }
+
+  @Bean
+  LettuceConnectionFactory lettuceConnectionFactory() {
+    RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(host, port);
+    config.setPassword(password);
+    config.setUsername(username);
+    config.setDatabase(database);
+    return new LettuceConnectionFactory(config);
+  }
+
+  @Bean
+  public RedisClient lettuceRedisClient(LettuceConnectionFactory factory) {
+    return (RedisClient) factory.getNativeClient();
+  }
 }

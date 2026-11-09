@@ -15,7 +15,8 @@ const AiAssistant: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, setMessages, isLoading, errorBanner, sendMessage, clearError } = useAiAssistant();
+  const { messages, setMessages, isLoading, errorBanner, sendMessage, clearError } =
+    useAiAssistant();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -58,9 +59,13 @@ const AiAssistant: React.FC = () => {
     const parts = content.split(numberRegex);
 
     return parts.map((part, idx) =>
-      numberRegex.test(part) ?
-        <span key={idx} style={{ fontFamily: 'var(--font-mono)' }}>{part}</span> :
+      numberRegex.test(part) ? (
+        <span key={idx} style={{ fontFamily: 'var(--font-mono)' }}>
+          {part}
+        </span>
+      ) : (
         part
+      ),
     );
   };
 
@@ -73,11 +78,7 @@ const AiAssistant: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Open AI Assistant"
       >
-        {isOpen ? (
-          <X size={24} />
-        ) : (
-          <MessageCircle size={24} />
-        )}
+        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
       </button>
 
       {isOpen && (
@@ -104,7 +105,7 @@ const AiAssistant: React.FC = () => {
                   I can analyze risk, explain simulations, and pull live metrics.
                 </p>
                 <div className={styles.suggestionChips}>
-                  {SUGGESTION_CHIPS.map(chip => (
+                  {SUGGESTION_CHIPS.map((chip) => (
                     <button
                       key={chip}
                       className={styles.chip}
@@ -117,21 +118,17 @@ const AiAssistant: React.FC = () => {
               </div>
             ) : (
               <>
-                {messages.map(msg => (
+                {messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={`${styles.message} ${
-                      msg.role === 'user'
-                        ? styles.userMessage
-                        : styles.assistantMessage
+                      msg.role === 'user' ? styles.userMessage : styles.assistantMessage
                     }`}
                   >
                     <div className={styles.messageBubble}>
                       {msg.role === 'user' ? msg.content : formatMessageContent(msg.content)}
                     </div>
-                    <div className={styles.timestamp}>
-                      {formatTime(msg.timestamp)}
-                    </div>
+                    <div className={styles.timestamp}>{formatTime(msg.timestamp)}</div>
                   </div>
                 ))}
                 {isLoading && (
@@ -151,9 +148,7 @@ const AiAssistant: React.FC = () => {
           {errorBanner && (
             <div
               className={`${styles.errorBanner} ${
-                errorBanner.type === 'warning'
-                  ? styles.warningBanner
-                  : styles.dangerBanner
+                errorBanner.type === 'warning' ? styles.warningBanner : styles.dangerBanner
               }`}
             >
               {errorBanner.message}
@@ -169,7 +164,7 @@ const AiAssistant: React.FC = () => {
               className={styles.textarea}
               placeholder="Ask about your portfolio..."
               value={inputValue}
-              onChange={e => {
+              onChange={(e) => {
                 setInputValue(e.target.value);
                 adjustTextareaHeight();
               }}

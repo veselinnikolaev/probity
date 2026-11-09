@@ -12,51 +12,54 @@ import { SimulationRequest, SimulationAsyncState } from '@/types/simulation';
  * after a newer one.
  */
 export function useSimulation(portfolioId: string) {
-    const [state, setState] = useState<SimulationAsyncState>({ status: 'idle', data: null });
-    const [lastRequest, setLastRequest] = useState<SimulationRequest | null>(null);
-    // Aborts the run currently in flight; replaced on every run and on unmount.
-    const inFlight = useRef<AbortController | null>(null);
+  const [state, setState] = useState<SimulationAsyncState>({ status: 'idle', data: null });
+  const [lastRequest, setLastRequest] = useState<SimulationRequest | null>(null);
+  // Aborts the run currently in flight; replaced on every run and on unmount.
+  const inFlight = useRef<AbortController | null>(null);
 
-    const cancelInFlight = useCallback(() => {
-        inFlight.current?.abort();
-        inFlight.current = null;
-    }, []);
+  const cancelInFlight = useCallback(() => {
+    inFlight.current?.abort();
+    inFlight.current = null;
+  }, []);
 
-    // Reset when the user switches portfolios so stale results never show.
-    useEffect(() => {
-        setState({ status: 'idle', data: null });
-        setLastRequest(null);
-    }, [portfolioId]);
+  // Reset when the user switches portfolios so stale results never show.
+  useEffect(() => {
+    setState({ status: 'idle', data: null });
+    setLastRequest(null);
+  }, [portfolioId]);
 
-    // Abort any polling when the hook unmounts.
-    useEffect(() => cancelInFlight, [cancelInFlight]);
+  // Abort any polling when the hook unmounts.
+  useEffect(() => cancelInFlight, [cancelInFlight]);
 
-    const run = useCallback(async (request: SimulationRequest) => {
-        // A new run supersedes whatever was in flight; cancelling also means the
-        // superseded promise rejects with AbortError and must not touch state.
-        cancelInFlight();
-        const controller = new AbortController();
-        inFlight.current = controller;
+  const run = useCallback(
+    async (request: SimulationRequest) => {
+      // A new run supersedes whatever was in flight; cancelling also means the
+      // superseded promise rejects with AbortError and must not touch state.
+      cancelInFlight();
+      const controller = new AbortController();
+      inFlight.current = controller;
 
-        setState({ status: 'loading', data: null });
-        setLastRequest(request);
-        try {
-            const result = await runSimulationAndWait(request, { signal: controller.signal });
-            if (controller.signal.aborted) return;
-            setState({ status: 'success', data: result });
-            return result;
-        } catch (error) {
-            if (controller.signal.aborted) return;
-            const message = error instanceof Error ? error.message : 'Failed to run simulation';
-            setState({ status: 'error', data: null, error: message });
-        } finally {
-            if (inFlight.current === controller) inFlight.current = null;
-        }
-    }, [cancelInFlight]);
+      setState({ status: 'loading', data: null });
+      setLastRequest(request);
+      try {
+        const result = await runSimulationAndWait(request, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setState({ status: 'success', data: result });
+        return result;
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const message = error instanceof Error ? error.message : 'Failed to run simulation';
+        setState({ status: 'error', data: null, error: message });
+      } finally {
+        if (inFlight.current === controller) inFlight.current = null;
+      }
+    },
+    [cancelInFlight],
+  );
 
-    const refetch = useCallback(() => {
-        if (lastRequest) run(lastRequest);
-    }, [lastRequest, run]);
+  const refetch = useCallback(() => {
+    if (lastRequest) run(lastRequest);
+  }, [lastRequest, run]);
 
-    return { state, run, refetch };
+  return { state, run, refetch };
 }

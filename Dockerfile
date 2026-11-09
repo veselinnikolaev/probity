@@ -19,9 +19,9 @@ COPY --from=build /app/probity-api/target/*.jar app.jar
 RUN addgroup -S probity && adduser -S probity -G probity
 USER probity
 
-EXPOSE 8080
+EXPOSE 8080 9091
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://localhost:8080/actuator/health || exit 1
+  CMD wget -qO- http://localhost:9091/actuator/health || exit 1
 
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", "-jar", "app.jar"]

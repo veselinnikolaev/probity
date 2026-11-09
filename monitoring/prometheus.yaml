@@ -6,10 +6,10 @@ scrape_configs:
   - job_name: 'probity'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:8080']  # use app:8080 if app is in compose
+      - targets: ['host.docker.internal:9091']  # management port; use app:9091 in Compose
     # If running with prod profile, replace with:
     # static_configs:
-    #   - targets: ['app:8080']
+    #   - targets: ['app:9091']
 
   - job_name: 'probity-worker'
     metrics_path: '/actuator/prometheus'

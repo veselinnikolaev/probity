@@ -26,7 +26,7 @@ export const authService = {
 
   async logout(): Promise<void> {
     try {
-      await api.post('/auth/logout');
+      await api.post('/auth/refresh/logout');
     } catch {
       // Server unreachable — cookies expire naturally
     }

@@ -47,7 +47,11 @@ export function CorrelationHeatmap({ assets, correlations }: CorrelationHeatmapP
                 style={{
                   backgroundColor: getColor(value),
                   cursor: 'pointer',
-                  opacity: hoveredCell ? (hoveredCell.row === rowIdx || hoveredCell.col === colIdx ? 1 : 0.5) : 1,
+                  opacity: hoveredCell
+                    ? hoveredCell.row === rowIdx || hoveredCell.col === colIdx
+                      ? 1
+                      : 0.5
+                    : 1,
                   transition: 'opacity 0.12s',
                 }}
                 onMouseEnter={() => setHoveredCell({ row: rowIdx, col: colIdx })}

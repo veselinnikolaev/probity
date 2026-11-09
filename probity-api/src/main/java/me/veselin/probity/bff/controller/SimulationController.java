@@ -7,6 +7,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
@@ -16,7 +22,6 @@ import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.util.ConditionalGetSupport;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.marketdata.port.MarketDataPort;
-import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.simulation.config.SimulationProperties;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.dto.SimulationStatusResponse;
@@ -30,323 +35,338 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.math.BigDecimal;
-import java.net.URI;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
-import java.time.temporal.ChronoUnit;
-import java.util.stream.Collectors;
-
 @Tag(name = "Simulations", description = "Monte Carlo portfolio simulations")
 @RestController
 @RequiredArgsConstructor
 @Slf4j
 public class SimulationController {
 
-    private final SimulationPort simulationPort;
-    private final MarketDataPort marketDataPort;
-    private final SimulationProperties simulationProperties;
+  private final SimulationPort simulationPort;
+  private final MarketDataPort marketDataPort;
+  private final SimulationProperties simulationProperties;
 
-    /**
-     * POST /simulations/run
-     * Runs a new Monte Carlo simulation and persists the result.
-     *
-     * @param request simulation parameters
-     * @param principal authenticated user principal
-     * @param idempotencyKey unique key for idempotent requests
-     * @param ucb URI components builder for Location header
-     * @return 201 CREATED with simulation result
-     */
-    @Operation(summary = "Run Monte Carlo simulation")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Simulation created",
-            headers = @Header(name = "X-Cache", description = "Present with value 'Idempotent-Hit' if response was served from cache")),
-        @ApiResponse(responseCode = "400", description = "Invalid request or empty portfolio"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "404", description = "Portfolio not found"),
-        @ApiResponse(responseCode = "409", description = "Identical request currently processing")
-    })
-    @PostMapping(ApiRoutes.Simulations.RUN)
-    public ResponseEntity<SimulationResponse> run(
-            @Valid @RequestBody RunSimulationRequest request,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @Parameter(description = "Unique key for idempotent requests. Prevents duplicate simulation runs.", required = true)
-            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
-            UriComponentsBuilder ucb) {
+  /**
+   * POST /simulations/run Runs a new Monte Carlo simulation and persists the result.
+   *
+   * @param request simulation parameters
+   * @param principal authenticated user principal
+   * @param idempotencyKey unique key for idempotent requests
+   * @param ucb URI components builder for Location header
+   * @return 201 CREATED with simulation result
+   */
+  @Operation(summary = "Run Monte Carlo simulation")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "201",
+        description = "Simulation created",
+        headers =
+            @Header(
+                name = "X-Cache",
+                description =
+                    "Present with value 'Idempotent-Hit' if response was served from cache")),
+    @ApiResponse(responseCode = "400", description = "Invalid request or empty portfolio"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized"),
+    @ApiResponse(responseCode = "404", description = "Portfolio not found"),
+    @ApiResponse(responseCode = "409", description = "Identical request currently processing")
+  })
+  @PostMapping(ApiRoutes.Simulations.RUN)
+  public ResponseEntity<SimulationResponse> run(
+      @Valid @RequestBody RunSimulationRequest request,
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Parameter(
+              description =
+                  "Unique key for idempotent requests. Prevents duplicate simulation runs.",
+              required = true)
+          @RequestHeader(value = "Idempotency-Key", required = true)
+          String idempotencyKey,
+      UriComponentsBuilder ucb) {
 
-        log.info("Running simulation for portfolio: {}, user: {}, simulations: {}, horizon: {} days, confidence: {}",
-                request.portfolioId(), principal.id(), request.numberOfSimulations(), request.timeHorizonDays(), request.confidenceLevel());
-        SimulationData data = simulationPort.runSimulation(
-                request.portfolioId(),
-                request.numberOfSimulations(),
-                request.timeHorizonDays(),
-                request.confidenceLevel(),
-                request.assumedReturnPercent(),
-                request.assumedVolatilityPercent(),
-                principal.id()
-        );
+    log.info(
+        "Running simulation for portfolio: {}, user: {}, simulations: {}, horizon: {} days, confidence: {}",
+        request.portfolioId(),
+        principal.id(),
+        request.numberOfSimulations(),
+        request.timeHorizonDays(),
+        request.confidenceLevel());
+    SimulationData data =
+        simulationPort.runSimulation(
+            request.portfolioId(),
+            request.numberOfSimulations(),
+            request.timeHorizonDays(),
+            request.confidenceLevel(),
+            request.assumedReturnPercent(),
+            request.assumedVolatilityPercent(),
+            principal.id());
 
-        URI location = ucb.path(ApiRoutes.Simulations.SIMULATION)
-                .buildAndExpand(data.id())
-                .toUri();
+    URI location = ucb.path(ApiRoutes.Simulations.SIMULATION).buildAndExpand(data.id()).toUri();
 
-        log.info("Simulation completed successfully: {}, portfolio: {}", data.id(), request.portfolioId());
-        return ResponseEntity.created(location).body(mapToResponse(data));
+    log.info(
+        "Simulation completed successfully: {}, portfolio: {}", data.id(), request.portfolioId());
+    return ResponseEntity.created(location).body(mapToResponse(data));
+  }
+
+  /**
+   * POST /simulations/run-async Initiates an asynchronous Monte Carlo simulation. Returns 202
+   * Accepted with Location header for status polling.
+   *
+   * @param request simulation parameters
+   * @param principal authenticated user principal
+   * @param idempotencyKey unique key for idempotent requests
+   * @param ucb URI components builder for Location header
+   * @return 202 ACCEPTED with status location
+   */
+  @Operation(summary = "Run Monte Carlo simulation asynchronously")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "202",
+        description = "Simulation accepted for processing",
+        headers = @Header(name = "Location", description = "URL to poll for simulation status")),
+    @ApiResponse(responseCode = "400", description = "Invalid request or empty portfolio"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized"),
+    @ApiResponse(responseCode = "404", description = "Portfolio not found"),
+    @ApiResponse(responseCode = "409", description = "Identical request currently processing")
+  })
+  @PostMapping(ApiRoutes.Simulations.RUN_ASYNC)
+  public ResponseEntity<SimulationStatusResponse> runAsync(
+      @Valid @RequestBody RunSimulationRequest request,
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Parameter(
+              description =
+                  "Unique key for idempotent requests. Prevents duplicate simulation runs.",
+              required = true)
+          @RequestHeader(value = "Idempotency-Key", required = true)
+          String idempotencyKey,
+      UriComponentsBuilder ucb) {
+
+    log.info(
+        "Initiating async simulation for portfolio: {}, user: {}, simulations: {}, horizon: {} days, confidence: {}",
+        request.portfolioId(),
+        principal.id(),
+        request.numberOfSimulations(),
+        request.timeHorizonDays(),
+        request.confidenceLevel());
+
+    // Capture market data snapshot at request time for stale-price safety
+    Map<String, BigDecimal> marketDataSnapshot =
+        captureMarketDataSnapshot(request.portfolioId(), principal.id());
+
+    SimulationStatusResponse statusResponse =
+        simulationPort.runSimulationAsync(
+            request.portfolioId(),
+            request.numberOfSimulations(),
+            request.timeHorizonDays(),
+            request.confidenceLevel(),
+            request.assumedReturnPercent(),
+            request.assumedVolatilityPercent(),
+            principal.id(),
+            idempotencyKey,
+            marketDataSnapshot);
+
+    URI statusLocation =
+        ucb.path(ApiRoutes.Simulations.STATUS).buildAndExpand(statusResponse.getId()).toUri();
+
+    log.info(
+        "Async simulation accepted: {}, portfolio: {}",
+        statusResponse.getId(),
+        request.portfolioId());
+    return ResponseEntity.accepted()
+        .header(HttpHeaders.LOCATION, statusLocation.toString())
+        .body(statusResponse);
+  }
+
+  /**
+   * GET /simulations/{id}/status Gets the current status of a simulation. Returns status and result
+   * if COMPLETED.
+   */
+  @Operation(summary = "Get simulation status")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "Status returned"),
+    @ApiResponse(responseCode = "304", description = "Not modified"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized"),
+    @ApiResponse(responseCode = "404", description = "Simulation not found")
+  })
+  @GetMapping(ApiRoutes.Simulations.STATUS)
+  public ResponseEntity<SimulationStatusResponse> getStatus(
+      @PathVariable UUID id,
+      @AuthenticationPrincipal UserPrincipal principal,
+      @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+
+    log.debug("Fetching simulation status: {} for user: {}", id, principal.id());
+    SimulationStatusResponse statusResponse =
+        simulationPort.getSimulationStatus(id, principal.id());
+    String etag = buildStatusEtag(id, statusResponse);
+    if (etag.equals(ifNoneMatch)) {
+      log.debug("Simulation status not modified: {}", id);
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
+    }
+    return ResponseEntity.ok().eTag(etag).body(statusResponse);
+  }
+
+  /** GET /simulations/{id} Fetches a previously run simulation result by its ID. */
+  @Operation(summary = "Get simulation by ID")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "Simulation returned"),
+    @ApiResponse(responseCode = "304", description = "Not modified"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized"),
+    @ApiResponse(responseCode = "404", description = "Simulation not found")
+  })
+  @GetMapping(ApiRoutes.Simulations.SIMULATION)
+  public ResponseEntity<SimulationResponse> getSimulation(
+      @PathVariable UUID id,
+      @AuthenticationPrincipal UserPrincipal principal,
+      @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+
+    log.debug("Fetching simulation: {} for user: {}", id, principal.id());
+    String etag = "\"" + id + "\"";
+
+    if (etag.equals(ifNoneMatch)) {
+      log.debug("Simulation not modified: {}", id);
+      return ConditionalGetSupport.notModifiedETag(etag);
     }
 
-    /**
-     * POST /simulations/run-async
-     * Initiates an asynchronous Monte Carlo simulation.
-     * Returns 202 Accepted with Location header for status polling.
-     *
-     * @param request simulation parameters
-     * @param principal authenticated user principal
-     * @param idempotencyKey unique key for idempotent requests
-     * @param ucb URI components builder for Location header
-     * @return 202 ACCEPTED with status location
-     */
-    @Operation(summary = "Run Monte Carlo simulation asynchronously")
-    @ApiResponses({
-        @ApiResponse(responseCode = "202", description = "Simulation accepted for processing",
-            headers = @Header(name = "Location", description = "URL to poll for simulation status")),
-        @ApiResponse(responseCode = "400", description = "Invalid request or empty portfolio"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "404", description = "Portfolio not found"),
-        @ApiResponse(responseCode = "409", description = "Identical request currently processing")
-    })
-    @PostMapping(ApiRoutes.Simulations.RUN_ASYNC)
-    public ResponseEntity<SimulationStatusResponse> runAsync(
-            @Valid @RequestBody RunSimulationRequest request,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @Parameter(description = "Unique key for idempotent requests. Prevents duplicate simulation runs.", required = true)
-            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
-            UriComponentsBuilder ucb) {
+    SimulationData data = simulationPort.getSimulation(id, principal.id());
+    return ConditionalGetSupport.okImmutable(mapToResponse(data), etag);
+  }
 
-        log.info("Initiating async simulation for portfolio: {}, user: {}, simulations: {}, horizon: {} days, confidence: {}",
-                request.portfolioId(), principal.id(), request.numberOfSimulations(), request.timeHorizonDays(), request.confidenceLevel());
+  /**
+   * GET /simulations/{id}/paths?n=N The sampled path array of a completed simulation (Q9b API
+   * split, docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10).
+   *
+   * <p>Since Q9b the result/status/list bodies carry no paths; this is the only endpoint that
+   * serves them, and it serves a bounded deterministic sample (global min/max paths always
+   * included) instead of the whole array. {@code n} is optional and defaults to the configured
+   * sample size; an explicit {@code n} must be within [1, max] and not exceed the stored count,
+   * else 400 — an omitted {@code n} is the configured default and is served capped to what exists.
+   * Auth and ownership are exactly those of {@code GET /{id}}: a row that is not the caller's is a
+   * 404.
+   */
+  @Operation(summary = "Get sampled simulation paths")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "Sampled paths returned"),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Invalid n (out of bounds or above the stored path count)"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized"),
+    @ApiResponse(responseCode = "404", description = "Simulation not found")
+  })
+  @GetMapping(ApiRoutes.Simulations.PATHS)
+  public ResponseEntity<SimulationPathsResponse> getPaths(
+      @PathVariable UUID id,
+      @Parameter(
+              description = "Maximum paths to return (1..max, and not more than the stored count)")
+          @RequestParam(value = "n", required = false)
+          Integer n,
+      @AuthenticationPrincipal UserPrincipal principal) {
 
-        // Capture market data snapshot at request time for stale-price safety
-        Map<String, BigDecimal> marketDataSnapshot = captureMarketDataSnapshot(request.portfolioId(), principal.id());
-
-        SimulationStatusResponse statusResponse = simulationPort.runSimulationAsync(
-                request.portfolioId(),
-                request.numberOfSimulations(),
-                request.timeHorizonDays(),
-                request.confidenceLevel(),
-                request.assumedReturnPercent(),
-                request.assumedVolatilityPercent(),
-                principal.id(),
-                idempotencyKey,
-                marketDataSnapshot
-        );
-
-        URI statusLocation = ucb.path(ApiRoutes.Simulations.STATUS)
-                .buildAndExpand(statusResponse.getId())
-                .toUri();
-
-        log.info("Async simulation accepted: {}, portfolio: {}", statusResponse.getId(), request.portfolioId());
-        return ResponseEntity.accepted()
-                .header(HttpHeaders.LOCATION, statusLocation.toString())
-                .body(statusResponse);
+    int requested = n == null ? simulationProperties.getResponsePathsSampleSize() : n;
+    if (requested < 1 || requested > simulationProperties.getResponsePathsMaxSampleSize()) {
+      throw new InvalidPathsRequestException(
+          "n must be between 1 and %d"
+              .formatted(simulationProperties.getResponsePathsMaxSampleSize()));
     }
 
-    /**
-     * GET /simulations/{id}/status
-     * Gets the current status of a simulation.
-     * Returns status and result if COMPLETED.
-     */
-    @Operation(summary = "Get simulation status")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Status returned"),
-        @ApiResponse(responseCode = "304", description = "Not modified"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "404", description = "Simulation not found")
-    })
-    @GetMapping(ApiRoutes.Simulations.STATUS)
-    public ResponseEntity<SimulationStatusResponse> getStatus(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false)
-            String ifNoneMatch) {
+    log.debug(
+        "Fetching sampled simulation paths: {} n={} for user: {}", id, requested, principal.id());
+    SimulationPort.SampledPaths sampled =
+        simulationPort.getSimulationPaths(id, principal.id(), requested);
 
-        log.debug("Fetching simulation status: {} for user: {}", id, principal.id());
-        SimulationStatusResponse statusResponse = simulationPort.getSimulationStatus(id, principal.id());
-        String etag = buildStatusEtag(id, statusResponse);
-        if (etag.equals(ifNoneMatch)) {
-            log.debug("Simulation status not modified: {}", id);
-            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
-        }
-        return ResponseEntity.ok()
-                .eTag(etag)
-                .body(statusResponse);
+    // An explicit n above the stored count is a client error; an omitted n is just the
+    // configured default and is served capped to what exists (so a 2-path row answers
+    // 200 with 2 paths, not 400).
+    if (n != null && requested > sampled.totalPaths() && sampled.totalPaths() > 0) {
+      throw new InvalidPathsRequestException(
+          "n (%d) exceeds the stored path count (%d)".formatted(requested, sampled.totalPaths()));
     }
 
-    /**
-     * GET /simulations/{id}
-     * Fetches a previously run simulation result by its ID.
-     */
-    @Operation(summary = "Get simulation by ID")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Simulation returned"),
-        @ApiResponse(responseCode = "304", description = "Not modified"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "404", description = "Simulation not found")
-    })
-    @GetMapping(ApiRoutes.Simulations.SIMULATION)
-    public ResponseEntity<SimulationResponse> getSimulation(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false)
-            String ifNoneMatch) {
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.noStore().cachePrivate())
+        .body(
+            new SimulationPathsResponse(
+                id.toString(), sampled.totalPaths(), sampled.paths().size(), sampled.paths()));
+  }
 
-        log.debug("Fetching simulation: {} for user: {}", id, principal.id());
-        String etag = "\"" + id + "\"";
+  /**
+   * GET /simulations?portfolioId={portfolioId} Lists all simulations for a portfolio, most recent
+   * first.
+   */
+  @Operation(summary = "List simulations for portfolio")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "Simulations returned"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized")
+  })
+  @GetMapping(ApiRoutes.Simulations.SIMULATIONS)
+  public ResponseEntity<List<SimulationResponse>> listSimulations(
+      @RequestParam UUID portfolioId, @AuthenticationPrincipal UserPrincipal principal) {
 
-        if (etag.equals(ifNoneMatch)) {
-            log.debug("Simulation not modified: {}", id);
-            return ConditionalGetSupport.notModifiedETag(etag);
-        }
+    log.debug("Listing simulations for portfolio: {}, user: {}", portfolioId, principal.id());
+    return ResponseEntity.ok(
+        simulationPort.listSimulations(portfolioId, principal.id()).stream()
+            .map(this::mapToResponse)
+            .toList());
+  }
 
-        SimulationData data = simulationPort.getSimulation(id, principal.id());
-        return ConditionalGetSupport.okImmutable(mapToResponse(data), etag);
+  private String buildStatusEtag(UUID id, SimulationStatusResponse statusResponse) {
+    if (statusResponse == null) {
+      return "\"" + id + "\"";
     }
+    String updatedAt =
+        statusResponse.getUpdatedAt() == null
+            ? "null"
+            : statusResponse
+                .getUpdatedAt()
+                .truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+                .toString();
+    String status = statusResponse.getStatus() == null ? "null" : statusResponse.getStatus();
+    String composite = id.toString() + "|" + status + "|" + updatedAt;
+    return "\"" + java.util.Objects.hash(composite) + "\"";
+  }
 
-    /**
-     * GET /simulations/{id}/paths?n=N
-     * The sampled path array of a completed simulation (Q9b API split,
-     * docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §10).
-     *
-     * <p>Since Q9b the result/status/list bodies carry no paths; this is the only endpoint
-     * that serves them, and it serves a bounded deterministic sample (global min/max paths
-     * always included) instead of the whole array. {@code n} is optional and defaults to the
-     * configured sample size; an explicit {@code n} must be within [1, max] and not exceed
-     * the stored count, else 400 — an omitted {@code n} is the configured default and is
-     * served capped to what exists. Auth and ownership are exactly those of {@code GET /{id}}:
-     * a row that is not the caller's is a 404.
-     */
-    @Operation(summary = "Get sampled simulation paths")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Sampled paths returned"),
-        @ApiResponse(responseCode = "400", description = "Invalid n (out of bounds or above the stored path count)"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "404", description = "Simulation not found")
-    })
-    @GetMapping(ApiRoutes.Simulations.PATHS)
-    public ResponseEntity<SimulationPathsResponse> getPaths(
-            @PathVariable UUID id,
-            @Parameter(description = "Maximum paths to return (1..max, and not more than the stored count)")
-            @RequestParam(value = "n", required = false) Integer n,
-            @AuthenticationPrincipal UserPrincipal principal) {
-
-        int requested = n == null ? simulationProperties.getResponsePathsSampleSize() : n;
-        if (requested < 1 || requested > simulationProperties.getResponsePathsMaxSampleSize()) {
-            throw new InvalidPathsRequestException(
-                    "n must be between 1 and %d".formatted(simulationProperties.getResponsePathsMaxSampleSize()));
-        }
-
-        log.debug("Fetching sampled simulation paths: {} n={} for user: {}", id, requested, principal.id());
-        SimulationPort.SampledPaths sampled = simulationPort.getSimulationPaths(id, principal.id(), requested);
-
-        // An explicit n above the stored count is a client error; an omitted n is just the
-        // configured default and is served capped to what exists (so a 2-path row answers
-        // 200 with 2 paths, not 400).
-        if (n != null && requested > sampled.totalPaths() && sampled.totalPaths() > 0) {
-            throw new InvalidPathsRequestException(
-                    "n (%d) exceeds the stored path count (%d)".formatted(requested, sampled.totalPaths()));
-        }
-
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore().cachePrivate())
-                .body(new SimulationPathsResponse(
-                        id.toString(),
-                        sampled.totalPaths(),
-                        sampled.paths().size(),
-                        sampled.paths()));
+  /**
+   * Captures current market prices for all positions in a portfolio. Used to prevent stale-price
+   * execution in async simulations.
+   */
+  private Map<String, BigDecimal> captureMarketDataSnapshot(UUID portfolioId, UUID userId) {
+    try {
+      // Get portfolio with positions to know which tickers to fetch
+      var portfolio = simulationPort.getSimulationPortfolio(portfolioId, userId);
+      if (portfolio != null && portfolio.getPositions() != null) {
+        return portfolio.getPositions().stream()
+            .collect(
+                Collectors.toMap(
+                    pos -> pos.getAsset().getTicker(),
+                    pos -> marketDataPort.getLatestPrice(pos.getAsset().getTicker())));
+      }
+    } catch (Exception e) {
+      log.warn(
+          "Failed to capture market data snapshot for portfolio {}: {}",
+          portfolioId,
+          e.getMessage());
     }
+    return Map.of();
+  }
 
-    /**
-     * GET /simulations?portfolioId={portfolioId}
-     * Lists all simulations for a portfolio, most recent first.
-     */
-    @Operation(summary = "List simulations for portfolio")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Simulations returned"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized")
-    })
-    @GetMapping(ApiRoutes.Simulations.SIMULATIONS)
-    public ResponseEntity<List<SimulationResponse>> listSimulations(
-            @RequestParam UUID portfolioId,
-            @AuthenticationPrincipal UserPrincipal principal) {
-
-        log.debug("Listing simulations for portfolio: {}, user: {}", portfolioId, principal.id());
-        return ResponseEntity.ok(simulationPort.listSimulations(portfolioId, principal.id())
-                .stream()
-                .map(this::mapToResponse)
-                .toList());
-    }
-
-    private String buildStatusEtag(UUID id, SimulationStatusResponse statusResponse) {
-        if (statusResponse == null) {
-            return "\"" + id + "\"";
-        }
-        String updatedAt = statusResponse.getUpdatedAt() == null
-                ? "null"
-                : statusResponse.getUpdatedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS).toString();
-        String status = statusResponse.getStatus() == null ? "null" : statusResponse.getStatus();
-        String composite = id.toString() + "|" + status + "|" + updatedAt;
-        return "\"" + java.util.Objects.hash(composite) + "\"";
-    }
-
-    /**
-     * Captures current market prices for all positions in a portfolio.
-     * Used to prevent stale-price execution in async simulations.
-     */
-    private Map<String, BigDecimal> captureMarketDataSnapshot(UUID portfolioId, UUID userId) {
-        try {
-            // Get portfolio with positions to know which tickers to fetch
-            var portfolio = simulationPort.getSimulationPortfolio(portfolioId, userId);
-            if (portfolio != null && portfolio.getPositions() != null) {
-                return portfolio.getPositions().stream()
-                        .collect(Collectors.toMap(
-                                pos -> pos.getAsset().getTicker(),
-                                pos -> marketDataPort.getLatestPrice(pos.getAsset().getTicker())
-                        ));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to capture market data snapshot for portfolio {}: {}", portfolioId, e.getMessage());
-        }
-        return Map.of();
-    }
-
-    private SimulationResponse mapToResponse(SimulationData data) {
-        return new SimulationResponse(
-                data.id(),
-                data.portfolioId(),
-                data.createdAt(),
-                new SimulationResponse.Parameters(
-                        data.parameters().numberOfSimulations(),
-                        data.parameters().timeHorizonDays(),
-                        data.parameters().confidenceLevel()
-                ),
-                data.currentPortfolioValue(),
-                data.percentileSeries(),
-                new SimulationResponse.Statistics(
-                        data.statistics().expectedFinalValue(),
-                        data.statistics().medianFinalValue(),
-                        data.statistics().stdDeviation(),
-                        data.statistics().minValue(),
-                        data.statistics().maxValue()
-                ),
-                new SimulationResponse.Outcomes(
-                        data.outcomes().probabilityOf10PercentLoss(),
-                        data.outcomes().probabilityOf20PercentLoss(),
-                        data.outcomes().valueAtRisk95(),
-                        data.outcomes().conditionalValueAtRisk95()
-                ),
-                data.distribution()
-        );
-    }
+  private SimulationResponse mapToResponse(SimulationData data) {
+    return new SimulationResponse(
+        data.id(),
+        data.portfolioId(),
+        data.createdAt(),
+        new SimulationResponse.Parameters(
+            data.parameters().numberOfSimulations(),
+            data.parameters().timeHorizonDays(),
+            data.parameters().confidenceLevel()),
+        data.currentPortfolioValue(),
+        data.percentileSeries(),
+        new SimulationResponse.Statistics(
+            data.statistics().expectedFinalValue(),
+            data.statistics().medianFinalValue(),
+            data.statistics().stdDeviation(),
+            data.statistics().minValue(),
+            data.statistics().maxValue()),
+        new SimulationResponse.Outcomes(
+            data.outcomes().probabilityOf10PercentLoss(),
+            data.outcomes().probabilityOf20PercentLoss(),
+            data.outcomes().valueAtRisk95(),
+            data.outcomes().conditionalValueAtRisk95()),
+        data.distribution());
+  }
 }

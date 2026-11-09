@@ -46,16 +46,18 @@
 .portfolio-card:hover {
   background: var(--pb-surface-elevated);
   border-color: var(--pb-accent);
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.15),
-              0 0 20px rgba(59, 130, 246, 0.1);
+  box-shadow:
+    0 8px 16px rgba(59, 130, 246, 0.15),
+    0 0 20px rgba(59, 130, 246, 0.1);
   transform: translateY(-2px);
 }
 
 .portfolio-card--hovered {
   background: var(--pb-surface-elevated);
   border-color: var(--pb-accent);
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.15),
-              0 0 20px rgba(59, 130, 246, 0.1);
+  box-shadow:
+    0 8px 16px rgba(59, 130, 246, 0.15),
+    0 0 20px rgba(59, 130, 246, 0.1);
 }
 
 .portfolio-card__header {

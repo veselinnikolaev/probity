@@ -45,8 +45,10 @@ export function DistributionHistogram({
     const maxCount = Math.max(...distribution.map((b) => b.count));
 
     // Helper functions
-    const xScale = (value: number) => ((value - minValue) / displayRange) * chartWidth + padding.left;
-    const yScale = (count: number) => chartHeight - padding.bottom - (count / maxCount) * chartAreaHeight;
+    const xScale = (value: number) =>
+      ((value - minValue) / displayRange) * chartWidth + padding.left;
+    const yScale = (count: number) =>
+      chartHeight - padding.bottom - (count / maxCount) * chartAreaHeight;
 
     // Clear canvas
     ctx.fillStyle = 'var(--pb-bg)';
@@ -197,9 +199,7 @@ export function DistributionHistogram({
     const displayRange = maxValue - minValue;
     const hoverValue = minValue + fraction * displayRange;
 
-    const bucket = distribution.find(
-      (b) => hoverValue >= b.rangeMin && hoverValue < b.rangeMax
-    );
+    const bucket = distribution.find((b) => hoverValue >= b.rangeMin && hoverValue < b.rangeMax);
 
     if (bucket) {
       setTooltip({
@@ -228,27 +228,27 @@ export function DistributionHistogram({
         onMouseLeave={handleMouseLeave}
       />
       {tooltip && (
-          <div
-              style={{
-                position: 'absolute',
-                top: tooltip.y + 12,
-                left: tooltip.x + 12,
-                zIndex: 100,
-                backgroundColor: '#131B2E',
-                border: '1px solid #1E2D45',
-                borderRadius: '6px',
-                padding: '7px 10px',
-                pointerEvents: 'none',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                whiteSpace: 'pre-line',       // preserves the \n line breaks in content
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                color: 'var(--pb-text-primary)',
-                lineHeight: 1.6,
-              }}
-          >
-            {tooltip.content}
-          </div>
+        <div
+          style={{
+            position: 'absolute',
+            top: tooltip.y + 12,
+            left: tooltip.x + 12,
+            zIndex: 100,
+            backgroundColor: '#131B2E',
+            border: '1px solid #1E2D45',
+            borderRadius: '6px',
+            padding: '7px 10px',
+            pointerEvents: 'none',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            whiteSpace: 'pre-line', // preserves the \n line breaks in content
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            color: 'var(--pb-text-primary)',
+            lineHeight: 1.6,
+          }}
+        >
+          {tooltip.content}
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,11 @@
 package me.veselin.probity.simulation.persistence;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
@@ -7,483 +13,436 @@ import me.veselin.probity.simulation.domain.SimulationStatus;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 /**
- * Adapter wrapping SimulationJpaRepository and SimulationMapper.
- * Provides domain-oriented interface for services to use.
+ * Adapter wrapping SimulationJpaRepository and SimulationMapper. Provides domain-oriented interface
+ * for services to use.
  */
 @Repository
 @RequiredArgsConstructor
 public class SimulationRepository {
 
-    private final SimulationJpaRepository jpaRepository;
+  private final SimulationJpaRepository jpaRepository;
 
-    private final SimulationPathsJpaRepository pathsJpaRepository;
+  private final SimulationPathsJpaRepository pathsJpaRepository;
 
-    /**
-     * Saves a new simulation.
-     */
-    public Simulation save(Simulation domain) {
-        SimulationJpaEntity jpaEntity = SimulationMapper.toJpaEntity(domain);
-        SimulationJpaEntity saved = jpaRepository.save(jpaEntity);
-        return SimulationMapper.toDomain(saved);
+  /** Saves a new simulation. */
+  public Simulation save(Simulation domain) {
+    SimulationJpaEntity jpaEntity = SimulationMapper.toJpaEntity(domain);
+    SimulationJpaEntity saved = jpaRepository.save(jpaEntity);
+    return SimulationMapper.toDomain(saved);
+  }
+
+  /**
+   * Completes a claimed simulation, fenced on the token its claim returned.
+   *
+   * <p>Since the Q9a storage split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10) this is one
+   * <em>transaction</em> holding two writes: the conditional bulk {@code UPDATE} writes the status,
+   * the trimmed result payload (summary, statistics, outcomes, percentileSeries, distribution — but
+   * no paths), the portfolio value and {@code updated_at}, and only while the worker still holds
+   * the claim; the paths array goes to {@code simulation_paths} in that same transaction. The fence
+   * still decides everything — 0 rows means the claim was lost, and the paths row is then not
+   * written either, so a superseded worker can neither overwrite a peer's row nor orphan a paths
+   * row beside it. If either write fails the whole transaction rolls back and the row stays {@code
+   * PROCESSING}: there is no state in which a row reads {@code COMPLETED} without the result that
+   * justifies it or without its paths.
+   *
+   * @param id the simulation ID
+   * @param currentValue the current portfolio value at time of completion
+   * @param payload the full simulation result payload; its {@code allPaths} are written off-row via
+   *     {@link SimulationPayload#withoutAllPaths()}, everything else stays inline in {@code
+   *     result_payload}
+   * @param fenceToken the token {@link #claimForProcessing} returned for this worker
+   * @return the persisted row as read back from the database, or empty if the claim was lost and
+   *     the update matched no row
+   */
+  @Transactional
+  public Optional<Simulation> complete(
+      UUID id, BigDecimal currentValue, SimulationPayload payload, Instant fenceToken) {
+    List<SimulationPayload.SimulatedPath> paths = payload.allPaths();
+    int updated =
+        jpaRepository.completeIfClaimHeld(
+            id,
+            SimulationStatus.PROCESSING.name(),
+            SimulationStatus.COMPLETED.name(),
+            payload.withoutAllPaths(),
+            currentValue,
+            fenceToken,
+            now());
+    // The UPDATE above is the fence: only a row this worker still owns may gain a
+    // paths row, and it must be this transaction so the two halves cannot separate.
+    if (updated > 0 && !paths.isEmpty()) {
+      pathsJpaRepository.save(new SimulationPathsJpaEntity(id, paths));
     }
+    // Re-read rather than return the values just handed in: a caller that maps the same
+    // in-memory instance it saved cannot tell "written" from "silently discarded", and
+    // that ambiguity is exactly what hid the lost-result defect.
+    return updated > 0 ? findById(id) : Optional.empty();
+  }
 
-    /**
-     * Completes a claimed simulation, fenced on the token its claim returned.
-     *
-     * <p>Since the Q9a storage split (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10) this
-     * is one <em>transaction</em> holding two writes: the conditional bulk {@code UPDATE}
-     * writes the status, the trimmed result payload (summary, statistics, outcomes,
-     * percentileSeries, distribution — but no paths), the portfolio value and
-     * {@code updated_at}, and only while the worker still holds the claim; the paths array
-     * goes to {@code simulation_paths} in that same transaction. The fence still decides
-     * everything — 0 rows means the claim was lost, and the paths row is then not written
-     * either, so a superseded worker can neither overwrite a peer's row nor orphan a paths
-     * row beside it. If either write fails the whole transaction rolls back and the row
-     * stays {@code PROCESSING}: there is no state in which a row reads
-     * {@code COMPLETED} without the result that justifies it or without its paths.
-     *
-     * @param id the simulation ID
-     * @param currentValue the current portfolio value at time of completion
-     * @param payload the full simulation result payload; its {@code allPaths} are written
-     *                off-row via {@link SimulationPayload#withoutAllPaths()}, everything
-     *                else stays inline in {@code result_payload}
-     * @param fenceToken the token {@link #claimForProcessing} returned for this worker
-     * @return the persisted row as read back from the database, or empty if the claim was
-     *         lost and the update matched no row
-     */
-    @Transactional
-    public Optional<Simulation> complete(UUID id, BigDecimal currentValue, SimulationPayload payload,
-                                        Instant fenceToken) {
-        List<SimulationPayload.SimulatedPath> paths = payload.allPaths();
-        int updated = jpaRepository.completeIfClaimHeld(
-                id,
-                SimulationStatus.PROCESSING.name(),
-                SimulationStatus.COMPLETED.name(),
-                payload.withoutAllPaths(),
-                currentValue,
-                fenceToken,
-                now());
-        // The UPDATE above is the fence: only a row this worker still owns may gain a
-        // paths row, and it must be this transaction so the two halves cannot separate.
-        if (updated > 0 && !paths.isEmpty()) {
-            pathsJpaRepository.save(new SimulationPathsJpaEntity(id, paths));
-        }
-        // Re-read rather than return the values just handed in: a caller that maps the same
-        // in-memory instance it saved cannot tell "written" from "silently discarded", and
-        // that ambiguity is exactly what hid the lost-result defect.
-        return updated > 0 ? findById(id) : Optional.empty();
+  /**
+   * Returns a claimed simulation to {@code PENDING} so a later delivery can take it.
+   *
+   * <p>Fenced on the same token as {@link #complete}: if the claim was lost, a peer owns the row
+   * and this affects 0 rows. Losing the release is not an error - the row simply stays {@code
+   * PROCESSING} until its lease lapses.
+   *
+   * @return true if the row was still claimed by this worker and is now {@code PENDING}
+   */
+  public boolean releaseToPending(UUID id, Instant fenceToken) {
+    return jpaRepository.releaseIfClaimHeld(
+            id,
+            SimulationStatus.PROCESSING.name(),
+            SimulationStatus.PENDING.name(),
+            fenceToken,
+            now())
+        > 0;
+  }
+
+  /**
+   * Marks a row {@code FAILED} if it is still {@code PENDING}. Used by the dead-letter recoverer,
+   * which has no fence token to present.
+   *
+   * @return true if the row was pending and is now {@code FAILED}
+   */
+  public boolean markFailedIfPending(UUID id) {
+    return jpaRepository.markFailedIfPending(
+            id, SimulationStatus.PENDING.name(), SimulationStatus.FAILED.name(), now())
+        > 0;
+  }
+
+  /**
+   * Atomically claims a PENDING (or stale PROCESSING) simulation for processing.
+   *
+   * <p>The returned {@link Instant} is the <strong>fence token</strong>: the exact value written to
+   * {@code updated_at}, to be presented to {@link #complete} and {@link #releaseToPending}. It is
+   * truncated to microseconds because {@code updated_at} is {@code TIMESTAMPTZ} (microsecond
+   * storage) while {@code Instant} is nanosecond — an untruncated token would round on write and
+   * then never match on comparison, so every fenced write would silently affect zero rows.
+   *
+   * @param id the simulation ID
+   * @param lease maximum age of a PROCESSING row to consider stale (e.g., 5 minutes)
+   * @return the fence token if the row was claimed, empty if it was not claimable
+   */
+  public Optional<Claim> claimForProcessingWithAttempt(UUID id, java.time.Duration lease) {
+    Instant now = now();
+    UUID attemptId = UUID.randomUUID();
+    int updated =
+        jpaRepository.claimForProcessing(
+            id, SimulationStatus.PROCESSING.name(), now.minus(lease), now, attemptId);
+    return updated > 0 ? Optional.of(new Claim(now, attemptId)) : Optional.empty();
+  }
+
+  /**
+   * Compatibility view for existing callers that only need the timestamp fence. New worker code
+   * must use {@link #claimForProcessingWithAttempt(UUID, java.time.Duration)}.
+   */
+  public Optional<Instant> claimForProcessing(UUID id, java.time.Duration lease) {
+    return claimForProcessingWithAttempt(id, lease).map(Claim::fenceToken);
+  }
+
+  /** Marks a pending simulation failed only when the supplied attempt still owns it. */
+  public boolean markFailedForAttempt(UUID id, UUID attemptId) {
+    return jpaRepository.markFailedForAttempt(
+            id, SimulationStatus.PENDING.name(), SimulationStatus.FAILED.name(), attemptId, now())
+        > 0;
+  }
+
+  public record Claim(Instant fenceToken, UUID attemptId) {}
+
+  /**
+   * The single clock reading every conditional write stamps with, at the precision the column
+   * actually stores. Bulk JPQL updates bypass {@code @PreUpdate}, so each one must set {@code
+   * updated_at} explicitly.
+   */
+  private static Instant now() {
+    return Instant.now().truncatedTo(ChronoUnit.MICROS);
+  }
+
+  public Optional<Simulation> findById(UUID id) {
+    return jpaRepository.findById(id).map(SimulationMapper::toDomain);
+  }
+
+  /**
+   * The off-row paths of a Q9a split-written simulation, or empty when the row keeps its paths
+   * inline (every row written before this change, and the sync {@code POST /run} write, which Q9a
+   * deliberately leaves whole) or has none at all.
+   *
+   * <p>This is the storage half of the dual-source read; the worker's SimulationMapper picks
+   * between this and the inline array. The response-side sampling that may further bound the list
+   * happens there, never here — this returns what was stored.
+   *
+   * @see SimulationPayload#withoutAllPaths()
+   */
+  public Optional<List<SimulationPayload.SimulatedPath>> findPaths(UUID simulationId) {
+    return pathsJpaRepository.findById(simulationId).map(SimulationPathsJpaEntity::getPaths);
+  }
+
+  /**
+   * The status of a live (not soft-deleted) row, or empty if it is gone.
+   *
+   * <p>Used by the consumer to choose between nacking and acknowledging when a claim fails. Loading
+   * the whole aggregate to read one column would be wasteful, and the {@code deleted} predicate is
+   * what keeps a soft-deleted row from reading as a runnable {@code PENDING} one.
+   */
+  public Optional<SimulationStatus> findLiveStatus(UUID id) {
+    return jpaRepository.findLiveStatusById(id).map(SimulationStatus::valueOf);
+  }
+
+  public Optional<Simulation> findByIdAndUserId(UUID id, UUID userId) {
+    return jpaRepository.findByIdAndUserId(id, userId).map(SimulationMapper::toDomain);
+  }
+
+  public List<Simulation> findByPortfolioIdAndUserId(UUID portfolioId, UUID userId) {
+    return jpaRepository.findByPortfolioIdAndUserId(portfolioId, userId).stream()
+        .map(SimulationMapper::toDomain)
+        .toList();
+  }
+
+  /** Deletes all simulations (for test cleanup only). */
+  public void deleteAll() {
+    jpaRepository.deleteAll();
+  }
+
+  /** Finds a simulation by ID and user ID, including status. */
+  public Optional<Simulation> findByIdAndUserIdWithStatus(UUID id, UUID userId) {
+    return jpaRepository.findByIdAndUserId(id, userId).map(SimulationMapper::toDomain);
+  }
+
+  /**
+   * Updates the status of a simulation, unconditionally.
+   *
+   * <p><strong>Not for the worker's write-back.</strong> This is a non-atomic {@code findById} +
+   * {@code save} with no predicate, so it will happily overwrite a row a peer owns and will strand
+   * a row in any state. The worker's paths use {@link #complete} and {@link #releaseToPending},
+   * which are fenced, and the dead-letter recoverer uses {@link #markFailedIfPending}. This
+   * survives only for test fixtures that need to place a row in a given state.
+   */
+  public void updateStatus(UUID id, SimulationStatus status) {
+    jpaRepository
+        .findById(id)
+        .ifPresent(
+            entity -> {
+              entity.setStatus(status.name());
+              jpaRepository.save(entity);
+            });
+  }
+
+  /**
+   * Finds simulations stuck in PROCESSING state for recovery.
+   *
+   * <p>Named for a time predicate it does not have: it returns <em>every</em> PROCESSING row for
+   * the user, however fresh. Unused. PR-B replaces it with a sweeper that takes an actual staleness
+   * bound; PR-A must not build on it.
+   */
+  public List<Simulation> findStaleProcessingSimulations(UUID userId) {
+    return jpaRepository.findByUserIdAndStatus(userId, SimulationStatus.PROCESSING.name()).stream()
+        .map(SimulationMapper::toDomain)
+        .toList();
+  }
+
+  /**
+   * Locks a bounded batch of pending outbox records for the calling publisher.
+   *
+   * <p>See {@link SimulationJpaRepository#lockPendingOutboxBatch(int, Instant)} for the locking and
+   * jsonb-casting rules. The caller must commit this transaction before performing any Kafka I/O;
+   * the row lock must not be held during the blocking broker call.
+   *
+   * @return rows of {@code [id (UUID), simulation_id (UUID), payload (String)]}
+   */
+  public List<Object[]> lockPendingOutboxBatch(int limit, Instant now) {
+    return jpaRepository.lockPendingOutboxBatch(limit, now);
+  }
+
+  /**
+   * Leases the rows returned by {@link #lockPendingOutboxBatch} to one publisher.
+   *
+   * <p>The lease is durable: it survives the transaction that wrote it, so the publisher can commit
+   * the claim, perform the Kafka send, and write the outcome later without holding row locks across
+   * the network call.
+   */
+  public int claimOutboxRecords(List<UUID> ids, UUID token, Instant claimedUntil) {
+    return jpaRepository.claimOutboxRecords(ids, token, claimedUntil);
+  }
+
+  /**
+   * Marks a leased row published, fenced on the claim token.
+   *
+   * @return 1 if this publisher still held the claim, 0 if a newer publisher owns the row
+   */
+  public int markOutboxPublished(UUID id, UUID token) {
+    return jpaRepository.markOutboxPublished(id, token);
+  }
+
+  /**
+   * Records a publication failure and releases the lease for a later retry, fenced on the claim
+   * token.
+   *
+   * @return 1 if this publisher still held the claim, 0 otherwise
+   */
+  public int recordOutboxFailure(UUID id, UUID token, Instant retryAt) {
+    return jpaRepository.recordOutboxFailure(id, token, retryAt);
+  }
+
+  /** The number of consecutive publication failures recorded for a row (alerting only). */
+  public Optional<Integer> findOutboxErrorCount(UUID id) {
+    return jpaRepository.findOutboxErrorCount(id);
+  }
+
+  /**
+   * Inserts an event into the outbox table in the caller's transaction.
+   *
+   * @param eventId the outbox row id
+   * @param simulationId the simulation the event belongs to
+   */
+  public void insertOutboxEvent(
+      UUID eventId, UUID simulationId, String eventType, String payloadJson) {
+    jpaRepository.insertOutboxEvent(simulationId, eventId, eventType, payloadJson);
+  }
+
+  // ── reconciliation sweeper (M2) ──────────────────────────────────────────
+
+  public record ReconciliationCandidate(
+      UUID simulationId,
+      Instant stateSince,
+      UUID outboxId,
+      Instant publishedAt,
+      Instant claimedUntil) {}
+
+  public record MissingOutboxAlert(UUID simulationId, Instant stateSince) {}
+
+  public record OrphanOutboxAlert(UUID outboxId, UUID simulationId, Instant createdAt) {}
+
+  public record ReconcileLoopAlert(UUID outboxId, UUID simulationId, int reconcileCount) {}
+
+  public record OutboxReconciliationState(
+      UUID outboxId,
+      Instant publishedAt,
+      Instant claimedUntil,
+      Instant lastReconciledAt,
+      int reconcileCount) {}
+
+  public List<ReconciliationCandidate> findPendingSimulationsWithoutDelivery(
+      double pendingGraceSeconds, double cooldownSeconds, int batchSize) {
+    return jpaRepository
+        .findPendingSimulationsWithoutDelivery(pendingGraceSeconds, cooldownSeconds, batchSize)
+        .stream()
+        .map(
+            row ->
+                new ReconciliationCandidate(
+                    toUUID(row[0]),
+                    toInstant(row[1]),
+                    toUUID(row[2]),
+                    toInstant(row[3]),
+                    toInstant(row[4])))
+        .toList();
+  }
+
+  public List<ReconciliationCandidate> findStaleProcessingSimulationsWithOutbox(
+      double processingGraceSeconds, double cooldownSeconds, int batchSize) {
+    return jpaRepository
+        .findStaleProcessingSimulationsWithOutbox(
+            processingGraceSeconds, cooldownSeconds, batchSize)
+        .stream()
+        .map(
+            row ->
+                new ReconciliationCandidate(
+                    toUUID(row[0]),
+                    toInstant(row[1]),
+                    toUUID(row[2]),
+                    toInstant(row[3]),
+                    toInstant(row[4])))
+        .toList();
+  }
+
+  public List<MissingOutboxAlert> findPendingSimulationsWithoutOutbox(
+      double pendingGraceSeconds, int batchSize) {
+    return jpaRepository
+        .findPendingSimulationsWithoutOutbox(pendingGraceSeconds, batchSize)
+        .stream()
+        .map(row -> new MissingOutboxAlert(toUUID(row[0]), toInstant(row[1])))
+        .toList();
+  }
+
+  public List<OrphanOutboxAlert> findOrphanOutboxRecords(double orphanGraceSeconds, int batchSize) {
+    return jpaRepository.findOrphanOutboxRecords(orphanGraceSeconds, batchSize).stream()
+        .map(row -> new OrphanOutboxAlert(toUUID(row[0]), toUUID(row[1]), toInstant(row[2])))
+        .toList();
+  }
+
+  public List<ReconcileLoopAlert> findReconcileLoopRecords(
+      int alertThreshold, double recentWindowSeconds, int batchSize) {
+    return jpaRepository
+        .findReconcileLoopRecords(alertThreshold, recentWindowSeconds, batchSize)
+        .stream()
+        .map(row -> new ReconcileLoopAlert(toUUID(row[0]), toUUID(row[1]), toInt(row[2])))
+        .toList();
+  }
+
+  public Optional<OutboxReconciliationState> lockOutboxForReconciliation(UUID simulationId) {
+    List<Object[]> rows = jpaRepository.lockOutboxForReconciliation(simulationId);
+    if (rows.isEmpty()) {
+      return Optional.empty();
     }
+    Object[] row = rows.get(0);
+    return Optional.of(
+        new OutboxReconciliationState(
+            toUUID(row[0]),
+            toInstant(row[1]),
+            toInstant(row[2]),
+            toInstant(row[3]),
+            toInt(row[4])));
+  }
 
-    /**
-     * Returns a claimed simulation to {@code PENDING} so a later delivery can take it.
-     *
-     * <p>Fenced on the same token as {@link #complete}: if the claim was lost, a peer owns
-     * the row and this affects 0 rows. Losing the release is not an error - the row simply
-     * stays {@code PROCESSING} until its lease lapses.
-     *
-     * @return true if the row was still claimed by this worker and is now {@code PENDING}
-     */
-    public boolean releaseToPending(UUID id, Instant fenceToken) {
-        return jpaRepository.releaseIfClaimHeld(
-                id,
-                SimulationStatus.PROCESSING.name(),
-                SimulationStatus.PENDING.name(),
-                fenceToken,
-                now()) > 0;
-    }
+  public int resetOutboxPublishedStatus(UUID outboxId) {
+    return jpaRepository.resetOutboxPublishedStatus(outboxId);
+  }
 
-    /**
-     * Marks a row {@code FAILED} if it is still {@code PENDING}. Used by the dead-letter
-     * recoverer, which has no fence token to present.
-     *
-     * @return true if the row was pending and is now {@code FAILED}
-     */
-    public boolean markFailedIfPending(UUID id) {
-        return jpaRepository.markFailedIfPending(
-                id,
-                SimulationStatus.PENDING.name(),
-                SimulationStatus.FAILED.name(),
-                now()) > 0;
-    }
+  public int resetProcessingSimulationToPending(UUID simulationId, Instant observedStateSince) {
+    return jpaRepository.resetProcessingSimulationToPending(simulationId, observedStateSince);
+  }
 
-    /**
-     * Atomically claims a PENDING (or stale PROCESSING) simulation for processing.
-     *
-     * <p>The returned {@link Instant} is the <strong>fence token</strong>: the exact value
-     * written to {@code updated_at}, to be presented to {@link #complete} and
-     * {@link #releaseToPending}. It is truncated to microseconds because {@code updated_at}
-     * is {@code TIMESTAMPTZ} (microsecond storage) while {@code Instant} is nanosecond — an
-     * untruncated token would round on write and then never match on comparison, so every
-     * fenced write would silently affect zero rows.
-     *
-     * @param id the simulation ID
-     * @param lease maximum age of a PROCESSING row to consider stale (e.g., 5 minutes)
-     * @return the fence token if the row was claimed, empty if it was not claimable
-     */
-    public Optional<Claim> claimForProcessingWithAttempt(UUID id, java.time.Duration lease) {
-        Instant now = now();
-        UUID attemptId = UUID.randomUUID();
-        int updated = jpaRepository.claimForProcessing(
-                id, SimulationStatus.PROCESSING.name(), now.minus(lease), now, attemptId);
-        return updated > 0 ? Optional.of(new Claim(now, attemptId)) : Optional.empty();
-    }
+  public long countStuckSimulations(SimulationStatus status, double graceSeconds) {
+    return jpaRepository.countStuckSimulations(status.name(), graceSeconds);
+  }
 
-    /**
-     * Compatibility view for existing callers that only need the timestamp fence.
-     * New worker code must use {@link #claimForProcessingWithAttempt(UUID, java.time.Duration)}.
-     */
-    public Optional<Instant> claimForProcessing(UUID id, java.time.Duration lease) {
-        return claimForProcessingWithAttempt(id, lease).map(Claim::fenceToken);
-    }
+  public long countUnpublishedOutbox() {
+    return jpaRepository.countUnpublishedOutbox();
+  }
 
-    /**
-     * Marks a pending simulation failed only when the supplied attempt still owns it.
-     */
-    public boolean markFailedForAttempt(UUID id, UUID attemptId) {
-        return jpaRepository.markFailedForAttempt(
-                id,
-                SimulationStatus.PENDING.name(),
-                SimulationStatus.FAILED.name(),
-                attemptId,
-                now()) > 0;
-    }
+  public double getOldestUnpublishedOutboxAgeSeconds() {
+    return jpaRepository.getOldestUnpublishedOutboxAgeSeconds();
+  }
 
-    public record Claim(Instant fenceToken, UUID attemptId) {
-    }
+  public int getMaxOutboxErrorCount() {
+    return jpaRepository.getMaxOutboxErrorCount();
+  }
 
-    /**
-     * The single clock reading every conditional write stamps with, at the precision the
-     * column actually stores. Bulk JPQL updates bypass {@code @PreUpdate}, so each one must
-     * set {@code updated_at} explicitly.
-     */
-    private static Instant now() {
-        return Instant.now().truncatedTo(ChronoUnit.MICROS);
-    }
+  public double getOldestPublishedOutboxAgeSeconds() {
+    return jpaRepository.getOldestPublishedOutboxAgeSeconds();
+  }
 
-    public Optional<Simulation> findById(UUID id) {
-        return jpaRepository.findById(id)
-                .map(SimulationMapper::toDomain);
-    }
+  public int getMaxReconcileCount() {
+    return jpaRepository.getMaxReconcileCount();
+  }
 
-    /**
-     * The off-row paths of a Q9a split-written simulation, or empty when the row keeps its
-     * paths inline (every row written before this change, and the sync {@code POST /run}
-     * write, which Q9a deliberately leaves whole) or has none at all.
-     *
-     * <p>This is the storage half of the dual-source read; the worker's SimulationMapper
-     * picks between this and the inline array. The response-side sampling that may further
-     * bound the list happens there, never here — this returns what was stored.
-     *
-     * @see SimulationPayload#withoutAllPaths()
-     */
-    public Optional<List<SimulationPayload.SimulatedPath>> findPaths(UUID simulationId) {
-        return pathsJpaRepository.findById(simulationId)
-                .map(SimulationPathsJpaEntity::getPaths);
-    }
+  private static Instant toInstant(Object obj) {
+    if (obj == null) return null;
+    if (obj instanceof Instant inst) return inst;
+    if (obj instanceof java.sql.Timestamp ts) return ts.toInstant();
+    if (obj instanceof java.time.OffsetDateTime odt) return odt.toInstant();
+    if (obj instanceof java.time.ZonedDateTime zdt) return zdt.toInstant();
+    return Instant.parse(obj.toString());
+  }
 
-    /**
-     * The status of a live (not soft-deleted) row, or empty if it is gone.
-     *
-     * <p>Used by the consumer to choose between nacking and acknowledging when a claim
-     * fails. Loading the whole aggregate to read one column would be wasteful, and the
-     * {@code deleted} predicate is what keeps a soft-deleted row from reading as a runnable
-     * {@code PENDING} one.
-     */
-    public Optional<SimulationStatus> findLiveStatus(UUID id) {
-        return jpaRepository.findLiveStatusById(id)
-                .map(SimulationStatus::valueOf);
-    }
+  private static UUID toUUID(Object obj) {
+    if (obj == null) return null;
+    if (obj instanceof UUID u) return u;
+    return UUID.fromString(obj.toString());
+  }
 
-    public Optional<Simulation> findByIdAndUserId(UUID id, UUID userId) {
-        return jpaRepository.findByIdAndUserId(id, userId)
-                .map(SimulationMapper::toDomain);
-    }
-
-    public List<Simulation> findByPortfolioIdAndUserId(UUID portfolioId, UUID userId) {
-        return jpaRepository.findByPortfolioIdAndUserId(portfolioId, userId).stream()
-                .map(SimulationMapper::toDomain)
-                .toList();
-    }
-
-    /**
-     * Deletes all simulations (for test cleanup only).
-     */
-    public void deleteAll() {
-        jpaRepository.deleteAll();
-    }
-
-    /**
-     * Finds a simulation by ID and user ID, including status.
-     */
-    public Optional<Simulation> findByIdAndUserIdWithStatus(UUID id, UUID userId) {
-        return jpaRepository.findByIdAndUserId(id, userId)
-                .map(SimulationMapper::toDomain);
-    }
-
-    /**
-     * Updates the status of a simulation, unconditionally.
-     *
-     * <p><strong>Not for the worker's write-back.</strong> This is a non-atomic
-     * {@code findById} + {@code save} with no predicate, so it will happily overwrite a row
-     * a peer owns and will strand a row in any state. The worker's paths use
-     * {@link #complete} and {@link #releaseToPending}, which are fenced, and the dead-letter
-     * recoverer uses {@link #markFailedIfPending}. This survives only for test fixtures that
-     * need to place a row in a given state.
-     */
-    public void updateStatus(UUID id, SimulationStatus status) {
-        jpaRepository.findById(id).ifPresent(entity -> {
-            entity.setStatus(status.name());
-            jpaRepository.save(entity);
-        });
-    }
-
-    /**
-     * Finds simulations stuck in PROCESSING state for recovery.
-     *
-     * <p>Named for a time predicate it does not have: it returns <em>every</em> PROCESSING
-     * row for the user, however fresh. Unused. PR-B replaces it with a sweeper that takes
-     * an actual staleness bound; PR-A must not build on it.
-     */
-    public List<Simulation> findStaleProcessingSimulations(UUID userId) {
-        return jpaRepository.findByUserIdAndStatus(userId, SimulationStatus.PROCESSING.name()).stream()
-                .map(SimulationMapper::toDomain)
-                .toList();
-    }
-
-    /**
-     * Locks a bounded batch of pending outbox records for the calling publisher.
-     *
-     * <p>See {@link SimulationJpaRepository#lockPendingOutboxBatch(int, Instant)} for the
-     * locking and jsonb-casting rules. The caller must commit this transaction before
-     * performing any Kafka I/O; the row lock must not be held during the blocking broker
-     * call.
-     *
-     * @return rows of {@code [id (UUID), simulation_id (UUID), payload (String)]}
-     */
-    public List<Object[]> lockPendingOutboxBatch(int limit, Instant now) {
-        return jpaRepository.lockPendingOutboxBatch(limit, now);
-    }
-
-    /**
-     * Leases the rows returned by {@link #lockPendingOutboxBatch} to one publisher.
-     *
-     * <p>The lease is durable: it survives the transaction that wrote it, so the publisher
-     * can commit the claim, perform the Kafka send, and write the outcome later without
-     * holding row locks across the network call.
-     */
-    public int claimOutboxRecords(List<UUID> ids, UUID token, Instant claimedUntil) {
-        return jpaRepository.claimOutboxRecords(ids, token, claimedUntil);
-    }
-
-    /**
-     * Marks a leased row published, fenced on the claim token.
-     *
-     * @return 1 if this publisher still held the claim, 0 if a newer publisher owns the row
-     */
-    public int markOutboxPublished(UUID id, UUID token) {
-        return jpaRepository.markOutboxPublished(id, token);
-    }
-
-    /**
-     * Records a publication failure and releases the lease for a later retry, fenced on the
-     * claim token.
-     *
-     * @return 1 if this publisher still held the claim, 0 otherwise
-     */
-    public int recordOutboxFailure(UUID id, UUID token, Instant retryAt) {
-        return jpaRepository.recordOutboxFailure(id, token, retryAt);
-    }
-
-    /**
-     * The number of consecutive publication failures recorded for a row (alerting only).
-     */
-    public Optional<Integer> findOutboxErrorCount(UUID id) {
-        return jpaRepository.findOutboxErrorCount(id);
-    }
-
-    /**
-     * Inserts an event into the outbox table in the caller's transaction.
-     *
-     * @param eventId the outbox row id
-     * @param simulationId the simulation the event belongs to
-     */
-    public void insertOutboxEvent(UUID eventId, UUID simulationId, String eventType, String payloadJson) {
-        jpaRepository.insertOutboxEvent(simulationId, eventId, eventType, payloadJson);
-    }
-
-    // ── reconciliation sweeper (M2) ──────────────────────────────────────────
-
-    public record ReconciliationCandidate(
-            UUID simulationId,
-            Instant stateSince,
-            UUID outboxId,
-            Instant publishedAt,
-            Instant claimedUntil
-    ) {}
-
-    public record MissingOutboxAlert(
-            UUID simulationId,
-            Instant stateSince
-    ) {}
-
-    public record OrphanOutboxAlert(
-            UUID outboxId,
-            UUID simulationId,
-            Instant createdAt
-    ) {}
-
-    public record ReconcileLoopAlert(
-            UUID outboxId,
-            UUID simulationId,
-            int reconcileCount
-    ) {}
-
-    public record OutboxReconciliationState(
-            UUID outboxId,
-            Instant publishedAt,
-            Instant claimedUntil,
-            Instant lastReconciledAt,
-            int reconcileCount
-    ) {}
-
-    public List<ReconciliationCandidate> findPendingSimulationsWithoutDelivery(
-            double pendingGraceSeconds,
-            double cooldownSeconds,
-            int batchSize) {
-        return jpaRepository.findPendingSimulationsWithoutDelivery(pendingGraceSeconds, cooldownSeconds, batchSize)
-                .stream()
-                .map(row -> new ReconciliationCandidate(
-                        toUUID(row[0]),
-                        toInstant(row[1]),
-                        toUUID(row[2]),
-                        toInstant(row[3]),
-                        toInstant(row[4])))
-                .toList();
-    }
-
-    public List<ReconciliationCandidate> findStaleProcessingSimulationsWithOutbox(
-            double processingGraceSeconds,
-            double cooldownSeconds,
-            int batchSize) {
-        return jpaRepository.findStaleProcessingSimulationsWithOutbox(processingGraceSeconds, cooldownSeconds, batchSize)
-                .stream()
-                .map(row -> new ReconciliationCandidate(
-                        toUUID(row[0]),
-                        toInstant(row[1]),
-                        toUUID(row[2]),
-                        toInstant(row[3]),
-                        toInstant(row[4])))
-                .toList();
-    }
-
-    public List<MissingOutboxAlert> findPendingSimulationsWithoutOutbox(
-            double pendingGraceSeconds,
-            int batchSize) {
-        return jpaRepository.findPendingSimulationsWithoutOutbox(pendingGraceSeconds, batchSize)
-                .stream()
-                .map(row -> new MissingOutboxAlert(
-                        toUUID(row[0]),
-                        toInstant(row[1])))
-                .toList();
-    }
-
-    public List<OrphanOutboxAlert> findOrphanOutboxRecords(
-            double orphanGraceSeconds,
-            int batchSize) {
-        return jpaRepository.findOrphanOutboxRecords(orphanGraceSeconds, batchSize)
-                .stream()
-                .map(row -> new OrphanOutboxAlert(
-                        toUUID(row[0]),
-                        toUUID(row[1]),
-                        toInstant(row[2])))
-                .toList();
-    }
-
-    public List<ReconcileLoopAlert> findReconcileLoopRecords(
-            int alertThreshold,
-            double recentWindowSeconds,
-            int batchSize) {
-        return jpaRepository.findReconcileLoopRecords(alertThreshold, recentWindowSeconds, batchSize)
-                .stream()
-                .map(row -> new ReconcileLoopAlert(
-                        toUUID(row[0]),
-                        toUUID(row[1]),
-                        toInt(row[2])))
-                .toList();
-    }
-
-    public Optional<OutboxReconciliationState> lockOutboxForReconciliation(UUID simulationId) {
-        List<Object[]> rows = jpaRepository.lockOutboxForReconciliation(simulationId);
-        if (rows.isEmpty()) {
-            return Optional.empty();
-        }
-        Object[] row = rows.get(0);
-        return Optional.of(new OutboxReconciliationState(
-                toUUID(row[0]),
-                toInstant(row[1]),
-                toInstant(row[2]),
-                toInstant(row[3]),
-                toInt(row[4])));
-    }
-
-    public int resetOutboxPublishedStatus(UUID outboxId) {
-        return jpaRepository.resetOutboxPublishedStatus(outboxId);
-    }
-
-    public int resetProcessingSimulationToPending(UUID simulationId, Instant observedStateSince) {
-        return jpaRepository.resetProcessingSimulationToPending(simulationId, observedStateSince);
-    }
-
-    public long countStuckSimulations(SimulationStatus status, double graceSeconds) {
-        return jpaRepository.countStuckSimulations(status.name(), graceSeconds);
-    }
-
-    public long countUnpublishedOutbox() {
-        return jpaRepository.countUnpublishedOutbox();
-    }
-
-    public double getOldestUnpublishedOutboxAgeSeconds() {
-        return jpaRepository.getOldestUnpublishedOutboxAgeSeconds();
-    }
-
-    public int getMaxOutboxErrorCount() {
-        return jpaRepository.getMaxOutboxErrorCount();
-    }
-
-    public double getOldestPublishedOutboxAgeSeconds() {
-        return jpaRepository.getOldestPublishedOutboxAgeSeconds();
-    }
-
-    public int getMaxReconcileCount() {
-        return jpaRepository.getMaxReconcileCount();
-    }
-
-    private static Instant toInstant(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof Instant inst) return inst;
-        if (obj instanceof java.sql.Timestamp ts) return ts.toInstant();
-        if (obj instanceof java.time.OffsetDateTime odt) return odt.toInstant();
-        if (obj instanceof java.time.ZonedDateTime zdt) return zdt.toInstant();
-        return Instant.parse(obj.toString());
-    }
-
-    private static UUID toUUID(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof UUID u) return u;
-        return UUID.fromString(obj.toString());
-    }
-
-    private static int toInt(Object obj) {
-        if (obj == null) return 0;
-        if (obj instanceof Number num) return num.intValue();
-        return Integer.parseInt(obj.toString());
-    }
+  private static int toInt(Object obj) {
+    if (obj == null) return 0;
+    if (obj instanceof Number num) return num.intValue();
+    return Integer.parseInt(obj.toString());
+  }
 }

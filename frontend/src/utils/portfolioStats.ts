@@ -1,7 +1,10 @@
 import type { StatCardProps } from '@/components/probity/StatCard';
 import type { PortfolioSummary } from '@/types/portfolio';
 
-export function buildStatCards(summary: PortfolioSummary, positionsCount?: number): StatCardProps[] {
+export function buildStatCards(
+  summary: PortfolioSummary,
+  positionsCount?: number,
+): StatCardProps[] {
   const cards: StatCardProps[] = [
     {
       label: 'Total Value',

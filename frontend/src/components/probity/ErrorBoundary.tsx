@@ -35,36 +35,44 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          padding: '24px',
-          backgroundColor: 'var(--pb-surface)',
-          fontFamily: 'var(--font-body)',
-        }}>
-          <div style={{
-            maxWidth: '480px',
-            textAlign: 'center',
-          }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            padding: '24px',
+            backgroundColor: 'var(--pb-surface)',
+            fontFamily: 'var(--font-body)',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '480px',
+              textAlign: 'center',
+            }}
+          >
             <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
-            <h1 style={{
-              fontSize: '24px',
-              fontWeight: 700,
-              color: 'var(--pb-text-primary)',
-              marginBottom: '12px',
-              fontFamily: 'var(--font-display)',
-            }}>
+            <h1
+              style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: 'var(--pb-text-primary)',
+                marginBottom: '12px',
+                fontFamily: 'var(--font-display)',
+              }}
+            >
               Something went wrong
             </h1>
-            <p style={{
-              fontSize: '14px',
-              color: 'var(--pb-text-secondary)',
-              marginBottom: '24px',
-              lineHeight: '1.5',
-            }}>
+            <p
+              style={{
+                fontSize: '14px',
+                color: 'var(--pb-text-secondary)',
+                marginBottom: '24px',
+                lineHeight: '1.5',
+              }}
+            >
               An unexpected error occurred. Please try refreshing the page.
             </p>
             <button
@@ -80,29 +88,35 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 cursor: 'pointer',
                 transition: 'opacity 0.12s',
               }}
-              onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.9'; }}
-              onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+              onMouseOver={(e) => {
+                (e.currentTarget as HTMLElement).style.opacity = '0.9';
+              }}
+              onMouseOut={(e) => {
+                (e.currentTarget as HTMLElement).style.opacity = '1';
+              }}
             >
               Reload Page
             </button>
             {this.state.error && (
-              <details style={{
-                marginTop: '24px',
-                textAlign: 'left',
-                fontSize: '12px',
-                color: 'var(--pb-text-tertiary)',
-              }}>
-                <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>
-                  Error details
-                </summary>
-                <pre style={{
-                  padding: '12px',
-                  backgroundColor: 'var(--pb-surface-elevated)',
-                  border: '1px solid var(--pb-border)',
-                  borderRadius: '6px',
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                }}>
+              <details
+                style={{
+                  marginTop: '24px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  color: 'var(--pb-text-tertiary)',
+                }}
+              >
+                <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>Error details</summary>
+                <pre
+                  style={{
+                    padding: '12px',
+                    backgroundColor: 'var(--pb-surface-elevated)',
+                    border: '1px solid var(--pb-border)',
+                    borderRadius: '6px',
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
                   {this.state.error.toString()}
                 </pre>
               </details>

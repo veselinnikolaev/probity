@@ -42,7 +42,7 @@ export function useAiAssistant(): UseAiAssistantReturn {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setErrorBanner(null);
 
@@ -54,11 +54,14 @@ export function useAiAssistant(): UseAiAssistantReturn {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.data.message || response.data.response,
+        content:
+          response.data.message ||
+          response.data.response ||
+          'No response was returned. Please try again.',
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error: any) {
       if (error?.response?.status === 429) {
         setErrorBanner({

@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { settingsService } from '@/services/settings';
 import { ProfileResponse, UpdateProfileRequest, ChangePasswordRequest } from '@/types/settings';
-import { AsyncState, createLoadingState, createSuccessState, createErrorState } from '@/types/shared';
+import {
+  AsyncState,
+  createLoadingState,
+  createSuccessState,
+  createErrorState,
+} from '@/types/shared';
 import { useMutation } from '@/hooks/useMutation';
 
 export interface UseProfileReturn {
@@ -12,7 +17,8 @@ export interface UseProfileReturn {
 }
 
 export function useProfile(): UseProfileReturn {
-  const [profile, setProfile] = useState<AsyncState<ProfileResponse>>(createLoadingState<ProfileResponse>());
+  const [profile, setProfile] =
+    useState<AsyncState<ProfileResponse>>(createLoadingState<ProfileResponse>());
 
   // ─── Initial data fetch ─────────────────────────────────────────────────
   useEffect(() => {

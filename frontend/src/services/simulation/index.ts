@@ -25,7 +25,7 @@ export const SIMULATION_POLL_TIMEOUT_MS = 120_000;
 export async function runSimulation(request: SimulationRequest): Promise<SimulationResult> {
   const payload = {
     ...request,
-    confidenceLevel: request.confidenceLevel / 100,  // 95 → 0.95
+    confidenceLevel: request.confidenceLevel / 100, // 95 → 0.95
   };
   const response = await api.post<SimulationResult>('/simulations/run', payload);
   return response.data;
@@ -45,7 +45,7 @@ export async function runSimulationAsync(
 ): Promise<SimulationStatus> {
   const payload = {
     ...request,
-    confidenceLevel: request.confidenceLevel / 100,  // 95 → 0.95
+    confidenceLevel: request.confidenceLevel / 100, // 95 → 0.95
   };
   const response = await api.post<SimulationStatus>('/simulations/run-async', payload, { signal });
   return response.data;
@@ -59,7 +59,9 @@ export async function fetchSimulationStatus(
   simulationId: string,
   signal?: AbortSignal,
 ): Promise<SimulationStatus> {
-  const response = await api.get<SimulationStatus>(`/simulations/${simulationId}/status`, { signal });
+  const response = await api.get<SimulationStatus>(`/simulations/${simulationId}/status`, {
+    signal,
+  });
   return response.data;
 }
 

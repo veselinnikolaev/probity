@@ -13,7 +13,7 @@ export function DangerZoneTab() {
   const { deleteAccountMutation } = useProfile();
   const { logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
 
@@ -49,7 +49,10 @@ export function DangerZoneTab() {
           <ProbityButton
             variant="danger"
             size="md"
-            onClick={() => { setDeleteConfirmInput(''); setShowDeleteConfirm(true); }}
+            onClick={() => {
+              setDeleteConfirmInput('');
+              setShowDeleteConfirm(true);
+            }}
           >
             Delete Account
           </ProbityButton>
@@ -76,7 +79,9 @@ export function DangerZoneTab() {
               variant="danger"
               size="md"
               onClick={handleDeleteAccount}
-              disabled={deleteConfirmInput !== DELETE_CONFIRMATION_WORD || deleteAccountMutation.isPending}
+              disabled={
+                deleteConfirmInput !== DELETE_CONFIRMATION_WORD || deleteAccountMutation.isPending
+              }
             >
               {deleteAccountMutation.isPending ? 'Deleting…' : 'Delete Account'}
             </ProbityButton>
@@ -88,7 +93,8 @@ export function DangerZoneTab() {
             Are you sure you want to delete your account? All your data will be permanently removed.
           </p>
           <p className={styles.modalWarning}>
-            Type <span className={styles.highlightText}>{DELETE_CONFIRMATION_WORD}</span> to confirm.
+            Type <span className={styles.highlightText}>{DELETE_CONFIRMATION_WORD}</span> to
+            confirm.
           </p>
           <InputField
             placeholder={`Type ${DELETE_CONFIRMATION_WORD} to confirm`}

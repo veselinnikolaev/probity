@@ -21,26 +21,22 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(
-      0deg,
-      transparent calc(100% - 1px),
-      rgba(59, 130, 246, 0.08) calc(100% - 1px)
-    ),
-    linear-gradient(
-      90deg,
-      transparent calc(100% - 1px),
-      rgba(59, 130, 246, 0.08) calc(100% - 1px)
-    );
+    linear-gradient(0deg, transparent calc(100% - 1px), rgba(59, 130, 246, 0.08) calc(100% - 1px)),
+    linear-gradient(90deg, transparent calc(100% - 1px), rgba(59, 130, 246, 0.08) calc(100% - 1px));
   background-size: 60px 60px;
   animation: slideGrid 20s linear infinite;
 }
 
 @keyframes slideGrid {
   0% {
-    background-position: 0 0, 0 0;
+    background-position:
+      0 0,
+      0 0;
   }
   100% {
-    background-position: 60px 60px, 60px 60px;
+    background-position:
+      60px 60px,
+      60px 60px;
   }
 }
 
@@ -60,7 +56,8 @@
 }
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0) translateX(0);
     opacity: 0;
   }
@@ -91,7 +88,9 @@
   border: 1px solid var(--pb-border);
   border-radius: 12px;
   padding: 40px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4), 0 0 1px rgba(59, 130, 246, 0.2);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.4),
+    0 0 1px rgba(59, 130, 246, 0.2);
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -107,12 +106,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(59, 130, 246, 0.5) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.5) 50%, transparent 100%);
   border-radius: 12px 12px 0 0;
 }
 
@@ -195,7 +189,9 @@
 .input:focus {
   outline: none;
   border-color: var(--pb-accent);
-  box-shadow: inset 0 0 0 1px var(--pb-accent), 0 0 8px rgba(59, 130, 246, 0.2);
+  box-shadow:
+    inset 0 0 0 1px var(--pb-accent),
+    0 0 8px rgba(59, 130, 246, 0.2);
 }
 
 .input:disabled {
@@ -210,7 +206,9 @@
 
 .inputError:focus {
   border-color: var(--pb-danger);
-  box-shadow: inset 0 0 0 1px var(--pb-danger), 0 0 8px rgba(239, 68, 68, 0.2);
+  box-shadow:
+    inset 0 0 0 1px var(--pb-danger),
+    0 0 8px rgba(239, 68, 68, 0.2);
 }
 
 .inputSuccess {
@@ -219,7 +217,9 @@
 
 .inputSuccess:focus {
   border-color: var(--pb-success);
-  box-shadow: inset 0 0 0 1px var(--pb-success), 0 0 8px rgba(16, 185, 129, 0.2);
+  box-shadow:
+    inset 0 0 0 1px var(--pb-success),
+    0 0 8px rgba(16, 185, 129, 0.2);
 }
 
 /* ── Password Strength ── */
@@ -384,7 +384,7 @@
 .successMessage {
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #10B981;
+  color: #10b981;
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 13px;
@@ -412,7 +412,7 @@
   border: none;
   padding: 0;
   cursor: pointer;
-  color: var(--pb-text-muted, rgba(255,255,255,0.4));
+  color: var(--pb-text-muted, rgba(255, 255, 255, 0.4));
   display: flex;
   align-items: center;
   transition: color 0.15s ease;
@@ -420,7 +420,7 @@
 }
 
 .showPasswordBtn:hover {
-  color: var(--pb-text-primary, rgba(255,255,255,0.8));
+  color: var(--pb-text-primary, rgba(255, 255, 255, 0.8));
 }
 
 /* ---- Progress Indicator (3-step wizard) ---- */

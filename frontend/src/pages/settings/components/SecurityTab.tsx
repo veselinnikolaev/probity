@@ -9,7 +9,7 @@ import styles from '../settings.module.css';
 export function SecurityTab() {
   const { changePasswordMutation } = useProfile();
   const { sessions, revokeSessionMutation } = useSessions();
-  
+
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [revokeSessionId, setRevokeSessionId] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
@@ -64,7 +64,11 @@ export function SecurityTab() {
           {passwordError && <p className={styles.errorText}>{passwordError}</p>}
 
           {!showPasswordChange ? (
-            <ProbityButton variant="secondary" size="md" onClick={() => setShowPasswordChange(true)}>
+            <ProbityButton
+              variant="secondary"
+              size="md"
+              onClick={() => setShowPasswordChange(true)}
+            >
               Change Password
             </ProbityButton>
           ) : (
@@ -82,9 +86,7 @@ export function SecurityTab() {
                 label="New Password"
                 type="password"
                 value={passwordForm.newPassword}
-                onChange={(e) =>
-                  setPasswordForm({ ...passwordForm, newPassword: e.target.value })
-                }
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                 placeholder="At least 8 characters"
               />
               <InputField
@@ -108,7 +110,10 @@ export function SecurityTab() {
                 <ProbityButton
                   variant="secondary"
                   size="md"
-                  onClick={() => { setShowPasswordChange(false); setPasswordError(null); }}
+                  onClick={() => {
+                    setShowPasswordChange(false);
+                    setPasswordError(null);
+                  }}
                 >
                   Cancel
                 </ProbityButton>
@@ -138,9 +143,7 @@ export function SecurityTab() {
                   <div className={styles.sessionInfo}>
                     <p className={styles.sessionDevice}>{session.deviceHint}</p>
                     <p className={styles.sessionLocation}>{session.ipAddress}</p>
-                    <p className={styles.sessionLastActive}>
-                      Last active: {session.lastActiveAt}
-                    </p>
+                    <p className={styles.sessionLastActive}>Last active: {session.lastActiveAt}</p>
                   </div>
                   <ProbityButton
                     variant="secondary"

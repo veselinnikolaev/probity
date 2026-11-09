@@ -44,11 +44,7 @@ export const DeletePortfolioModal: React.FC<DeletePortfolioModalProps> = ({
 
   const footer = (
     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-      <ProbityButton
-        variant="ghost"
-        onClick={onClose}
-        disabled={deleteMutation.isPending}
-      >
+      <ProbityButton variant="ghost" onClick={onClose} disabled={deleteMutation.isPending}>
         Cancel
       </ProbityButton>
       <ProbityButton
@@ -63,13 +59,7 @@ export const DeletePortfolioModal: React.FC<DeletePortfolioModalProps> = ({
   );
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Delete portfolio?"
-      size="sm"
-      footer={footer}
-    >
+    <Modal open={open} onClose={onClose} title="Delete portfolio?" size="sm" footer={footer}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <p
           style={{

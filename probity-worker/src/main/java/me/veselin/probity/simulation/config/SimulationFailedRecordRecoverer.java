@@ -1,6 +1,11 @@
 package me.veselin.probity.simulation.config;
 
+import static org.apache.commons.logging.LogFactory.getLog;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.simulation.dlt.FailureContext;
 import me.veselin.probity.simulation.dlt.SimulationDltEventWriter;
@@ -13,148 +18,147 @@ import org.springframework.kafka.support.serializer.DeserializationException;
 import org.springframework.kafka.support.serializer.SerializationUtils;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.UUID;
-
-import static org.apache.commons.logging.LogFactory.getLog;
-
 @Slf4j
 @Component
 public final class SimulationFailedRecordRecoverer implements ConsumerRecordRecoverer {
 
-    private static final LogAccessor DESERIALIZATION_LOG =
-            new LogAccessor(getLog(SimulationFailedRecordRecoverer.class));
+  private static final LogAccessor DESERIALIZATION_LOG =
+      new LogAccessor(getLog(SimulationFailedRecordRecoverer.class));
 
-    private final SimulationDltEventWriter writer;
-    private final ObjectMapper objectMapper;
+  private final SimulationDltEventWriter writer;
+  private final ObjectMapper objectMapper;
 
-    public SimulationFailedRecordRecoverer(SimulationDltEventWriter writer,
-                                            ObjectMapper objectMapper) {
-        this.writer = writer;
-        this.objectMapper = objectMapper;
+  public SimulationFailedRecordRecoverer(
+      SimulationDltEventWriter writer, ObjectMapper objectMapper) {
+    this.writer = writer;
+    this.objectMapper = objectMapper;
+  }
+
+  @Override
+  public void accept(ConsumerRecord<?, ?> record, Exception exception) {
+    boolean deserializationFailure = isDeserializationFailure(record, exception);
+    SimulationAttemptFailedException attemptFailure = findAttemptFailure(exception);
+
+    UUID simulationId =
+        attemptFailure == null ? simulationIdFromRecord(record) : attemptFailure.simulationId();
+    UUID attemptId =
+        attemptFailure == null ? syntheticAttemptId(record) : attemptFailure.attemptId();
+
+    if (!deserializationFailure && attemptFailure == null) {
+      throw new IllegalStateException(
+          "Simulation listener failure reached recovery without an attempt fence", exception);
     }
 
-    @Override
-    public void accept(ConsumerRecord<?, ?> record, Exception exception) {
-        boolean deserializationFailure = isDeserializationFailure(record, exception);
-        SimulationAttemptFailedException attemptFailure = findAttemptFailure(exception);
+    FailureContext context =
+        new FailureContext(
+            UUID.randomUUID(),
+            simulationId,
+            attemptId,
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            record.key() == null ? null : record.key().toString(),
+            payloadBytes(record, deserializationFailure),
+            exception.getClass().getName(),
+            safeDescription(exception),
+            Instant.now());
 
-        UUID simulationId = attemptFailure == null
-                ? simulationIdFromRecord(record)
-                : attemptFailure.simulationId();
-        UUID attemptId = attemptFailure == null
-                ? syntheticAttemptId(record)
-                : attemptFailure.attemptId();
-
-        if (!deserializationFailure && attemptFailure == null) {
-            throw new IllegalStateException(
-                    "Simulation listener failure reached recovery without an attempt fence", exception);
-        }
-
-        FailureContext context = new FailureContext(
-                UUID.randomUUID(),
-                simulationId,
-                attemptId,
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                record.key() == null ? null : record.key().toString(),
-                payloadBytes(record, deserializationFailure),
-                exception.getClass().getName(),
-                safeDescription(exception),
-                Instant.now());
-
-        WriteResult result;
-        if (simulationId == null) {
-            result = writer.recordUnattributableFailure(context);
-        } else if (deserializationFailure) {
-            result = writer.recordUnclaimedFailure(context);
-        } else {
-            result = writer.recordAttemptFailure(context);
-        }
-
-        if (result == WriteResult.NOT_OWNER) {
-            log.debug("Did not record DLT event for source {}-{}@{}; simulation is no longer owned",
-                    record.topic(), record.partition(), record.offset());
-        } else {
-            log.info("Persisted durable DLT event {} for source {}-{}@{}",
-                    context.dltEventId(), record.topic(), record.partition(), record.offset());
-        }
+    WriteResult result;
+    if (simulationId == null) {
+      result = writer.recordUnattributableFailure(context);
+    } else if (deserializationFailure) {
+      result = writer.recordUnclaimedFailure(context);
+    } else {
+      result = writer.recordAttemptFailure(context);
     }
 
-    private boolean isDeserializationFailure(ConsumerRecord<?, ?> record, Exception exception) {
-        if (exception instanceof org.apache.kafka.common.errors.SerializationException) {
-            return true;
-        }
-        for (Throwable current = exception; current != null; current = current.getCause()) {
-            if (current instanceof DeserializationException) {
-                return true;
-            }
-        }
-        return SerializationUtils.getExceptionFromHeader(
-                record,
-                SerializationUtils.VALUE_DESERIALIZER_EXCEPTION_HEADER,
-                DESERIALIZATION_LOG) != null;
+    if (result == WriteResult.NOT_OWNER) {
+      log.debug(
+          "Did not record DLT event for source {}-{}@{}; simulation is no longer owned",
+          record.topic(),
+          record.partition(),
+          record.offset());
+    } else {
+      log.info(
+          "Persisted durable DLT event {} for source {}-{}@{}",
+          context.dltEventId(),
+          record.topic(),
+          record.partition(),
+          record.offset());
     }
+  }
 
-    private byte[] payloadBytes(ConsumerRecord<?, ?> record, boolean deserializationFailure) {
-        if (deserializationFailure) {
-            DeserializationException deserialization = SerializationUtils.getExceptionFromHeader(
-                    record,
-                    SerializationUtils.VALUE_DESERIALIZER_EXCEPTION_HEADER,
-                    DESERIALIZATION_LOG);
-            if (deserialization != null && deserialization.getData() != null) {
-                return deserialization.getData();
-            }
-        }
-        if (record.value() == null) {
-            return null;
-        }
-        if (record.value() instanceof byte[] bytes) {
-            return bytes.clone();
-        }
-        if (record.value() instanceof String value) {
-            return value.getBytes(StandardCharsets.UTF_8);
-        }
-        try {
-            return objectMapper.writeValueAsBytes(record.value());
-        } catch (Exception serializationFailure) {
-            throw new IllegalStateException("Could not serialize recovered Kafka value", serializationFailure);
-        }
+  private boolean isDeserializationFailure(ConsumerRecord<?, ?> record, Exception exception) {
+    if (exception instanceof org.apache.kafka.common.errors.SerializationException) {
+      return true;
     }
+    for (Throwable current = exception; current != null; current = current.getCause()) {
+      if (current instanceof DeserializationException) {
+        return true;
+      }
+    }
+    return SerializationUtils.getExceptionFromHeader(
+            record, SerializationUtils.VALUE_DESERIALIZER_EXCEPTION_HEADER, DESERIALIZATION_LOG)
+        != null;
+  }
 
-    private UUID simulationIdFromRecord(ConsumerRecord<?, ?> record) {
-        if (record.key() == null) {
-            return null;
-        }
-        try {
-            return UUID.fromString(record.key().toString());
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
+  private byte[] payloadBytes(ConsumerRecord<?, ?> record, boolean deserializationFailure) {
+    if (deserializationFailure) {
+      DeserializationException deserialization =
+          SerializationUtils.getExceptionFromHeader(
+              record, SerializationUtils.VALUE_DESERIALIZER_EXCEPTION_HEADER, DESERIALIZATION_LOG);
+      if (deserialization != null && deserialization.getData() != null) {
+        return deserialization.getData();
+      }
     }
+    if (record.value() == null) {
+      return null;
+    }
+    if (record.value() instanceof byte[] bytes) {
+      return bytes.clone();
+    }
+    if (record.value() instanceof String value) {
+      return value.getBytes(StandardCharsets.UTF_8);
+    }
+    try {
+      return objectMapper.writeValueAsBytes(record.value());
+    } catch (Exception serializationFailure) {
+      throw new IllegalStateException(
+          "Could not serialize recovered Kafka value", serializationFailure);
+    }
+  }
 
-    private UUID syntheticAttemptId(ConsumerRecord<?, ?> record) {
-        return UUID.nameUUIDFromBytes(
-                ("dlt:" + record.topic() + ":" + record.partition() + ":" + record.offset())
-                        .getBytes(StandardCharsets.UTF_8));
+  private UUID simulationIdFromRecord(ConsumerRecord<?, ?> record) {
+    if (record.key() == null) {
+      return null;
     }
+    try {
+      return UUID.fromString(record.key().toString());
+    } catch (IllegalArgumentException ignored) {
+      return null;
+    }
+  }
 
-    private SimulationAttemptFailedException findAttemptFailure(Throwable failure) {
-        for (Throwable current = failure; current != null; current = current.getCause()) {
-            if (current instanceof SimulationAttemptFailedException attemptFailure) {
-                return attemptFailure;
-            }
-        }
-        return null;
-    }
+  private UUID syntheticAttemptId(ConsumerRecord<?, ?> record) {
+    return UUID.nameUUIDFromBytes(
+        ("dlt:" + record.topic() + ":" + record.partition() + ":" + record.offset())
+            .getBytes(StandardCharsets.UTF_8));
+  }
 
-    private String safeDescription(Throwable failure) {
-        String message = failure.getMessage();
-        if (message == null) {
-            return null;
-        }
-        return message.length() <= 4000 ? message : message.substring(0, 4000);
+  private SimulationAttemptFailedException findAttemptFailure(Throwable failure) {
+    for (Throwable current = failure; current != null; current = current.getCause()) {
+      if (current instanceof SimulationAttemptFailedException attemptFailure) {
+        return attemptFailure;
+      }
     }
+    return null;
+  }
+
+  private String safeDescription(Throwable failure) {
+    String message = failure.getMessage();
+    if (message == null) {
+      return null;
+    }
+    return message.length() <= 4000 ? message : message.substring(0, 4000);
+  }
 }

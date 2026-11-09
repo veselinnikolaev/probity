@@ -14,15 +14,15 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Slf4j
 public class UserRegisteredEventListener {
 
-    private final EmailVerificationPort emailVerificationPort;
+  private final EmailVerificationPort emailVerificationPort;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Async("ioExecutor")
-    public void onUserRegistered(UserRegisteredEvent event) {
-        try {
-            emailVerificationPort.sendVerificationEmail(event.email());
-        } catch (Exception e) {
-            log.error("Failed to send verification email to {}: {}", event.email(), e.getMessage(), e);
-        }
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  @Async("ioExecutor")
+  public void onUserRegistered(UserRegisteredEvent event) {
+    try {
+      emailVerificationPort.sendVerificationEmail(event.email());
+    } catch (Exception e) {
+      log.error("Failed to send verification email to {}: {}", event.email(), e.getMessage(), e);
     }
+  }
 }

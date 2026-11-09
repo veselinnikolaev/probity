@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from 'react';
 
 interface TooltipProps {
   content: React.ReactNode;
   children: React.ReactElement;
-  placement?: "top" | "bottom" | "left" | "right";
+  placement?: 'top' | 'bottom' | 'left' | 'right';
   delay?: number;
 }
 
-export function Tooltip({ content, children, placement = "top", delay = 200 }: TooltipProps) {
+export function Tooltip({ content, children, placement = 'top', delay = 200 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement>(null);
@@ -31,19 +31,19 @@ export function Tooltip({ content, children, placement = "top", delay = 200 }: T
     let left = 0;
 
     switch (placement) {
-      case "top":
+      case 'top':
         top = tEl.top - ttEl.height - gap;
         left = tEl.left + (tEl.width - ttEl.width) / 2;
         break;
-      case "bottom":
+      case 'bottom':
         top = tEl.bottom + gap;
         left = tEl.left + (tEl.width - ttEl.width) / 2;
         break;
-      case "left":
+      case 'left':
         top = tEl.top + (tEl.height - ttEl.height) / 2;
         left = tEl.left - ttEl.width - gap;
         break;
-      case "right":
+      case 'right':
         top = tEl.top + (tEl.height - ttEl.height) / 2;
         left = tEl.right + gap;
         break;
@@ -56,7 +56,7 @@ export function Tooltip({ content, children, placement = "top", delay = 200 }: T
   }, [visible, placement]);
 
   const child = React.isValidElement(children)
-      ? React.cloneElement(children as React.ReactElement<any>, {
+    ? React.cloneElement(children as React.ReactElement<any>, {
         // We merge the refs if the child already has one
         ref: (node: HTMLElement | null) => {
           // Update our local ref
@@ -83,19 +83,47 @@ export function Tooltip({ content, children, placement = "top", delay = 200 }: T
           (children.props as any).onBlur?.(e);
         },
       })
-      : children;
+    : children;
 
   const arrowStyle: React.CSSProperties = {
-    position: "absolute",
+    position: 'absolute',
     width: 0,
     height: 0,
   };
 
   const arrowDir: Record<string, React.CSSProperties> = {
-    top: { bottom: "-5px", left: "50%", transform: "translateX(-50%)", borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "5px solid #131B2E" },
-    bottom: { top: "-5px", left: "50%", transform: "translateX(-50%)", borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "5px solid #131B2E" },
-    left: { right: "-5px", top: "50%", transform: "translateY(-50%)", borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderLeft: "5px solid #131B2E" },
-    right: { left: "-5px", top: "50%", transform: "translateY(-50%)", borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderRight: "5px solid #131B2E" },
+    top: {
+      bottom: '-5px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      borderLeft: '5px solid transparent',
+      borderRight: '5px solid transparent',
+      borderTop: '5px solid #131B2E',
+    },
+    bottom: {
+      top: '-5px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      borderLeft: '5px solid transparent',
+      borderRight: '5px solid transparent',
+      borderBottom: '5px solid #131B2E',
+    },
+    left: {
+      right: '-5px',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      borderTop: '5px solid transparent',
+      borderBottom: '5px solid transparent',
+      borderLeft: '5px solid #131B2E',
+    },
+    right: {
+      left: '-5px',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      borderTop: '5px solid transparent',
+      borderBottom: '5px solid transparent',
+      borderRight: '5px solid #131B2E',
+    },
   };
 
   return (
@@ -105,34 +133,36 @@ export function Tooltip({ content, children, placement = "top", delay = 200 }: T
         <div
           ref={tooltipRef}
           style={{
-            position: "fixed",
+            position: 'fixed',
             top: coords.top,
             left: coords.left,
             zIndex: 10000,
-            backgroundColor: "#131B2E",
-            border: "1px solid #1E2D45",
-            borderRadius: "6px",
-            padding: "7px 10px",
-            maxWidth: "240px",
-            pointerEvents: "none",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(59,130,246,0.08)",
-            animation: "pb-tooltip-in 0.1s ease-out",
+            backgroundColor: '#131B2E',
+            border: '1px solid #1E2D45',
+            borderRadius: '6px',
+            padding: '7px 10px',
+            maxWidth: '240px',
+            pointerEvents: 'none',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(59,130,246,0.08)',
+            animation: 'pb-tooltip-in 0.1s ease-out',
           }}
         >
           <div style={{ ...arrowStyle, ...arrowDir[placement] }} />
-          {typeof content === "string" ? (
+          {typeof content === 'string' ? (
             <span
               style={{
-                fontFamily: "var(--font-body)",
-                fontSize: "12px",
-                color: "var(--pb-text-primary)",
+                fontFamily: 'var(--font-body)',
+                fontSize: '12px',
+                color: 'var(--pb-text-primary)',
                 lineHeight: 1.5,
-                display: "block",
+                display: 'block',
               }}
             >
               {content}
             </span>
-          ) : content}
+          ) : (
+            content
+          )}
           <style>{`
             @keyframes pb-tooltip-in {
               from{opacity:0;transform:translateY(2px)}

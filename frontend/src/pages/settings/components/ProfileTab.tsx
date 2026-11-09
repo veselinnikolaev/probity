@@ -42,16 +42,16 @@ export function ProfileTab() {
 
   const userInitials = profile.data
     ? ((profile.data.firstName?.[0] ?? '') + (profile.data.lastName?.[0] ?? '')).toUpperCase() ||
-    profile.data.username?.[0]?.toUpperCase() ||
-    'U'
+      profile.data.username?.[0]?.toUpperCase() ||
+      'U'
     : 'U';
 
   const memberSince = profile.data?.memberSince
     ? new Date(profile.data.memberSince).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
     : '…';
 
   return (
@@ -93,12 +93,7 @@ export function ProfileTab() {
             value={profileForm.lastName}
             onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
           />
-          <InputField
-            label="Email"
-            type="email"
-            value={profile.data?.email ?? ''}
-            disabled
-          />
+          <InputField label="Email" type="email" value={profile.data?.email ?? ''} disabled />
           <div className={styles.formActions}>
             <ProbityButton
               variant="primary"
@@ -111,7 +106,10 @@ export function ProfileTab() {
             <ProbityButton
               variant="secondary"
               size="md"
-              onClick={() => { setIsEditingProfile(false); setProfileError(null); }}
+              onClick={() => {
+                setIsEditingProfile(false);
+                setProfileError(null);
+              }}
             >
               Cancel
             </ProbityButton>

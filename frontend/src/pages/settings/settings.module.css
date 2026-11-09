@@ -74,7 +74,7 @@
 .navItemActive {
   background-color: rgba(59, 130, 246, 0.15);
   border-color: rgba(59, 130, 246, 0.3);
-  color: #60A5FA;
+  color: #60a5fa;
 }
 
 .navItemIcon {
@@ -86,7 +86,7 @@
 }
 
 .navItemDanger {
-  color: #EF4444;
+  color: #ef4444;
 }
 
 .navItemDanger:hover {
@@ -97,7 +97,7 @@
 .navItemDanger.navItemActive {
   background-color: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.3);
-  color: #EF4444;
+  color: #ef4444;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3B82F6, #1E40AF);
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -395,7 +395,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #EF4444;
+  color: #ef4444;
 }
 
 .dangerZoneDescription {

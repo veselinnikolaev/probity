@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { portfolioService } from '@/services/portfolio';
-import { AsyncState, createLoadingState, createSuccessState, createErrorState } from '@/types/shared';
+import {
+  AsyncState,
+  createLoadingState,
+  createSuccessState,
+  createErrorState,
+} from '@/types/shared';
 import type {
   PortfolioSummary,
   Position,
   CompositionEntry,
   RiskAlert,
-  VolatilityPoint
+  VolatilityPoint,
 } from '@/types/portfolio';
 
 export interface PortfolioDetail {
@@ -18,10 +23,11 @@ export interface PortfolioDetail {
 }
 
 export function usePortfolioDetail(
-    portfolioId: string,
-    dateRange: string
+  portfolioId: string,
+  dateRange: string,
 ): AsyncState<PortfolioDetail> & { refetch: () => void } {
-  const [state, setState] = useState<AsyncState<PortfolioDetail>>(createLoadingState<PortfolioDetail>());
+  const [state, setState] =
+    useState<AsyncState<PortfolioDetail>>(createLoadingState<PortfolioDetail>());
 
   const fetch = useCallback(async () => {
     if (!portfolioId) {
@@ -43,6 +49,8 @@ export function usePortfolioDetail(
     }
   }, [portfolioId, dateRange]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
   return { ...state, refetch: fetch };
 }

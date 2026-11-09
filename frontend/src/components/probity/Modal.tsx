@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -8,22 +8,32 @@ interface ModalProps {
   subtitle?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-const SIZE_WIDTHS = { sm: "380px", md: "520px", lg: "680px", xl: "860px" };
+const SIZE_WIDTHS = { sm: '380px', md: '520px', lg: '680px', xl: '860px' };
 
-export function Modal({ open, onClose, title, subtitle, children, footer, size = "md" }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  footer,
+  size = 'md',
+}: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleKey);
-    document.body.style.overflow = "hidden";
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = "";
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = '';
     };
   }, [open, onClose]);
 
@@ -32,45 +42,48 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
   return createPortal(
     <div
       ref={overlayRef}
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose();
+      }}
       style={{
-        position: "fixed",
+        position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        backgroundColor: "rgba(10,13,18,0.8)",
-        backdropFilter: "blur(4px)",
-        animation: "pb-modal-overlay 0.15s ease-out",
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        backgroundColor: 'rgba(10,13,18,0.8)',
+        backdropFilter: 'blur(4px)',
+        animation: 'pb-modal-overlay 0.15s ease-out',
       }}
     >
       <div
         style={{
-          backgroundColor: "var(--pb-surface-elevated)",
-          border: "1px solid var(--pb-border)",
-          borderRadius: "10px",
-          width: "100%",
+          backgroundColor: 'var(--pb-surface-elevated)',
+          border: '1px solid var(--pb-border)',
+          borderRadius: '10px',
+          width: '100%',
           maxWidth: SIZE_WIDTHS[size],
-          maxHeight: "calc(100vh - 48px)",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.06)",
-          animation: "pb-modal-in 0.18s ease-out",
-          overflow: "hidden",
-          position: "relative",
+          maxHeight: 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.06)',
+          animation: 'pb-modal-in 0.18s ease-out',
+          overflow: 'hidden',
+          position: 'relative',
         }}
       >
         {/* Top accent line */}
         <div
           style={{
-            position: "absolute",
+            position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            height: "1px",
-            background: "linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.5) 50%, transparent 100%)",
+            height: '1px',
+            background:
+              'linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.5) 50%, transparent 100%)',
           }}
         />
 
@@ -78,12 +91,12 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
         {(title || subtitle) && (
           <div
             style={{
-              padding: "20px 24px 16px",
-              borderBottom: "1px solid var(--pb-border)",
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: "12px",
+              padding: '20px 24px 16px',
+              borderBottom: '1px solid var(--pb-border)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: '12px',
               flexShrink: 0,
             }}
           >
@@ -91,10 +104,10 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
               {title && (
                 <h3
                   style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "16px",
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '16px',
                     fontWeight: 700,
-                    color: "var(--pb-text-primary)",
+                    color: 'var(--pb-text-primary)',
                     margin: 0,
                   }}
                 >
@@ -104,10 +117,10 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
               {subtitle && (
                 <p
                   style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: "12px",
-                    color: "var(--pb-text-secondary)",
-                    margin: "4px 0 0",
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '12px',
+                    color: 'var(--pb-text-secondary)',
+                    margin: '4px 0 0',
                   }}
                 >
                   {subtitle}
@@ -118,28 +131,28 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
             <button
               onClick={onClose}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "28px",
-                height: "28px",
-                borderRadius: "6px",
-                border: "1px solid var(--pb-border)",
-                backgroundColor: "transparent",
-                color: "var(--pb-text-secondary)",
-                cursor: "pointer",
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                border: '1px solid var(--pb-border)',
+                backgroundColor: 'transparent',
+                color: 'var(--pb-text-secondary)',
+                cursor: 'pointer',
                 flexShrink: 0,
-                fontSize: "16px",
+                fontSize: '16px',
                 lineHeight: 1,
-                transition: "all 0.12s",
+                transition: 'all 0.12s',
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(30,45,69,0.8)";
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--pb-text-primary)";
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'rgba(30,45,69,0.8)';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--pb-text-primary)';
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--pb-text-secondary)";
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--pb-text-secondary)';
               }}
               aria-label="Close"
             >
@@ -151,8 +164,8 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
         {/* Body */}
         <div
           style={{
-            padding: "20px 24px",
-            overflowY: "auto",
+            padding: '20px 24px',
+            overflowY: 'auto',
             flex: 1,
           }}
         >
@@ -163,14 +176,14 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
         {footer && (
           <div
             style={{
-              padding: "16px 24px",
-              borderTop: "1px solid var(--pb-border)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              gap: "8px",
+              padding: '16px 24px',
+              borderTop: '1px solid var(--pb-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '8px',
               flexShrink: 0,
-              backgroundColor: "rgba(10,13,18,0.3)",
+              backgroundColor: 'rgba(10,13,18,0.3)',
             }}
           >
             {footer}
@@ -188,6 +201,6 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
         }
       `}</style>
     </div>,
-    document.body
+    document.body,
   );
 }
