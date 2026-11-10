@@ -131,7 +131,14 @@ public class SecurityConfiguration {
             "If-Modified-Since",
             "X-XSRF-TOKEN",
             "Idempotency-Key"));
-    config.setExposedHeaders(List.of("ETag", "Last-Modified", "X-RateLimit-Remaining", "X-Cache"));
+    config.setExposedHeaders(
+        List.of(
+            "ETag",
+            "Last-Modified",
+            "X-RateLimit-Remaining",
+            "X-Cache",
+            "Idempotency-Replayed",
+            "Retry-After"));
     config.setAllowCredentials(true);
     config.setMaxAge(3600L); // cache preflight for 1 hour
 

@@ -19,6 +19,9 @@ import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.event.SimulationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -42,6 +45,8 @@ class SimulationRunAsyncRequestIntegrationTest extends BaseAsyncSimulationIntegr
    * request contract does not include the publish succeeding.
    */
   @MockitoBean private SimulationEventPublisher simulationEventPublisher;
+  @Autowired private RedisTemplate<String, Object> redisTemplate;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @DynamicPropertySource
   static void kafkaProperties(DynamicPropertyRegistry registry) {
@@ -129,6 +134,91 @@ class SimulationRunAsyncRequestIntegrationTest extends BaseAsyncSimulationIntegr
         () ->
             "Location must address the status endpoint of the row just created, but was: "
                 + location);
+  }
+
+  @Test
+  @DisplayName("M4.1: a completed request is replayed from PostgreSQL after Redis is flushed")
+  void runAsync_replaysDurableResponseAfterRedisFlush() throws Exception {
+    AuthResult auth = login();
+    String key = "m41-durable-" + UUID.randomUUID();
+    String body = runRequestBody(100, 10, 0.95);
+
+    MvcResult first =
+        mockMvc
+            .perform(
+                withCsrf(
+                    post(ApiRoutes.Simulations.RUN_ASYNC)
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)))
+            .andExpect(status().isAccepted())
+            .andReturn();
+
+    redisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
+
+    mockMvc
+        .perform(
+            withCsrf(
+                post(ApiRoutes.Simulations.RUN_ASYNC)
+                    .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                    .header("Idempotency-Key", key)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)))
+        .andExpect(status().isAccepted())
+        .andExpect(header().string("Idempotency-Replayed", "true"))
+        .andExpect(
+            jsonPath("$.id")
+                .value(
+                    objectMapper
+                        .readTree(first.getResponse().getContentAsString())
+                        .get("id")
+                        .asText()));
+  }
+
+  @Test
+  @DisplayName("M4.1: a truncated durable response is reconstructed from the simulation row")
+  void runAsync_reconstructsTruncatedDurableResponse() throws Exception {
+    AuthResult auth = login();
+    String key = "m41-truncated-" + UUID.randomUUID();
+    String body = runRequestBody(100, 10, 0.95);
+
+    MvcResult first =
+                        mockMvc
+                            .perform(
+                                withCsrf(
+                                    post(ApiRoutes.Simulations.RUN_ASYNC)
+                                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                                        .header("Idempotency-Key", key)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(body)))
+                            .andExpect(status().isAccepted())
+                            .andReturn();
+
+    jdbcTemplate.update(
+                        """
+                        UPDATE idempotency_record
+                           SET response_body = NULL, response_truncated = TRUE,
+                               response_reconstruction_metadata = ?
+                         WHERE idempotency_key = ?
+                        """,
+                        first.getResponse().getContentAsString(),
+                        key);
+    redisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
+
+    mockMvc
+                        .perform(
+                            withCsrf(
+                                post(ApiRoutes.Simulations.RUN_ASYNC)
+                                    .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                                    .header("Idempotency-Key", key)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body)))
+                        .andExpect(status().isAccepted())
+                        .andExpect(header().string("Idempotency-Replayed", "true"))
+                        .andExpect(
+                            content()
+                                .json(first.getResponse().getContentAsString()));
   }
 
   private String runRequestBody(int paths, int days, double confidence) {
