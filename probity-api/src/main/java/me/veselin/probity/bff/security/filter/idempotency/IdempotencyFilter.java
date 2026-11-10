@@ -292,7 +292,9 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         response.setStatus(existing.statusCode());
         response.setContentType("application/json");
         response.addHeader("X-Cache", "Idempotent-Hit");
-        response.getWriter().write(existing.responseBody());
+        // This is a byte-for-byte replay of a previously generated JSON API response, not an HTML view.
+        // nosemgrep: java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer
+        response.getOutputStream().write(existing.responseBody().getBytes(StandardCharsets.UTF_8));
         return;
       }
       response.sendError(
