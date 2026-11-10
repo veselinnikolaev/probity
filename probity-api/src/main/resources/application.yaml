@@ -36,9 +36,13 @@ probity:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   idempotency:
+    enabled: ${IDEMPOTENCY_DURABLE_ENABLED:true}
     key-prefix: "probity:idempotency:"
     ttl:
-      hours: ${IDEMPOTENCY_TTL_HOURS:24}
+      hours: ${IDEMPOTENCY_TTL_HOURS:72}
+    lease: ${IDEMPOTENCY_LEASE:30s}
+    response-max-bytes: ${IDEMPOTENCY_RESPONSE_MAX_BYTES:16384}
+    cleanup-interval: ${IDEMPOTENCY_CLEANUP_INTERVAL:1h}
     key:
       min-length: 8
       max-length: 256
