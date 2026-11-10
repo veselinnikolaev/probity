@@ -1,0 +1,9 @@
+# Reviewed exceptions for the current Spring Boot 3.5 / Spring Framework 6.2 line.
+# Revisit by 2027-01-31 when Spring Boot 4 / Spring Framework 7 compatibility is assessed.
+CVE-2026-47884 exp:2027-01-31
+CVE-2026-47890 exp:2027-01-31
+CVE-2026-47892 exp:2027-01-31
+
+# MCP SDK 1.0.0 is the first reported fixed version; Spring AI 1.1.8 currently
+# resolves MCP 0.18.3. Revisit by 2027-01-31 with the next Spring AI line.
+CVE-2026-35568 exp:2027-01-31
