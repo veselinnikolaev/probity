@@ -41,6 +41,9 @@ public class SimulationProperties {
    */
   private Duration unclaimableBackoff = Duration.ofSeconds(1);
 
+  /** Whether messages missing both generation carriers may use legacy generation 1. */
+  private boolean legacyGenerationDefault = false;
+
   /**
    * Maximum number of {@code allPaths} entries the sampled-paths endpoint ({@code GET
    * /api/v1/simulations/{id}/paths}) serves when the caller does not pass an explicit {@code n}

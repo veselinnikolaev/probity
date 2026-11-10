@@ -16,5 +16,50 @@ public record SimulationRequestedEvent(
     Double assumedReturnPercent,
     Double assumedVolatilityPercent,
     Map<String, BigDecimal> marketDataSnapshot,
-    Instant occurredAt)
-    implements DomainEvent {}
+    Instant occurredAt,
+    Integer dispatchGeneration)
+    implements DomainEvent {
+
+  public SimulationRequestedEvent(
+      UUID simulationId,
+      UUID portfolioId,
+      UUID userId,
+      int numberOfSimulations,
+      int timeHorizonDays,
+      double confidenceLevel,
+      Double assumedReturnPercent,
+      Double assumedVolatilityPercent,
+      Map<String, BigDecimal> marketDataSnapshot,
+      Instant occurredAt) {
+    this(
+        simulationId,
+        portfolioId,
+        userId,
+        numberOfSimulations,
+        timeHorizonDays,
+        confidenceLevel,
+        assumedReturnPercent,
+        assumedVolatilityPercent,
+        marketDataSnapshot,
+        occurredAt,
+        null);
+  }
+
+  public SimulationRequestedEvent withDispatchGeneration(int generation) {
+    if (generation < 1) {
+      throw new IllegalArgumentException("dispatchGeneration must be positive");
+    }
+    return new SimulationRequestedEvent(
+        simulationId,
+        portfolioId,
+        userId,
+        numberOfSimulations,
+        timeHorizonDays,
+        confidenceLevel,
+        assumedReturnPercent,
+        assumedVolatilityPercent,
+        marketDataSnapshot,
+        occurredAt,
+        generation);
+  }
+}

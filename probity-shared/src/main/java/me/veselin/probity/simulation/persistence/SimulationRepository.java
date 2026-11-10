@@ -58,6 +58,16 @@ public class SimulationRepository {
   @Transactional
   public Optional<Simulation> complete(
       UUID id, BigDecimal currentValue, SimulationPayload payload, Instant fenceToken) {
+    return complete(id, currentValue, payload, fenceToken, 1);
+  }
+
+  @Transactional
+  public Optional<Simulation> complete(
+      UUID id,
+      BigDecimal currentValue,
+      SimulationPayload payload,
+      Instant fenceToken,
+      int generation) {
     List<SimulationPayload.SimulatedPath> paths = payload.allPaths();
     int updated =
         jpaRepository.completeIfClaimHeld(
@@ -67,7 +77,8 @@ public class SimulationRepository {
             payload.withoutAllPaths(),
             currentValue,
             fenceToken,
-            now());
+            now(),
+            generation);
     // The UPDATE above is the fence: only a row this worker still owns may gain a
     // paths row, and it must be this transaction so the two halves cannot separate.
     if (updated > 0 && !paths.isEmpty()) {
@@ -89,12 +100,17 @@ public class SimulationRepository {
    * @return true if the row was still claimed by this worker and is now {@code PENDING}
    */
   public boolean releaseToPending(UUID id, Instant fenceToken) {
+    return releaseToPending(id, fenceToken, 1);
+  }
+
+  public boolean releaseToPending(UUID id, Instant fenceToken, int generation) {
     return jpaRepository.releaseIfClaimHeld(
             id,
             SimulationStatus.PROCESSING.name(),
             SimulationStatus.PENDING.name(),
             fenceToken,
-            now())
+            now(),
+            generation)
         > 0;
   }
 
@@ -105,8 +121,16 @@ public class SimulationRepository {
    * @return true if the row was pending and is now {@code FAILED}
    */
   public boolean markFailedIfPending(UUID id) {
+    return markFailedIfPending(id, 1);
+  }
+
+  public boolean markFailedIfPending(UUID id, int generation) {
     return jpaRepository.markFailedIfPending(
-            id, SimulationStatus.PENDING.name(), SimulationStatus.FAILED.name(), now())
+            id,
+            SimulationStatus.PENDING.name(),
+            SimulationStatus.FAILED.name(),
+            now(),
+            generation)
         > 0;
   }
 
@@ -124,12 +148,22 @@ public class SimulationRepository {
    * @return the fence token if the row was claimed, empty if it was not claimable
    */
   public Optional<Claim> claimForProcessingWithAttempt(UUID id, java.time.Duration lease) {
+    return claimForProcessingWithAttempt(id, 1, lease);
+  }
+
+  public Optional<Claim> claimForProcessingWithAttempt(
+      UUID id, int generation, java.time.Duration lease) {
     Instant now = now();
     UUID attemptId = UUID.randomUUID();
     int updated =
         jpaRepository.claimForProcessing(
-            id, SimulationStatus.PROCESSING.name(), now.minus(lease), now, attemptId);
-    return updated > 0 ? Optional.of(new Claim(now, attemptId)) : Optional.empty();
+            id,
+            SimulationStatus.PROCESSING.name(),
+            now.minus(lease),
+            now,
+            attemptId,
+            generation);
+    return updated > 0 ? Optional.of(new Claim(now, attemptId, generation)) : Optional.empty();
   }
 
   /**
@@ -142,12 +176,21 @@ public class SimulationRepository {
 
   /** Marks a pending simulation failed only when the supplied attempt still owns it. */
   public boolean markFailedForAttempt(UUID id, UUID attemptId) {
+    return markFailedForAttempt(id, attemptId, 1);
+  }
+
+  public boolean markFailedForAttempt(UUID id, UUID attemptId, int generation) {
     return jpaRepository.markFailedForAttempt(
-            id, SimulationStatus.PENDING.name(), SimulationStatus.FAILED.name(), attemptId, now())
+            id,
+            SimulationStatus.PENDING.name(),
+            SimulationStatus.FAILED.name(),
+            attemptId,
+            now(),
+            generation)
         > 0;
   }
 
-  public record Claim(Instant fenceToken, UUID attemptId) {}
+  public record Claim(Instant fenceToken, UUID attemptId, int dispatchGeneration) {}
 
   /**
    * The single clock reading every conditional write stamps with, at the precision the column
@@ -185,8 +228,16 @@ public class SimulationRepository {
    * what keeps a soft-deleted row from reading as a runnable {@code PENDING} one.
    */
   public Optional<SimulationStatus> findLiveStatus(UUID id) {
-    return jpaRepository.findLiveStatusById(id).map(SimulationStatus::valueOf);
+    return findLiveState(id).map(LiveState::status);
   }
+
+  public Optional<LiveState> findLiveState(UUID id) {
+    return jpaRepository
+        .findLiveStateById(id)
+        .map(row -> new LiveState(SimulationStatus.valueOf((String) row[0]), ((Number) row[1]).intValue()));
+  }
+
+  public record LiveState(SimulationStatus status, int dispatchGeneration) {}
 
   public Optional<Simulation> findByIdAndUserId(UUID id, UUID userId) {
     return jpaRepository.findByIdAndUserId(id, userId).map(SimulationMapper::toDomain);

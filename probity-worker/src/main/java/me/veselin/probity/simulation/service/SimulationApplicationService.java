@@ -145,7 +145,8 @@ public class SimulationApplicationService implements SimulationPort {
                   assumedReturnPercent,
                   assumedVolatilityPercent,
                   snapshot,
-                  Instant.now()));
+                  Instant.now(),
+                  1));
     } catch (Exception e) {
       throw new IllegalStateException("Failed to serialize simulation event", e);
     }
@@ -174,7 +175,8 @@ public class SimulationApplicationService implements SimulationPort {
       Double assumedVolatilityPercent,
       UUID userId,
       Map<String, BigDecimal> marketDataSnapshot,
-      Instant fenceToken) {
+      Instant fenceToken,
+      int dispatchGeneration) {
     log.info(
         "Application service: executing async simulation id={} portfolioId={} fence={}",
         simulationId,
@@ -190,7 +192,8 @@ public class SimulationApplicationService implements SimulationPort {
         assumedVolatilityPercent,
         userId,
         marketDataSnapshot,
-        fenceToken);
+        fenceToken,
+        dispatchGeneration);
   }
 
   /**

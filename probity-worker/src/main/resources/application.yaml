@@ -23,6 +23,7 @@ probity:
     # the same record is redelivered. Replaces the previous whole-consumer nack: only the
     # owning partition is paused, so sibling partitions keep flowing.
     unclaimable-backoff: ${SIMULATION_UNCLAIMABLE_BACKOFF:1s}
+    legacy-generation-default: ${PROBITY_DISPATCH_LEGACY_GENERATION_DEFAULT:false}
     # Q9b (docs/plans/Q9_RESULT_PAYLOAD_STORAGE.md §9/§10): default number of paths the sampled
     # endpoint GET /api/v1/simulations/{id}/paths serves when the caller passes no n. 100 is
     # an unmeasured first guess (owner-bounded "at most N"), cutting the paths body from

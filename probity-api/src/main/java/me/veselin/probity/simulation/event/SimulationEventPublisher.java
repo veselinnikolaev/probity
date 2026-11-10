@@ -1,6 +1,7 @@
 package me.veselin.probity.simulation.event;
 
 import java.util.concurrent.CompletableFuture;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.common.domain.event.DomainEvent;
@@ -8,6 +9,9 @@ import me.veselin.probity.common.domain.event.DomainEventPublisher;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
@@ -36,8 +40,20 @@ public class SimulationEventPublisher implements DomainEventPublisher {
           "Publishing SimulationRequestedEvent to Kafka: simulationId={}",
           simulationEvent.simulationId());
 
-      CompletableFuture<SendResult<String, DomainEvent>> future =
-          kafkaTemplate.send(simulationRequestedTopic, key, event);
+      SimulationRequestedEvent generationOneEvent =
+          simulationEvent.dispatchGeneration() == null
+              ? simulationEvent.withDispatchGeneration(1)
+              : simulationEvent;
+      Message<DomainEvent> message =
+          MessageBuilder.withPayload((DomainEvent) generationOneEvent)
+              .setHeader(KafkaHeaders.TOPIC, simulationRequestedTopic)
+              .setHeader(KafkaHeaders.KEY, key)
+              .setHeader(
+                  "dispatch-generation",
+                  Integer.toString(generationOneEvent.dispatchGeneration())
+                      .getBytes(StandardCharsets.US_ASCII))
+              .build();
+      CompletableFuture<SendResult<String, DomainEvent>> future = kafkaTemplate.send(message);
       future.whenComplete(
           (result, ex) -> {
             if (ex != null) {

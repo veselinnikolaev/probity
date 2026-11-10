@@ -31,8 +31,10 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
    * aggregate. Soft-deleted rows and unknown ids are both absent, which is correct: the consumer
    * acknowledges and skips either way.
    */
-  @Query("SELECT s.status FROM SimulationJpaEntity s WHERE s.id = :id AND s.deleted = false")
-  Optional<String> findLiveStatusById(@Param("id") UUID id);
+  @Query(
+      "SELECT s.status, s.dispatchGeneration FROM SimulationJpaEntity s "
+          + "WHERE s.id = :id AND s.deleted = false")
+  Optional<Object[]> findLiveStateById(@Param("id") UUID id);
 
   @Query(
       "SELECT s FROM SimulationJpaEntity s WHERE s.portfolioId = :portfolioId AND s.userId = :userId AND s.status = 'COMPLETED' AND s.deleted = false ORDER BY s.createdAt DESC")
@@ -69,13 +71,15 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
   @Query(
       "UPDATE SimulationJpaEntity s SET s.status = :processingStatus, s.attemptId = :attemptId, s.updatedAt = :now "
           + "WHERE s.id = :id AND s.deleted = false "
+          + "AND s.dispatchGeneration = :generation "
           + "AND (s.status = 'PENDING' OR (s.status = 'PROCESSING' AND s.updatedAt < :staleThreshold))")
   int claimForProcessing(
       @Param("id") UUID id,
       @Param("processingStatus") String processingStatus,
       @Param("staleThreshold") Instant staleThreshold,
       @Param("now") Instant now,
-      @Param("attemptId") UUID attemptId);
+      @Param("attemptId") UUID attemptId,
+      @Param("generation") int generation);
 
   /**
    * Fenced completion: marks the row COMPLETED and persists its result, but only for the worker
@@ -105,7 +109,8 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
       "UPDATE SimulationJpaEntity s SET s.status = :completedStatus, "
           + "s.resultPayload = :payload, s.currentPortfolioValue = :currentValue, s.updatedAt = :now "
           + "WHERE s.id = :id AND s.deleted = false "
-          + "AND s.status = :processingStatus AND s.updatedAt = :fenceToken")
+          + "AND s.status = :processingStatus AND s.updatedAt = :fenceToken "
+          + "AND s.dispatchGeneration = :generation")
   int completeIfClaimHeld(
       @Param("id") UUID id,
       @Param("processingStatus") String processingStatus,
@@ -113,7 +118,8 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
       @Param("payload") SimulationPayload payload,
       @Param("currentValue") BigDecimal currentValue,
       @Param("fenceToken") Instant fenceToken,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("generation") int generation);
 
   /**
    * Fenced release: returns a claimed row to {@code PENDING} so a later delivery can take it, but
@@ -130,13 +136,15 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
   @Query(
       "UPDATE SimulationJpaEntity s SET s.status = :pendingStatus, s.updatedAt = :now "
           + "WHERE s.id = :id AND s.deleted = false "
-          + "AND s.status = :processingStatus AND s.updatedAt = :fenceToken")
+          + "AND s.status = :processingStatus AND s.updatedAt = :fenceToken "
+          + "AND s.dispatchGeneration = :generation")
   int releaseIfClaimHeld(
       @Param("id") UUID id,
       @Param("processingStatus") String processingStatus,
       @Param("pendingStatus") String pendingStatus,
       @Param("fenceToken") Instant fenceToken,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("generation") int generation);
 
   /**
    * Marks a row {@code FAILED}, but only if it is still {@code PENDING}.
@@ -161,12 +169,14 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
   @Transactional
   @Query(
       "UPDATE SimulationJpaEntity s SET s.status = :failedStatus, s.updatedAt = :now "
-          + "WHERE s.id = :id AND s.deleted = false AND s.status = :pendingStatus")
+          + "WHERE s.id = :id AND s.deleted = false AND s.status = :pendingStatus "
+          + "AND s.dispatchGeneration = :generation")
   int markFailedIfPending(
       @Param("id") UUID id,
       @Param("pendingStatus") String pendingStatus,
       @Param("failedStatus") String failedStatus,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("generation") int generation);
 
   /**
    * Marks a pending row failed only when the exact claim attempt still owns the retained attempt
@@ -177,13 +187,14 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
   @Query(
       "UPDATE SimulationJpaEntity s SET s.status = :failedStatus, s.updatedAt = :now "
           + "WHERE s.id = :id AND s.deleted = false AND s.status = :pendingStatus "
-          + "AND s.attemptId = :attemptId")
+          + "AND s.attemptId = :attemptId AND s.dispatchGeneration = :generation")
   int markFailedForAttempt(
       @Param("id") UUID id,
       @Param("pendingStatus") String pendingStatus,
       @Param("failedStatus") String failedStatus,
       @Param("attemptId") UUID attemptId,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("generation") int generation);
 
   // ── transactional outbox ────────────────────────────────────────────────
 
@@ -227,7 +238,7 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
   @Query(
       value =
           """
-            SELECT s.id, s.simulation_id, s.payload::text
+            SELECT s.id, s.simulation_id, s.payload::text, s.dispatch_generation
               FROM simulation_outbox s
              WHERE s.published_at IS NULL
                AND (s.claimed_until IS NULL OR s.claimed_until < :now)

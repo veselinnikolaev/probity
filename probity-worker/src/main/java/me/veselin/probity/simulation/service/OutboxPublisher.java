@@ -2,6 +2,7 @@ package me.veselin.probity.simulation.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -13,6 +14,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -121,6 +125,7 @@ public class OutboxPublisher {
               UUID id = (UUID) row[0];
               UUID simulationId = (UUID) row[1];
               String payload = (String) row[2];
+              int dispatchGeneration = ((Number) row[3]).intValue();
               UUID claimToken = UUID.randomUUID();
 
               // The lease must outlive the blocking send, otherwise another publisher can
@@ -136,7 +141,7 @@ public class OutboxPublisher {
                 return null;
               }
 
-              return new ClaimedRecord(id, simulationId, payload, claimToken);
+              return new ClaimedRecord(id, simulationId, payload, dispatchGeneration, claimToken);
             });
   }
 
@@ -145,10 +150,12 @@ public class OutboxPublisher {
     try {
       SimulationRequestedEvent event =
           objectMapper.readValue(record.payload(), SimulationRequestedEvent.class);
+      SimulationRequestedEvent generationStamped =
+          event.withDispatchGeneration(record.dispatchGeneration());
 
       // Block until Kafka acknowledges the send (acks=all by default). At this point
       // the claim transaction has committed and no DB row lock or transaction is open.
-      sendToKafka(record.simulationId(), event);
+      sendToKafka(record.simulationId(), generationStamped);
 
       int updated = simulationRepository.markOutboxPublished(record.id(), record.claimToken());
       if (updated == 0) {
@@ -173,8 +180,17 @@ public class OutboxPublisher {
    * dead cluster; production always uses the real template.
    */
   public void sendToKafka(UUID simulationId, SimulationRequestedEvent event) throws Exception {
+    Message<SimulationRequestedEvent> message =
+        MessageBuilder.withPayload(event)
+            .setHeader(KafkaHeaders.TOPIC, simulationRequestedTopic)
+            .setHeader(KafkaHeaders.KEY, simulationId.toString())
+            .setHeader(
+                "dispatch-generation",
+                Integer.toString(event.dispatchGeneration())
+                    .getBytes(StandardCharsets.US_ASCII))
+            .build();
     kafkaTemplate
-        .send(simulationRequestedTopic, simulationId.toString(), event)
+        .send(message)
         .get(sendTimeoutSecs, TimeUnit.SECONDS);
   }
 
@@ -222,5 +238,6 @@ public class OutboxPublisher {
   }
 
   /** A row whose lease is held by this publisher. */
-  private record ClaimedRecord(UUID id, UUID simulationId, String payload, UUID claimToken) {}
+  private record ClaimedRecord(
+      UUID id, UUID simulationId, String payload, int dispatchGeneration, UUID claimToken) {}
 }

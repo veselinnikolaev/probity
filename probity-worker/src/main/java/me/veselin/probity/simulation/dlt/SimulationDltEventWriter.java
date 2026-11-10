@@ -16,7 +16,13 @@ public class SimulationDltEventWriter {
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public WriteResult recordAttemptFailure(FailureContext context) {
-    if (!simulationRepository.markFailedForAttempt(context.simulationId(), context.attemptId())) {
+    if (context.dispatchGeneration() == null
+        || !simulationRepository.markFailedForAttempt(
+            context.simulationId(), context.attemptId(), context.dispatchGeneration())) {
+      if (context.dispatchGeneration() == null) {
+        insert(context);
+        return WriteResult.RECORDED_MALFORMED;
+      }
       return WriteResult.NOT_OWNER;
     }
     insert(context);
@@ -25,8 +31,21 @@ public class SimulationDltEventWriter {
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public WriteResult recordUnclaimedFailure(FailureContext context) {
-    if (!simulationRepository.markFailedIfPending(context.simulationId())) {
-      return WriteResult.NOT_OWNER;
+    if (context.dispatchGeneration() == null) {
+      insert(context);
+      return WriteResult.RECORDED_MALFORMED;
+    }
+    if (!simulationRepository.markFailedIfPending(
+        context.simulationId(), context.dispatchGeneration())) {
+      return simulationRepository
+              .findLiveState(context.simulationId())
+              .filter(state -> state.dispatchGeneration() > context.dispatchGeneration())
+              .map(
+                  state -> {
+                    insert(context);
+                    return WriteResult.RECORDED_STALE;
+                  })
+              .orElse(WriteResult.NOT_OWNER);
     }
     insert(context);
     return WriteResult.RECORDED;
@@ -50,6 +69,9 @@ public class SimulationDltEventWriter {
         context.payload(),
         context.exceptionType(),
         context.errorDescription(),
-        context.failedAt());
+        context.failedAt(),
+        context.dispatchGeneration(),
+        context.dispatchGenerationRaw(),
+        context.dispatchGenerationSource().name());
   }
 }

@@ -2,10 +2,13 @@ package me.veselin.probity.simulation.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import me.veselin.probity.common.domain.event.DispatchGeneration;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -71,4 +74,14 @@ public class SimulationDltOutboxJpaEntity {
 
   @Column(name = "dlt_published_at")
   private Instant dltPublishedAt;
+
+  @Column(name = "dispatch_generation")
+  private Integer dispatchGeneration;
+
+  @Column(name = "dispatch_generation_raw", length = 64)
+  private String dispatchGenerationRaw;
+
+  @Column(name = "dispatch_generation_source", length = 20)
+  @Enumerated(EnumType.STRING)
+  private DispatchGeneration.Source dispatchGenerationSource;
 }

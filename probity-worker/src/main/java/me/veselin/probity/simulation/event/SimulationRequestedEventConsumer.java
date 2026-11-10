@@ -1,12 +1,17 @@
 package me.veselin.probity.simulation.event;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
+import me.veselin.probity.common.domain.event.DispatchGeneration;
 import me.veselin.probity.simulation.config.SimulationProperties;
+import me.veselin.probity.simulation.dlt.FailureContext;
+import me.veselin.probity.simulation.dlt.SimulationDltEventWriter;
 import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.exception.SimulationAttemptFailedException;
 import me.veselin.probity.simulation.exception.SimulationClaimLostException;
@@ -14,6 +19,7 @@ import me.veselin.probity.simulation.persistence.SimulationRepository;
 import me.veselin.probity.simulation.port.SimulationPort;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
@@ -65,6 +71,9 @@ public class SimulationRequestedEventConsumer {
   private final SimulationRepository simulationRepository;
   private final SimulationProperties simulationProperties;
   private final UnclaimablePartitionParker unclaimablePartitionParker;
+  private final SimulationDltEventWriter dltEventWriter;
+  private final ObjectMapper objectMapper;
+  private final MeterRegistry meterRegistry;
 
   @KafkaListener(
       id = LISTENER_ID,
@@ -77,8 +86,9 @@ public class SimulationRequestedEventConsumer {
       @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
       @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
       @Header(KafkaHeaders.OFFSET) long offset,
-      Acknowledgment ack,
-      Consumer<?, ?> consumer) {
+          @Header(name = "dispatch-generation", required = false) byte[] generationHeader,
+          Acknowledgment ack,
+          Consumer<?, ?> consumer) {
 
     log.info(
         "Received simulation request event: simulationId={}, portfolioId={}, partition={}, offset={}",
@@ -88,6 +98,29 @@ public class SimulationRequestedEventConsumer {
         offset);
 
     UUID simulationId = event.simulationId();
+    String rawHeader =
+        generationHeader == null ? null : new String(generationHeader, java.nio.charset.StandardCharsets.US_ASCII);
+    DispatchGeneration.Resolution generation =
+        DispatchGeneration.resolve(
+            rawHeader,
+            event.dispatchGeneration(),
+            simulationProperties.isLegacyGenerationDefault());
+    meterRegistry.counter("simulation.dispatch.generation." + generation.source().name().toLowerCase())
+        .increment();
+    if (!generation.isValid()) {
+      meterRegistry
+          .counter("simulation.dispatch." + generation.source().name().toLowerCase())
+          .increment();
+      recordRejectedDelivery(event, generation, topic, partition, offset, kafkaKey);
+      ack.acknowledge();
+      log.warn(
+          "Rejecting simulation {} delivery with generation source={} header={} envelope={}",
+          simulationId,
+          generation.source(),
+          rawHeader,
+          event.dispatchGeneration());
+      return;
+    }
 
     // The claim is taken here, not in the service: this is the only component that holds
     // the Kafka offset and the group identity, so it is the only one that can decide
@@ -95,10 +128,11 @@ public class SimulationRequestedEventConsumer {
     // for this row must then present.
     Optional<SimulationRepository.Claim> claim =
         simulationRepository.claimForProcessingWithAttempt(
-            simulationId, simulationProperties.getClaimLease());
+            simulationId, generation.value(), simulationProperties.getClaimLease());
 
     if (claim.isEmpty()) {
-      handleUnclaimable(simulationId, topic, partition, offset, ack, consumer);
+      handleUnclaimable(
+          event, simulationId, generation.value(), topic, partition, offset, ack, consumer);
       return;
     }
 
@@ -116,7 +150,8 @@ public class SimulationRequestedEventConsumer {
           event.assumedVolatilityPercent(),
           event.userId(),
           event.marketDataSnapshot(),
-          fence);
+          fence,
+          generation.value());
 
       log.info("Simulation completed successfully: simulationId={}", simulationId);
       ack.acknowledge();
@@ -187,13 +222,15 @@ public class SimulationRequestedEventConsumer {
    * </table>
    */
   private void handleUnclaimable(
+      SimulationRequestedEvent event,
       UUID simulationId,
+      int messageGeneration,
       String topic,
       int partition,
       long offset,
       Acknowledgment ack,
       Consumer<?, ?> consumer) {
-    Optional<SimulationStatus> live = simulationRepository.findLiveStatus(simulationId);
+    Optional<SimulationRepository.LiveState> live = simulationRepository.findLiveState(simulationId);
 
     if (live.isEmpty()) {
       log.info(
@@ -206,7 +243,40 @@ public class SimulationRequestedEventConsumer {
       return;
     }
 
-    switch (live.get()) {
+    SimulationRepository.LiveState liveState = live.get();
+    if (liveState.dispatchGeneration() > messageGeneration) {
+      ack.acknowledge();
+      log.info(
+          "Dropping stale simulation {} delivery generation={} currentGeneration={}",
+          simulationId,
+          messageGeneration,
+          liveState.dispatchGeneration());
+      meterRegistry.counter("simulation.dispatch.stale").increment();
+      return;
+    }
+    if (liveState.dispatchGeneration() < messageGeneration) {
+      recordRejectedDelivery(
+          event,
+          new DispatchGeneration.Resolution(
+              messageGeneration,
+              DispatchGeneration.Source.FUTURE,
+              Integer.toString(messageGeneration),
+              messageGeneration),
+          topic,
+          partition,
+          offset,
+          event.simulationId().toString());
+      ack.acknowledge();
+      log.error(
+          "Received future simulation {} delivery generation={} currentGeneration={}",
+          simulationId,
+          messageGeneration,
+          liveState.dispatchGeneration());
+      meterRegistry.counter("simulation.dispatch.future").increment();
+      return;
+    }
+
+    switch (liveState.status()) {
       case COMPLETED, FAILED -> {
         log.info(
             "Simulation {} is {}; this delivery is a duplicate and there is nothing "
@@ -246,5 +316,49 @@ public class SimulationRequestedEventConsumer {
     TopicPartition topicPartition = new TopicPartition(topic, partition);
     consumer.seek(topicPartition, offset);
     unclaimablePartitionParker.park(LISTENER_ID, topicPartition);
+  }
+
+  private void recordRejectedDelivery(
+      SimulationRequestedEvent event,
+      DispatchGeneration.Resolution generation,
+      String topic,
+      int partition,
+      long offset,
+      String key) {
+    try {
+      dltEventWriter.recordUnattributableFailure(
+          new FailureContext(
+              UUID.nameUUIDFromBytes(
+                  ("generation:" + topic + ":" + partition + ":" + offset)
+                      .getBytes(StandardCharsets.UTF_8)),
+              event.simulationId(),
+              UUID.nameUUIDFromBytes(
+                  ("generation-attempt:" + topic + ":" + partition + ":" + offset)
+                      .getBytes(StandardCharsets.UTF_8)),
+              topic,
+              partition,
+              offset,
+              key,
+              objectMapper.writeValueAsBytes(event),
+              "DispatchGenerationRejected",
+              "dispatch generation " + generation.source(),
+              Instant.now(),
+              generation.value(),
+              generation.source(),
+              rawGeneration(generation)));
+    } catch (Exception failure) {
+      throw new IllegalStateException("Could not persist rejected dispatch generation", failure);
+    }
+  }
+
+  private String rawGeneration(DispatchGeneration.Resolution generation) {
+    if (generation.rawHeader() != null) {
+      return generation.rawHeader().length() <= 64
+          ? generation.rawHeader()
+          : generation.rawHeader().substring(0, 64);
+    }
+    return generation.envelopeValue() == null
+        ? null
+        : Integer.toString(generation.envelopeValue());
   }
 }

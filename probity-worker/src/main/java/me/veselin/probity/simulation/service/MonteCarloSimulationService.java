@@ -224,7 +224,8 @@ public class MonteCarloSimulationService {
       Double assumedVolatilityPercent,
       UUID userId,
       java.util.Map<String, java.math.BigDecimal> marketDataSnapshot,
-      Instant fenceToken) {
+      Instant fenceToken,
+      int dispatchGeneration) {
     log.info(
         "Running async Monte Carlo simulation id={} portfolioId={} userId={} paths={} horizon={}d fence={}",
         simulationId,
@@ -280,7 +281,7 @@ public class MonteCarloSimulationService {
     // without side effects rather than overwriting its work with a stale result.
     Simulation completed =
         simulationRepository
-            .complete(simulationId, currentValue, payload, fenceToken)
+            .complete(simulationId, currentValue, payload, fenceToken, dispatchGeneration)
             .orElseThrow(
                 () -> new SimulationClaimLostException(simulationId, fenceToken, "complete"));
 

@@ -10,6 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.simulation.dlt.FailureContext;
 import me.veselin.probity.simulation.dlt.SimulationDltEventWriter;
 import me.veselin.probity.simulation.dlt.WriteResult;
+import me.veselin.probity.common.domain.event.DispatchGeneration;
+import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
+import me.veselin.probity.simulation.config.SimulationProperties;
 import me.veselin.probity.simulation.exception.SimulationAttemptFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.core.log.LogAccessor;
@@ -27,11 +30,15 @@ public final class SimulationFailedRecordRecoverer implements ConsumerRecordReco
 
   private final SimulationDltEventWriter writer;
   private final ObjectMapper objectMapper;
+  private final SimulationProperties properties;
 
   public SimulationFailedRecordRecoverer(
-      SimulationDltEventWriter writer, ObjectMapper objectMapper) {
+      SimulationDltEventWriter writer,
+      ObjectMapper objectMapper,
+      SimulationProperties properties) {
     this.writer = writer;
     this.objectMapper = objectMapper;
+    this.properties = properties;
   }
 
   @Override
@@ -43,6 +50,14 @@ public final class SimulationFailedRecordRecoverer implements ConsumerRecordReco
         attemptFailure == null ? simulationIdFromRecord(record) : attemptFailure.simulationId();
     UUID attemptId =
         attemptFailure == null ? syntheticAttemptId(record) : attemptFailure.attemptId();
+    String rawHeader = generationHeader(record);
+    Integer envelopeGeneration =
+        record.value() instanceof SimulationRequestedEvent requested
+            ? requested.dispatchGeneration()
+            : null;
+    DispatchGeneration.Resolution generation =
+        DispatchGeneration.resolve(
+            rawHeader, envelopeGeneration, properties.isLegacyGenerationDefault());
 
     if (!deserializationFailure && attemptFailure == null) {
       throw new IllegalStateException(
@@ -61,7 +76,12 @@ public final class SimulationFailedRecordRecoverer implements ConsumerRecordReco
             payloadBytes(record, deserializationFailure),
             exception.getClass().getName(),
             safeDescription(exception),
-            Instant.now());
+            Instant.now(),
+            generation.value(),
+            generation.source(),
+            rawHeader != null
+                ? truncate(rawHeader)
+                : envelopeGeneration == null ? null : Integer.toString(envelopeGeneration));
 
     WriteResult result;
     if (simulationId == null) {
@@ -160,5 +180,15 @@ public final class SimulationFailedRecordRecoverer implements ConsumerRecordReco
       return null;
     }
     return message.length() <= 4000 ? message : message.substring(0, 4000);
+  }
+
+  private String generationHeader(ConsumerRecord<?, ?> record) {
+    org.apache.kafka.common.header.Header header =
+        record.headers().lastHeader("dispatch-generation");
+    return header == null ? null : new String(header.value(), StandardCharsets.US_ASCII);
+  }
+
+  private String truncate(String value) {
+    return value.length() <= 64 ? value : value.substring(0, 64);
   }
 }

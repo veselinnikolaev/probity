@@ -46,6 +46,8 @@ spring:
 probity:
   kafka:
     simulation-topic-partitions: 1
+  simulation:
+    legacy-generation-default: false
   outbox:
     publish-batch-size: 10
     initial-backoff-ms: 5000

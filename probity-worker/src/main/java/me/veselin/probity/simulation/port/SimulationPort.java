@@ -55,7 +55,8 @@ public interface SimulationPort {
       Double assumedVolatilityPercent,
       UUID userId,
       Map<String, BigDecimal> marketDataSnapshot,
-      Instant fenceToken);
+      Instant fenceToken,
+      int dispatchGeneration);
 
   SimulationData getSimulation(UUID simulationId, UUID userId);
 

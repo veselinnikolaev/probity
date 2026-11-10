@@ -21,11 +21,13 @@ public interface SimulationDltOutboxJpaRepository
             INSERT INTO simulation_dlt_outbox (
                 dlt_event_id, simulation_id, attempt_id,
                 source_topic, source_partition, source_offset, source_key,
-                payload, exception_type, error_description, failed_at, created_at
+                payload, exception_type, error_description, failed_at,
+                dispatch_generation, dispatch_generation_raw, dispatch_generation_source, created_at
             ) VALUES (
                 :dltEventId, :simulationId, :attemptId,
                 :sourceTopic, :sourcePartition, :sourceOffset, :sourceKey,
-                :payload, :exceptionType, :errorDescription, :failedAt, now()
+                :payload, :exceptionType, :errorDescription, :failedAt,
+                :dispatchGeneration, :dispatchGenerationRaw, :dispatchGenerationSource, now()
             )
             ON CONFLICT (source_topic, source_partition, source_offset, attempt_id)
             DO NOTHING
@@ -42,7 +44,10 @@ public interface SimulationDltOutboxJpaRepository
       @Param("payload") byte[] payload,
       @Param("exceptionType") String exceptionType,
       @Param("errorDescription") String errorDescription,
-      @Param("failedAt") Instant failedAt);
+      @Param("failedAt") Instant failedAt,
+      @Param("dispatchGeneration") Integer dispatchGeneration,
+      @Param("dispatchGenerationRaw") String dispatchGenerationRaw,
+      @Param("dispatchGenerationSource") String dispatchGenerationSource);
 
   @Query(
       value =

@@ -88,6 +88,10 @@ public class SimulationJpaEntity extends BaseEntitySoftDelete {
   @Column(name = "attempt_id")
   private UUID attemptId;
 
+  @Column(name = "dispatch_generation", nullable = false)
+  @Builder.Default
+  private int dispatchGeneration = 1;
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;

@@ -56,6 +56,7 @@ class SimulationAsyncUndeserializablePayloadIntegrationTest
   @DynamicPropertySource
   static void kafkaProperties(DynamicPropertyRegistry registry) {
     AsyncKafkaTestSupport.registerAsyncBroker(registry, true, "t4a-undeserializable");
+    registry.add("probity.simulation.legacy-generation-default", () -> true);
   }
 
   @Test
