@@ -24,17 +24,33 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
       @Param("id") UUID id, @Param("userId") UUID userId);
 
   /**
-   * The live status of a row, as a bare {@code String} rather than an entity.
+   * The live status and dispatch generation of a row, as a compile-checked projection rather than an
+   * entity.
    *
-   * <p>The consumer needs exactly one column to decide between "nack and redeliver" and
+   * <p>The consumer needs exactly two columns to decide between "nack and redeliver" and
    * "acknowledge and skip", so this is one indexed primary-key lookup instead of loading the whole
    * aggregate. Soft-deleted rows and unknown ids are both absent, which is correct: the consumer
    * acknowledges and skips either way.
+   *
+   * <p>Interface projection is deliberate. The previous signature returned a raw {@code
+   * Optional<Object[]>}, and callers cast element zero to {@code String}; any change in how Spring
+   * Data materialised the tuple failed at runtime with a {@link ClassCastException} rather than at
+   * compile time. Binding to typed accessors makes the column order and the boxed types the
+   * framework's responsibility.
    */
+  interface LiveStateView {
+
+    /** The stored {@code status} column ({@code PENDING}, {@code PROCESSING}, ...). */
+    String getStatus();
+
+    /** The stored {@code dispatch_generation} column; non-null because the column is non-null. */
+    Integer getDispatchGeneration();
+  }
+
   @Query(
-      "SELECT s.status, s.dispatchGeneration FROM SimulationJpaEntity s "
-          + "WHERE s.id = :id AND s.deleted = false")
-  Optional<Object[]> findLiveStateById(@Param("id") UUID id);
+      "SELECT s.status AS status, s.dispatchGeneration AS dispatchGeneration "
+          + "FROM SimulationJpaEntity s WHERE s.id = :id AND s.deleted = false")
+  Optional<LiveStateView> findLiveStateById(@Param("id") UUID id);
 
   @Query(
       "SELECT s FROM SimulationJpaEntity s WHERE s.portfolioId = :portfolioId AND s.userId = :userId AND s.status = 'COMPLETED' AND s.deleted = false ORDER BY s.createdAt DESC")

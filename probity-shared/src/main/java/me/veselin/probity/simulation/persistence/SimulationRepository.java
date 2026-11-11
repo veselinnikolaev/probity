@@ -234,7 +234,10 @@ public class SimulationRepository {
   public Optional<LiveState> findLiveState(UUID id) {
     return jpaRepository
         .findLiveStateById(id)
-        .map(row -> new LiveState(SimulationStatus.valueOf((String) row[0]), ((Number) row[1]).intValue()));
+        .map(
+            view ->
+                new LiveState(
+                    SimulationStatus.valueOf(view.getStatus()), view.getDispatchGeneration()));
   }
 
   public record LiveState(SimulationStatus status, int dispatchGeneration) {}
