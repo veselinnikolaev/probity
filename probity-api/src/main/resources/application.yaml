@@ -127,6 +127,12 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: true
+    postgresql:
+      # Session-level advisory lock: the default transactional lock keeps a second
+      # connection's transaction open for the whole migration, and V25.2's
+      # CREATE INDEX CONCURRENTLY waits for exactly that transaction — an
+      # indefinite self-wait (upstream flyway#3508).
+      transactional-lock: false
 
   cache:
     type: redis
