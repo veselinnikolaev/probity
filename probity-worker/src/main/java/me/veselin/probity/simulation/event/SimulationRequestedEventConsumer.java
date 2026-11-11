@@ -173,7 +173,7 @@ public class SimulationRequestedEventConsumer {
       // cannot be claimed by the redelivery, so the retry budget would be spent on a row
       // nobody can take; and an unfenced release would hand a peer's live job back to
       // the queue for a second, concurrent execution.
-      if (simulationRepository.releaseToPending(simulationId, fence)) {
+      if (simulationRepository.releaseToPending(simulationId, fence, generation.value())) {
         log.info(
             "Released simulation {} back to PENDING for redelivery (attempt={}, fence={})",
             simulationId,
@@ -190,6 +190,12 @@ public class SimulationRequestedEventConsumer {
 
       // Rethrow to trigger Kafka retry/DLT. The row is PENDING again, not FAILED:
       // marking it terminal on every throw is what made the retry path inert.
+      //
+      // Returning normally would NOT redeliver the record on the next poll: with
+      // manual_immediate acknowledgement the consumer's position has already advanced, so
+      // the next poll reads the following record and this one is invisible until a
+      // rebalance or restart rewinds the group. No exception also means DefaultErrorHandler
+      // never runs, so the bounded retry budget and the DLT are both bypassed.
       throw new SimulationAttemptFailedException(simulationId, attemptId, e);
     }
   }
