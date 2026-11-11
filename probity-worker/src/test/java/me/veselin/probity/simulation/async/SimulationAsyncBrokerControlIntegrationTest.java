@@ -42,7 +42,7 @@ class SimulationAsyncBrokerControlIntegrationTest extends BaseAsyncSimulationInt
   void validEventIsDeliveredAndTheRowIsCompletedWithItsResult() throws Exception {
     UUID id = seedPendingSimulation();
 
-    publish(validEventFor(id), id);
+    publishWithGeneration(validEventFor(id), id);
 
     // Nothing but the consumer's conditional UPDATE can move a row off PENDING, and
     // nothing but a successful execution can move it to COMPLETED with a payload. Both

@@ -55,7 +55,7 @@ class SimulationAsyncPoisonPayloadProductionConfigIntegrationTest
     UntrustedSimulationPayload poison =
         new UntrustedSimulationPayload(id, "not a SimulationRequestedEvent");
 
-    publish(poison, id);
+    publishWithGeneration(poison, id);
 
     List<ConsumerRecord<String, byte[]>> dlt =
         AsyncKafkaTestSupport.drainDlt(DLT_WAIT, 1, "prd0-poison-prod");

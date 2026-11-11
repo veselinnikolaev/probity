@@ -42,8 +42,8 @@ class SimulationAsyncDuplicateDeliveryIntegrationTest extends BaseAsyncSimulatio
   void duplicateDelivery_completesTheRowAndExecutesExactlyOnce() throws Exception {
     UUID id = seedPendingSimulation();
 
-    publish(validEventFor(id), id);
-    publish(validEventFor(id), id);
+    publishWithGeneration(validEventFor(id), id);
+    publishWithGeneration(validEventFor(id), id);
 
     // Bounded wait, then a state assertion. On master the wait is what expires: the
     // row is claimed by the first delivery and nothing ever moves it again.

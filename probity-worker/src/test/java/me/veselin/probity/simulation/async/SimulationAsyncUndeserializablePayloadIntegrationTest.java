@@ -67,7 +67,7 @@ class SimulationAsyncUndeserializablePayloadIntegrationTest
         new UntrustedSimulationPayload(id, "not a SimulationRequestedEvent");
 
     // Keyed on the simulation id, exactly as SimulationEventPublisher keys real events.
-    publish(poison, id);
+    publishWithGeneration(poison, id);
 
     // Drain this class's own DLT and pick out the record for this simulation by its
     // key. "First record" is not a safe anchor: the drain may legitimately see records

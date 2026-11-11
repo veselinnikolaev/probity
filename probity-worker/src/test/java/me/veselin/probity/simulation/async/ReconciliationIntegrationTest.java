@@ -409,8 +409,8 @@ public class ReconciliationIntegrationTest extends BaseAsyncSimulationIntegratio
   @DisplayName("T10: Duplicate Kafka delivery executes simulation only once")
   void testT10_DuplicateKafkaDelivery_Idempotent() throws Exception {
     // Publish event to Kafka twice
-    publish(validEventFor(testSimulationId), testSimulationId);
-    publish(validEventFor(testSimulationId), testSimulationId);
+    publishWithGeneration(validEventFor(testSimulationId), testSimulationId);
+    publishWithGeneration(validEventFor(testSimulationId), testSimulationId);
 
     Simulation completed =
         awaitStatus(testSimulationId, Set.of(SimulationStatus.COMPLETED), Duration.ofSeconds(20));

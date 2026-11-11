@@ -19,7 +19,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -142,7 +145,8 @@ public abstract class BaseAsyncSimulationIntegrationTest {
 
   @Autowired protected KafkaTemplate<String, Object> kafkaTemplate;
 
-  @Autowired private KafkaListenerEndpointRegistry listenerEndpointRegistry;
+  @Autowired
+  protected KafkaListenerEndpointRegistry listenerEndpointRegistry;
 
   @Autowired private org.springframework.core.env.Environment environment;
 
@@ -347,12 +351,32 @@ public abstract class BaseAsyncSimulationIntegrationTest {
   }
 
   /**
-   * Publishes and blocks until the broker acknowledges, so the record definitely exists before any
-   * assertion runs.
+   * Publishes with the generation header the production outbox carries.
+   * When both envelope header and Kafka header exist, they agree.
    */
-  protected void publish(Object value, UUID simulationId) throws Exception {
+  protected void publishWithGeneration(Object value, UUID simulationId) throws Exception {
+    UUID id = simulationId;
+    RecordHeaders headers = new RecordHeaders();
+    headers.add(
+        "dispatch-generation", Integer.toString(1).getBytes(StandardCharsets.US_ASCII));
     kafkaTemplate
-        .send(currentSourceTopic(), simulationId.toString(), value)
+        .send(
+            new ProducerRecord<>(
+                currentSourceTopic(), null, id.toString(), value, headers))
+        .get(15, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Publishes with the generation header the production outbox carries.
+   */
+  protected void publishWithGeneration(Object value, UUID simulationId, int generation) throws Exception {
+    RecordHeaders headers = new RecordHeaders();
+    headers.add(
+        "dispatch-generation", Integer.toString(generation).getBytes(StandardCharsets.US_ASCII));
+    kafkaTemplate
+        .send(
+            new ProducerRecord<>(
+                currentSourceTopic(), null, simulationId.toString(), value, headers))
         .get(15, TimeUnit.SECONDS);
   }
 

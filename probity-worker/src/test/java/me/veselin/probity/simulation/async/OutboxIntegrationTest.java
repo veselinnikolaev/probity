@@ -253,7 +253,7 @@ public class OutboxIntegrationTest extends BaseAsyncSimulationIntegrationTest {
         simulationRepository.claimOutboxRecords(
             List.of(testSimulationId), UUID.randomUUID(), Instant.now().plusSeconds(300)),
         "The row should be leased exactly as a live publisher leases it");
-    publish(validEventFor(testSimulationId), testSimulationId);
+    publishWithGeneration(validEventFor(testSimulationId), testSimulationId);
     assertFalse(
         outboxState(testSimulationId).published(),
         "The outbox row must still be unpublished after a crash before the mark");

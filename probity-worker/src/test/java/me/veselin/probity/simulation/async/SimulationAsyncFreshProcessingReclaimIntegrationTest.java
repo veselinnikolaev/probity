@@ -58,7 +58,7 @@ class SimulationAsyncFreshProcessingReclaimIntegrationTest
 
     Optional<Long> offsetBefore = committedOffset(currentGroupId());
 
-    publish(validEventFor(id), id);
+    publishWithGeneration(validEventFor(id), id);
 
     // Bounded generously: a single nack cycle alone sleeps ~5 s
     // (max(nackDuration, pollTimeout)), then the 2 s lease must lapse before a reclaim.

@@ -76,7 +76,7 @@ class SimulationAsyncRetryBudgetIntegrationTest extends BaseAsyncSimulationInteg
         .when(portfolioQueryPort)
         .loadPortfolioWithPositionsAndAssets(any(), any());
 
-    publish(validEventFor(id), id);
+    publishWithGeneration(validEventFor(id), id);
 
     List<ConsumerRecord<String, byte[]>> dlt =
         AsyncKafkaTestSupport.drainDlt(DLT_WAIT, 1, "t4b-retry-budget");
