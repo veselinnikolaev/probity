@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -21,7 +22,9 @@ import me.veselin.probity.simulation.event.SimulationRequestedEventConsumer;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,8 +95,12 @@ class SimulationAsyncPartitionParkIntegrationTest extends BaseAsyncSimulationInt
             });
 
     // Force the unclaimable record onto partition 0 and wait for the park to take effect.
+    // The dispatch-generation header is required: without it the generation gate rejects the
+    // record before claim/park logic ever runs.
     kafkaTemplate
-        .send(topic, 0, stalled.toString(), validEventFor(stalled))
+        .send(
+            new ProducerRecord<>(
+                topic, 0, stalled.toString(), validEventFor(stalled), generationHeaders(1)))
         .get(15, TimeUnit.SECONDS);
     await().atMost(Duration.ofSeconds(30)).until(() -> container().isPartitionPaused(tp0));
 
@@ -103,7 +110,11 @@ class SimulationAsyncPartitionParkIntegrationTest extends BaseAsyncSimulationInt
 
     // Now deliver a claimable record on the sibling partition. Under the old whole-consumer
     // nack this could not run; under the per-partition park it must complete while tp0 sits.
-    kafkaTemplate.send(topic, 1, live.toString(), validEventFor(live)).get(15, TimeUnit.SECONDS);
+    kafkaTemplate
+        .send(
+            new ProducerRecord<>(
+                topic, 1, live.toString(), validEventFor(live), generationHeaders(1)))
+        .get(15, TimeUnit.SECONDS);
     Simulation settled =
         awaitStatus(
             live,
@@ -155,6 +166,14 @@ class SimulationAsyncPartitionParkIntegrationTest extends BaseAsyncSimulationInt
                 + after
                 + " "
                 + diagnostics(live, settled));
+  }
+
+  /** The {@code dispatch-generation} header the production outbox publisher stamps. */
+  private static RecordHeaders generationHeaders(int generation) {
+    RecordHeaders headers = new RecordHeaders();
+    headers.add(
+        "dispatch-generation", Integer.toString(generation).getBytes(StandardCharsets.US_ASCII));
+    return headers;
   }
 
   private MessageListenerContainer container() {
