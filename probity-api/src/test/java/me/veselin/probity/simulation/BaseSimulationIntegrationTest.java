@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import me.veselin.probity.portfolio.BasePortfolioIntegrationTest;
 import me.veselin.probity.risk.dto.DistributionStatistics;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -51,9 +50,8 @@ public abstract class BaseSimulationIntegrationTest extends BasePortfolioIntegra
     when(riskPort.conditionalValueAtRisk(any(double[].class), anyDouble())).thenReturn(1550.0);
   }
 
-  @AfterEach
-  void cleanSimulations() {
-    // Delete in correct order to respect foreign keys
-    simulationRepository.deleteAll();
-  }
+  // Simulation cleanup is centralized in BaseIntegrationTest.cleanDatabase() (@BeforeEach),
+  // which deletes simulation_outbox/dlt/paths before simulations in FK-safe order. The
+  // previous @AfterEach simulationRepository.deleteAll() violated
+  // fk_simulation_outbox_dispatch_generation whenever outbox rows existed.
 }

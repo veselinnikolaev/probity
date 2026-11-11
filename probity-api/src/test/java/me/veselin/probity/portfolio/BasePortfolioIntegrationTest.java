@@ -20,7 +20,6 @@ import me.veselin.probity.portfolio.repository.AssetRepository;
 import me.veselin.probity.risk.dto.AssetRiskProfile;
 import me.veselin.probity.risk.enumeration.RiskLevel;
 import me.veselin.probity.risk.port.RiskPort;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -75,12 +74,10 @@ public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTe
     stubRiskPort();
   }
 
-  @AfterEach
-  void cleanDb() {
-    // Delete portfolios before assets to maintain foreign key order
-    portfolioRepository.deleteAll();
-    assetRepository.deleteAll();
-  }
+  // Database cleanup is centralized in BaseIntegrationTest.cleanDatabase() (@BeforeEach),
+  // which deletes in FK-safe order before every test. The previous @AfterEach deleteAll()
+  // here was removed: it ran after simulations/outbox rows could still exist and violated
+  // fk_simulation_outbox_dispatch_generation, leaving contaminated state for the next class.
 
   // ── Market-data stubs ────────────────────────────────────────────────────
 
