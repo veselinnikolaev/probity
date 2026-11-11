@@ -229,14 +229,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private String reconstructionMetadata(byte[] responseBytes) throws IOException {
     var response = objectMapper.readTree(responseBytes);
     var metadata = objectMapper.createObjectNode();
-    response
-        .fields()
-        .forEachRemaining(
-            entry -> {
-              if (!"result".equals(entry.getKey())) {
-                metadata.set(entry.getKey(), entry.getValue());
-              }
-            });
+    response.properties().forEach(entry -> {
+      if (!"result".equals(entry.getKey())) {
+        metadata.set(entry.getKey(), entry.getValue());
+      }
+    });
     return objectMapper.writeValueAsString(metadata);
   }
 

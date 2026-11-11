@@ -117,7 +117,7 @@ public class JwtService {
             connection -> {
               Set<String> keys = new HashSet<>();
               ScanOptions options = ScanOptions.scanOptions().match(pattern).count(500).build();
-              try (Cursor<byte[]> cursor = connection.scan(options)) {
+              try (Cursor<byte[]> cursor = connection.keyCommands().scan(options)) {
                 while (cursor.hasNext()) {
                   keys.add(new String(cursor.next(), StandardCharsets.UTF_8));
                 }
