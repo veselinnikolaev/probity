@@ -20,6 +20,7 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       backend: ${{ steps.filter.outputs.backend || steps.push.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend || steps.push.outputs.frontend }}
@@ -60,6 +61,7 @@ jobs:
   test:
     name: Build & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Run on pushes (as before) and on PRs that touch backend inputs; skip on
     # docs-only and frontend-only PRs.
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true')
@@ -76,10 +78,12 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # Tests activate the "test" profile, which supplies its own test-only
+      # JWT secret (probity.jwt.secret in application-test.yaml). No test reads
+      # JWT_SECRET from the environment, so do not pass a repository secret to
+      # untrusted pull_request code.
       - name: Run tests
         run: mvn verify -B
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Upload JaCoCo reports
         if: always()
@@ -92,16 +96,23 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload test results
-        if: failure()
+      # Machine-readable JUnit XML for every module (surefire/failsafe), on
+      # success and failure, so total/passed/failed/skipped are preserved.
+      - name: Upload JUnit test results
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: test-results
-          path: probity-api/target/surefire-reports/
+          name: junit-results-${{ github.sha }}
+          path: |
+            **/target/surefire-reports/TEST-*.xml
+            **/target/failsafe-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 30
 
   frontend_test:
     name: Frontend Build & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [changes]
     # Run on pushes and on PRs that touch frontend inputs.
     # Skip on docs-only and backend-only PRs.
@@ -143,6 +154,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [changes]
     if: github.event_name == 'pull_request' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true')
     permissions:
@@ -195,6 +207,7 @@ jobs:
   build-and-push:
     name: Build, Scan & Publish Docker Images
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [changes, test]
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')) || (github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true' && needs.test.result == 'success')
 
@@ -291,19 +304,21 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [changes, test, frontend_test, dependency-review, gitleaks, semgrep, build-and-push]
     if: always() && github.event_name == 'pull_request'
 
     steps:
       - name: Evaluate required jobs
         run: |
+          echo "change detection result: ${{ needs.changes.result }}"
           echo "backend result: ${{ needs.test.result }}"
           echo "frontend result: ${{ needs.frontend_test.result }}"
           echo "dependency review result: ${{ needs.dependency-review.result }}"
           echo "secret scan result: ${{ needs.gitleaks.result }}"
           echo "SAST result: ${{ needs.semgrep.result }}"
           echo "container build and scan result: ${{ needs.build-and-push.result }}"
-          if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.test.result }}" = "cancelled" ] || [ "${{ needs.frontend_test.result }}" = "failure" ] || [ "${{ needs.frontend_test.result }}" = "cancelled" ] || [ "${{ needs.dependency-review.result }}" = "failure" ] || [ "${{ needs.dependency-review.result }}" = "cancelled" ] || [ "${{ needs.gitleaks.result }}" = "failure" ] || [ "${{ needs.gitleaks.result }}" = "cancelled" ] || [ "${{ needs.semgrep.result }}" = "failure" ] || [ "${{ needs.semgrep.result }}" = "cancelled" ] || [ "${{ needs.build-and-push.result }}" = "failure" ] || [ "${{ needs.build-and-push.result }}" = "cancelled" ]; then
+          if [ "${{ needs.changes.result }}" = "failure" ] || [ "${{ needs.changes.result }}" = "cancelled" ] || [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.test.result }}" = "cancelled" ] || [ "${{ needs.frontend_test.result }}" = "failure" ] || [ "${{ needs.frontend_test.result }}" = "cancelled" ] || [ "${{ needs.dependency-review.result }}" = "failure" ] || [ "${{ needs.dependency-review.result }}" = "cancelled" ] || [ "${{ needs.gitleaks.result }}" = "failure" ] || [ "${{ needs.gitleaks.result }}" = "cancelled" ] || [ "${{ needs.semgrep.result }}" = "failure" ] || [ "${{ needs.semgrep.result }}" = "cancelled" ] || [ "${{ needs.build-and-push.result }}" = "failure" ] || [ "${{ needs.build-and-push.result }}" = "cancelled" ]; then
             echo "Build, test, or security check failed."
             exit 1
           fi
