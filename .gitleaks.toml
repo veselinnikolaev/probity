@@ -6,3 +6,24 @@ paths = [
     '''(^|/)src/test/''',
     '''(^|/)frontend/src/.*\.test\.(ts|tsx)$''',
 ]
+
+# Accepted historical synthetic fixtures.
+# Each entry requires BOTH the exact introducing commit AND the exact file path
+# (condition = "AND"), so the same path from any other commit is still reported.
+[[allowlists]]
+description = "Verified synthetic JWT fixture: .env at commit af028c7928019a9ccf6d470ff2470ddcd840ee82"
+condition = "AND"
+commits = ["af028c7928019a9ccf6d470ff2470ddcd840ee82"]
+paths = ['''^\.env$''']
+
+[[allowlists]]
+description = "Verified synthetic JWT fixture: .env.prod at commit af028c7928019a9ccf6d470ff2470ddcd840ee82"
+condition = "AND"
+commits = ["af028c7928019a9ccf6d470ff2470ddcd840ee82"]
+paths = ['''^\.env\.prod$''']
+
+[[allowlists]]
+description = "Verified synthetic credential-like build log entry: build-out-master.txt at commit 7715f4324ffdda2c3ea99625a5a6c9fe64e13108"
+condition = "AND"
+commits = ["7715f4324ffdda2c3ea99625a5a6c9fe64e13108"]
+paths = ['''^build-out-master\.txt$''']
